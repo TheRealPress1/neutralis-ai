@@ -51,39 +51,43 @@ body::after {
   inset: 0;
   z-index: 99;
   pointer-events: none;
-  background: radial-gradient(ellipse at center, transparent 50%, var(--titanium-black) 100%);
+  background: radial-gradient(ellipse at center, transparent 60%, var(--titanium-black) 100%);
 }
 
-/* ── Hero sheen ────────────────────────────────────── */
-@keyframes sheen-sweep {
+/* ── Hero center glow ─────────────────────────────── */
+@keyframes glow-breathe {
   0%, 100% {
-    opacity: 0;
-    transform: translateX(-100%) rotate(-25deg);
+    opacity: 0.06;
+    transform: translate(-50%, -50%) scale(0.95);
   }
-  40%, 60% {
-    opacity: 0.08;
-    transform: translateX(100%) rotate(-25deg);
+  50% {
+    opacity: 0.12;
+    transform: translate(-50%, -50%) scale(1.05);
   }
 }
 
-.hero-sheen {
+.hero-glow {
   position: relative;
   overflow: hidden;
 }
 
-.hero-sheen::after {
+.hero-glow::before {
   content: "";
   position: absolute;
-  inset: -50%;
-  background: linear-gradient(
-    135deg,
-    transparent 40%,
-    var(--silver) 50%,
-    transparent 60%
+  top: 50%;
+  left: 50%;
+  width: 80vw;
+  height: 80vh;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    ellipse at center,
+    rgba(192, 197, 203, 0.15) 0%,
+    rgba(192, 197, 203, 0.05) 30%,
+    transparent 70%
   );
-  opacity: 0.08;
-  animation: sheen-sweep 8s ease-in-out infinite;
+  animation: glow-breathe 12s ease-in-out infinite;
   pointer-events: none;
+  z-index: 0;
 }
 
 /* ── Button sheen ──────────────────────────────────── */
@@ -109,6 +113,13 @@ body::after {
 
 .btn-sheen:hover::before {
   transform: translateX(100%);
+}
+
+/* ── Pill CTA ─────────────────────────────────────── */
+.btn-pill {
+  border-radius: 9999px;
+  padding-left: 1.75rem;
+  padding-right: 1.75rem;
 }
 
 /* ── Glassmorphism ─────────────────────────────────── */
