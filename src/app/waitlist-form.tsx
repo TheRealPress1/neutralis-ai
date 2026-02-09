@@ -12,9 +12,11 @@ export default function WaitlistForm() {
 
   if (submitted) {
     return (
-      <p className="text-lg text-emerald-700 dark:text-emerald-400">
-        Thanks for joining. We&apos;ll be in touch soon.
-      </p>
+      <div className="glass-card rounded-xl px-6 py-5">
+        <p className="text-lg text-[#c0c5cb]">
+          Thanks for joining. We&apos;ll be in touch soon.
+        </p>
+      </div>
     );
   }
 
@@ -32,11 +34,11 @@ export default function WaitlistForm() {
         type="email"
         required
         placeholder="you@example.com"
-        className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:ring-zinc-400"
+        className="flex-1 rounded-lg border border-[#1a1d21] bg-[#0a0d10] px-4 py-3 text-[#e8e9ea] placeholder:text-[#9ca3af] transition-[border-color,box-shadow] duration-300 focus:border-[#c0c5cb] focus:outline-none focus:ring-2 focus:ring-[#c0c5cb]/40"
       />
       <button
         type="submit"
-        className="rounded-lg bg-zinc-900 px-6 py-3 font-medium text-white transition-colors hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 dark:focus:ring-offset-zinc-900"
+        className="btn-sheen rounded-lg bg-[#e8e9ea] px-6 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb]"
       >
         Join waitlist
       </button>
