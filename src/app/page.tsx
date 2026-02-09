@@ -1,48 +1,47 @@
 import WaitlistForm from "./waitlist-form";
 
-const features = [
+const outputs = [
   {
-    title: "Balanced by design",
+    title: "Neutral brief",
     description:
-      "Every response is weighted for fairness. Neutralis surfaces multiple perspectives so your team sees the full picture — not just the loudest angle.",
+      "A balanced summary with key claims and counterarguments, stripped of loaded framing.",
   },
   {
-    title: "Transparent reasoning",
+    title: "Viewpoint comparison",
     description:
-      "See why the model reached its conclusion. Neutralis shows its work, so you can verify the logic before you act on it.",
+      "The strongest arguments across multiple sides, presented with equal weight and clarity.",
   },
   {
-    title: "Calm under pressure",
+    title: "Evidence map",
     description:
-      "No sensationalism, no urgency theater. Neutralis keeps a steady tone — even when the stakes are high — so your team stays focused.",
+      "Each claim scored by source quality and consensus strength — what's solid, uncertain, or missing.",
+  },
+  {
+    title: "Decision memo",
+    description:
+      "Recommended next steps with assumptions and risks made explicit, ready for your team.",
   },
 ];
 
 const methodSteps = [
   {
     number: 1,
-    title: "Frame neutrally",
+    title: "Reframe",
     description:
-      "Neutralis strips loaded framing and rephrases your prompt into a balanced, multi-sided inquiry.",
+      "Your prompt is rephrased into a neutral, multi-sided inquiry before any analysis begins.",
   },
   {
     number: 2,
-    title: "Compare perspectives",
+    title: "Synthesize",
     description:
-      "The model gathers evidence across viewpoints and presents them with equal weight and clarity.",
+      "Evidence is gathered across perspectives and structured with equal weight — no side is favored.",
   },
   {
     number: 3,
-    title: "Weight evidence & uncertainty",
+    title: "Score",
     description:
-      "Each claim is scored by source quality and consensus strength, highlighting what's well-supported and what's uncertain.",
+      "Claims are ranked by source quality and consensus, surfacing what's well-supported and what's not.",
   },
-];
-
-const methodChips = [
-  "Neutral framing",
-  "Multi-view synthesis",
-  "Evidence weighting",
 ];
 
 export default function Home() {
@@ -57,18 +56,18 @@ export default function Home() {
           <ul className="hidden gap-6 text-sm font-medium text-[#9ca3af] sm:flex">
             <li>
               <a
-                href="#method"
+                href="#outputs"
                 className="transition-colors hover:text-[#e8e9ea]"
               >
-                Method
+                Outputs
               </a>
             </li>
             <li>
               <a
-                href="#product"
+                href="#method"
                 className="transition-colors hover:text-[#e8e9ea]"
               >
-                Product
+                Method
               </a>
             </li>
             <li>
@@ -92,12 +91,16 @@ export default function Home() {
       {/* ── Hero ───────────────────────────────────────────── */}
       <div className="hero-glow flex min-h-screen items-center justify-center">
         <header className="relative z-10 mx-auto max-w-3xl px-6 text-center">
-          <h1 className="text-5xl font-bold leading-tight tracking-tight sm:text-6xl">
-            Neutral-first AI for clear&nbsp;decisions.
+          <span className="text-xs font-medium uppercase tracking-[0.2em] text-[#c0c5cb]">
+            Neutral-first AI
+          </span>
+          <h1 className="mt-4 text-5xl font-bold leading-tight tracking-tight sm:text-6xl">
+            Clarity for every&nbsp;decision.
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-lg text-[#9ca3af]">
-            Balanced viewpoints. Evidence weighting. Calm interface. Neutralis
-            removes the noise so your team sees what&nbsp;matters.
+            Neutralis produces structured, balanced analysis — neutral briefs,
+            viewpoint comparisons, evidence maps — so your team acts on
+            signal, not&nbsp;noise.
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <a
@@ -107,45 +110,30 @@ export default function Home() {
               Request access
             </a>
             <a
-              href="#method"
+              href="#outputs"
               className="btn-pill inline-flex border border-[#1a1d21] px-7 py-3 font-medium transition-colors hover:border-[#c0c5cb]"
             >
-              See the method
+              See what it produces
             </a>
-          </div>
-
-          {/* Method preview chips */}
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            {methodChips.map((chip) => (
-              <span
-                key={chip}
-                className="rounded-full border border-[#1a1d21] px-4 py-1.5 text-xs text-[#9ca3af]"
-              >
-                {chip}
-              </span>
-            ))}
           </div>
         </header>
       </div>
 
-      {/* ── Method ─────────────────────────────────────────── */}
-      <section id="method" className="metallic-band border-t border-[#1a1d21] py-24">
+      {/* ── Outputs ──────────────────────────────────────── */}
+      <section id="outputs" className="border-t border-[#1a1d21] py-24">
         <div className="mx-auto max-w-5xl px-6">
           <h2 className="text-center text-3xl font-bold tracking-tight">
-            How neutrality works
+            What Neutralis delivers
           </h2>
-          <div className="mt-14 grid gap-8 md:grid-cols-3">
-            {methodSteps.map((step) => (
+          <div className="mt-14 grid gap-8 md:grid-cols-2">
+            {outputs.map((o) => (
               <article
-                key={step.number}
-                className="glass-card glass-card-hover rounded-xl p-8"
+                key={o.title}
+                className="card-panel rounded-xl p-8"
               >
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#0a0d10] text-lg font-bold text-[#c0c5cb]">
-                  {step.number}
-                </div>
-                <h3 className="text-lg font-semibold">{step.title}</h3>
+                <h3 className="text-lg font-semibold">{o.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-[#9ca3af]">
-                  {step.description}
+                  {o.description}
                 </p>
               </article>
             ))}
@@ -153,21 +141,24 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Product ────────────────────────────────────────── */}
-      <section id="product" className="border-t border-[#1a1d21] py-24">
+      {/* ── Method ─────────────────────────────────────────── */}
+      <section id="method" className="metallic-band border-t border-[#1a1d21] py-24">
         <div className="mx-auto max-w-5xl px-6">
           <h2 className="text-center text-3xl font-bold tracking-tight">
-            Built for thoughtful teams
+            How it works
           </h2>
           <div className="mt-14 grid gap-8 md:grid-cols-3">
-            {features.map((f) => (
+            {methodSteps.map((step) => (
               <article
-                key={f.title}
-                className="glass-card glass-card-hover rounded-xl p-8"
+                key={step.number}
+                className="card-panel rounded-xl p-8"
               >
-                <h3 className="text-lg font-semibold">{f.title}</h3>
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#050608] text-lg font-bold text-[#c0c5cb]">
+                  {step.number}
+                </div>
+                <h3 className="text-lg font-semibold">{step.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-[#9ca3af]">
-                  {f.description}
+                  {step.description}
                 </p>
               </article>
             ))}
