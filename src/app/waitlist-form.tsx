@@ -4,10 +4,34 @@ import { useState, type FormEvent } from "react";
 
 export default function WaitlistForm() {
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSubmitted(true);
+    setLoading(true);
+    setError("");
+
+    const form = e.currentTarget;
+    const email = new FormData(form).get("email") as string;
+
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to join waitlist");
+      }
+
+      setSubmitted(true);
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (submitted) {
@@ -38,10 +62,14 @@ export default function WaitlistForm() {
       />
       <button
         type="submit"
-        className="btn-sheen rounded-lg bg-[#e8e9ea] px-6 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb]"
+        disabled={loading}
+        className="btn-sheen rounded-lg bg-[#e8e9ea] px-6 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb] disabled:opacity-50"
       >
-        Join waitlist
+        {loading ? "Joining…" : "Join waitlist"}
       </button>
+      {error && (
+        <p className="text-sm text-red-400 sm:absolute sm:mt-14">{error}</p>
+      )}
     </form>
   );
 }
