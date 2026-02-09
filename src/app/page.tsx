@@ -21,22 +21,28 @@ const features = [
 const methodSteps = [
   {
     number: 1,
-    title: "Reframe the question",
+    title: "Frame neutrally",
     description:
-      "Neutralis strips loaded framing and rephrases your prompt into a neutral, multi-sided inquiry — before any analysis begins.",
+      "Neutralis strips loaded framing and rephrases your prompt into a balanced, multi-sided inquiry.",
   },
   {
     number: 2,
-    title: "Synthesize multiple views",
+    title: "Compare perspectives",
     description:
-      "Instead of picking a side, the model gathers evidence across perspectives and presents them with equal weight and clarity.",
+      "The model gathers evidence across viewpoints and presents them with equal weight and clarity.",
   },
   {
     number: 3,
-    title: "Weight the evidence",
+    title: "Weight evidence & uncertainty",
     description:
-      "Each claim is scored by source quality and consensus strength, so you can see which conclusions rest on solid ground.",
+      "Each claim is scored by source quality and consensus strength, highlighting what's well-supported and what's uncertain.",
   },
+];
+
+const methodChips = [
+  "Neutral framing",
+  "Multi-view synthesis",
+  "Evidence weighting",
 ];
 
 export default function Home() {
@@ -48,21 +54,21 @@ export default function Home() {
           <a href="#" className="text-lg font-semibold tracking-tight">
             Neutralis.ai
           </a>
-          <ul className="flex gap-6 text-sm font-medium text-[#9ca3af]">
-            <li>
-              <a
-                href="#product"
-                className="transition-colors hover:text-[#e8e9ea]"
-              >
-                Product
-              </a>
-            </li>
+          <ul className="hidden gap-6 text-sm font-medium text-[#9ca3af] sm:flex">
             <li>
               <a
                 href="#method"
                 className="transition-colors hover:text-[#e8e9ea]"
               >
                 Method
+              </a>
+            </li>
+            <li>
+              <a
+                href="#product"
+                className="transition-colors hover:text-[#e8e9ea]"
+              >
+                Product
               </a>
             </li>
             <li>
@@ -74,35 +80,53 @@ export default function Home() {
               </a>
             </li>
           </ul>
+          <a
+            href="#waitlist"
+            className="btn-sheen btn-pill bg-[#e8e9ea] px-5 py-2 text-sm font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb]"
+          >
+            Request access
+          </a>
         </div>
       </nav>
 
       {/* ── Hero ───────────────────────────────────────────── */}
-      <header className="hero-sheen mx-auto max-w-3xl px-6 pb-24 pt-36 text-center">
-        <h1 className="text-5xl font-bold leading-tight tracking-tight sm:text-6xl">
-          AI that stays neutral
-          <br />
-          so you can think clearly
-        </h1>
-        <p className="mx-auto mt-6 max-w-xl text-lg text-[#9ca3af]">
-          Neutralis helps teams make better decisions with balanced, transparent
-          AI. No hype, no hidden agendas — just clarity when it matters most.
-        </p>
-        <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-          <a
-            href="#waitlist"
-            className="btn-sheen inline-flex rounded-lg bg-[#e8e9ea] px-6 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb]"
-          >
-            Request access
-          </a>
-          <a
-            href="#method"
-            className="inline-flex rounded-lg border border-[#1a1d21] px-6 py-3 font-medium transition-colors hover:border-[#c0c5cb]"
-          >
-            See how it works
-          </a>
-        </div>
-      </header>
+      <div className="hero-glow flex min-h-screen items-center justify-center">
+        <header className="relative z-10 mx-auto max-w-3xl px-6 text-center">
+          <h1 className="text-5xl font-bold leading-tight tracking-tight sm:text-6xl">
+            Neutral-first AI for clear&nbsp;decisions.
+          </h1>
+          <p className="mx-auto mt-6 max-w-xl text-lg text-[#9ca3af]">
+            Balanced viewpoints. Evidence weighting. Calm interface. Neutralis
+            removes the noise so your team sees what&nbsp;matters.
+          </p>
+          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <a
+              href="#waitlist"
+              className="btn-sheen btn-pill inline-flex bg-[#e8e9ea] px-7 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb]"
+            >
+              Request access
+            </a>
+            <a
+              href="#method"
+              className="btn-pill inline-flex border border-[#1a1d21] px-7 py-3 font-medium transition-colors hover:border-[#c0c5cb]"
+            >
+              See the method
+            </a>
+          </div>
+
+          {/* Method preview chips */}
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            {methodChips.map((chip) => (
+              <span
+                key={chip}
+                className="rounded-full border border-[#1a1d21] px-4 py-1.5 text-xs text-[#9ca3af]"
+              >
+                {chip}
+              </span>
+            ))}
+          </div>
+        </header>
+      </div>
 
       {/* ── Method ─────────────────────────────────────────── */}
       <section id="method" className="metallic-band border-t border-[#1a1d21] py-24">
