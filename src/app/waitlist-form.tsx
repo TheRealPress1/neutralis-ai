@@ -12,7 +12,7 @@ export default function WaitlistForm() {
 
   if (submitted) {
     return (
-      <div className="glass-card rounded-xl px-6 py-5">
+      <div className="card-panel rounded-xl px-6 py-5">
         <p className="text-lg text-[#c0c5cb]">
           Thanks for joining. We&apos;ll be in touch soon.
         </p>

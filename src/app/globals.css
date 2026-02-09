@@ -51,19 +51,18 @@ body::after {
   inset: 0;
   z-index: 99;
   pointer-events: none;
-  background: radial-gradient(ellipse at center, transparent 60%, var(--titanium-black) 100%);
+  background: radial-gradient(ellipse at center, transparent 25%, rgba(5,6,8,0.5) 55%, #050608 80%);
 }
 
 /* ── Hero center glow ─────────────────────────────── */
 @keyframes glow-breathe {
-  0%, 100% {
-    opacity: 0.06;
-    transform: translate(-50%, -50%) scale(0.95);
-  }
-  50% {
-    opacity: 0.12;
-    transform: translate(-50%, -50%) scale(1.05);
-  }
+  0%, 100% { opacity: 0.75; transform: translate(-50%, -50%) scale(0.97); }
+  50%      { opacity: 1;    transform: translate(-50%, -50%) scale(1.03); }
+}
+
+@keyframes glow-breathe-slow {
+  0%, 100% { opacity: 0.7; transform: translate(-50%, -50%) scale(0.98); }
+  50%      { opacity: 1;   transform: translate(-50%, -50%) scale(1.02); }
 }
 
 .hero-glow {
@@ -74,18 +73,37 @@ body::after {
 .hero-glow::before {
   content: "";
   position: absolute;
-  top: 50%;
+  top: 55%;
   left: 50%;
-  width: 80vw;
-  height: 80vh;
+  width: 90vw;
+  height: 90vh;
   transform: translate(-50%, -50%);
   background: radial-gradient(
     ellipse at center,
-    rgba(192, 197, 203, 0.15) 0%,
-    rgba(192, 197, 203, 0.05) 30%,
-    transparent 70%
+    rgba(150, 165, 195, 0.35) 0%,
+    rgba(150, 165, 195, 0.12) 35%,
+    rgba(150, 165, 195, 0.04) 60%,
+    transparent 80%
   );
   animation: glow-breathe 12s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hero-glow::after {
+  content: "";
+  position: absolute;
+  top: 60%;
+  left: 50%;
+  width: 120vw;
+  height: 120vh;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    ellipse at center,
+    rgba(100, 120, 160, 0.1) 0%,
+    transparent 70%
+  );
+  animation: glow-breathe-slow 16s ease-in-out infinite;
   pointer-events: none;
   z-index: 0;
 }
@@ -122,18 +140,16 @@ body::after {
   padding-right: 1.75rem;
 }
 
-/* ── Glassmorphism ─────────────────────────────────── */
-.glass-card {
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  background: rgba(26, 29, 33, 0.4);
-  border: 1px solid rgba(192, 197, 203, 0.1);
+/* ── Card panel (solid, no blur) ──────────────────── */
+.card-panel {
+  background: #0a0d10;
+  border: 1px solid #1a1d21;
   transition: transform 0.3s ease, border-color 0.3s ease;
 }
 
-.glass-card-hover:hover {
+.card-panel:hover {
   transform: translateY(-2px);
-  border-color: rgba(192, 197, 203, 0.25);
+  border-color: rgba(192, 197, 203, 0.2);
 }
 
 /* ── Metallic banding ──────────────────────────────── */
