@@ -125,3 +125,38 @@ class Settings:
 def load_settings() -> Settings:
     """Build and validate settings from environment."""
     return Settings()
+
+
+def load_settings_with_profile(storage: object) -> Settings:
+    """Build settings, overriding pipeline/portfolio/matching from the active DB profile.
+
+    Falls back to environment defaults if no profile exists or DB query fails.
+    """
+    from neutralis.profiles import load_active_profile
+
+    base = Settings()
+
+    try:
+        profile = load_active_profile(storage)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Failed to load risk profile from DB, using env defaults",
+            exc_info=True,
+        )
+        return base
+
+    if profile is None:
+        return base
+
+    return Settings(
+        kalshi=base.kalshi,
+        polymarket=base.polymarket,
+        matching=profile.to_matching_config(),
+        db=base.db,
+        pipeline=profile.to_pipeline_config(),
+        portfolio=profile.to_portfolio_config(),
+        scheduler=base.scheduler,
+        api=base.api,
+        alerts=base.alerts,
+    )

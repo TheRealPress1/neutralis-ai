@@ -78,3 +78,36 @@ export interface MarketMatch {
 export type ActivityItem =
   | { kind: "signal"; data: Signal }
   | { kind: "decision"; data: Decision };
+
+export interface RiskProfile {
+  id: number;
+  name: string;
+  preset: "conservative" | "moderate" | "aggressive" | "custom";
+  is_active: boolean;
+  target_annual_return_pct: number;
+  description: string;
+
+  // Signal Quality
+  min_edge_pct: number;
+  min_liquidity_dollars: number;
+  max_time_to_expiry_hours: number;
+  min_time_to_expiry_hours: number;
+  fee_rate: number;
+
+  // Position Sizing
+  max_position_dollars: number;
+
+  // Portfolio Limits
+  max_total_exposure_dollars: number;
+  max_event_exposure_dollars: number;
+  max_ticker_exposure_dollars: number;
+  max_venue_exposure_pct: number;
+  max_open_positions: number;
+
+  // Matching
+  min_similarity: number;
+
+  user_id: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
