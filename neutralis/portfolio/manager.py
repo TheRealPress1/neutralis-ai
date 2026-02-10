@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime
 
+from neutralis.categories import classify_market
 from neutralis.config import PortfolioConfig, Settings
 from neutralis.logging import get_logger
 from neutralis.models import (
@@ -106,6 +107,7 @@ class PortfolioManager:
         )
 
         if existing is None:
+            category = classify_market(trade.ticker, trade.event_ticker)
             position = Position(
                 ticker=trade.ticker,
                 event_ticker=trade.event_ticker,
@@ -116,6 +118,7 @@ class PortfolioManager:
                 size_dollars=trade.size_dollars,
                 quantity=trade.quantity,
                 trade_count=1,
+                category=category,
             )
             self._storage.save_position(position)
             return position

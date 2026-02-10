@@ -1,13 +1,19 @@
 /* Typed fetch client for the FastAPI dashboard endpoints. */
 
 import type {
+  AnalyticsSummary,
+  CategoryBreakdown,
   CategoryMeta,
+  DailyPnL,
+  GuardStat,
+  PnLBucket,
   PortfolioStats,
   Position,
   Signal,
   Decision,
   MarketMatch,
   RiskProfile,
+  VenueBreakdown,
 } from "@/types/api";
 
 const API_BASE =
@@ -51,6 +57,30 @@ export function fetchDecisions(limit = 20) {
 
 export function fetchMatches(limit = 25) {
   return apiFetch<MarketMatch[]>("/api/matches", { limit: String(limit) });
+}
+
+// --- Analytics ---
+
+export function fetchAnalyticsSummary() {
+  return apiFetch<AnalyticsSummary>("/api/analytics/summary");
+}
+
+export function fetchPnLTimeline(days = 90) {
+  return apiFetch<DailyPnL[]>("/api/analytics/pnl-timeline", {
+    days: String(days),
+  });
+}
+
+export function fetchBreakdown() {
+  return apiFetch<{
+    by_category: CategoryBreakdown[];
+    by_venue: VenueBreakdown[];
+    pnl_distribution: PnLBucket[];
+  }>("/api/analytics/breakdown");
+}
+
+export function fetchGuardStats() {
+  return apiFetch<GuardStat[]>("/api/analytics/guard-stats");
 }
 
 // --- Risk Profiles ---

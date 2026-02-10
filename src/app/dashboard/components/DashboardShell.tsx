@@ -6,6 +6,9 @@ import PositionsTable from "./PositionsTable";
 import ActivityFeed from "./ActivityFeed";
 import MatchesTable from "./MatchesTable";
 import RiskProfileEditor from "./RiskProfileEditor";
+import PerformanceAnalytics from "./PerformanceAnalytics";
+
+type View = "dashboard" | "analytics" | "settings";
 
 function secondsAgo(date: Date) {
   return Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
@@ -15,7 +18,7 @@ export default function DashboardShell() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [elapsed, setElapsed] = useState(0);
-  const [showSettings, setShowSettings] = useState(false);
+  const [view, setView] = useState<View>("dashboard");
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
@@ -37,6 +40,12 @@ export default function DashboardShell() {
     setLastRefreshed(new Date());
   }
 
+  const NAV_ITEMS: { key: View; label: string }[] = [
+    { key: "dashboard", label: "Dashboard" },
+    { key: "analytics", label: "Analytics" },
+    { key: "settings", label: "Settings" },
+  ];
+
   return (
     <div className="min-h-screen bg-[#050608] text-[#e8e9ea]">
       {/* Nav */}
@@ -46,41 +55,55 @@ export default function DashboardShell() {
             <a href="/" className="text-lg font-semibold tracking-tight">
               Neutralis.ai
             </a>
-            <span className="text-sm font-medium text-[#9ca3af]">
-              Dashboard
-            </span>
+            <div className="flex items-center gap-1 rounded-lg border border-[#1a1d21] p-0.5">
+              {NAV_ITEMS.map((item) => (
+                <button
+                  key={item.key}
+                  onClick={() => setView(item.key)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    view === item.key
+                      ? "bg-[#1a1d21] text-[#e8e9ea]"
+                      : "text-[#9ca3af] hover:text-[#e8e9ea]"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="flex items-center gap-3">
-            {!showSettings && (
-              <span className="text-xs text-[#9ca3af]">
-                Updated {elapsed}s ago
-              </span>
+            {view === "dashboard" && (
+              <>
+                <span className="text-xs text-[#9ca3af]">
+                  Updated {elapsed}s ago
+                </span>
+                <button
+                  onClick={handleRefresh}
+                  className="rounded border border-[#1a1d21] px-3 py-1.5 text-xs font-medium text-[#9ca3af] transition-colors hover:border-[#c0c5cb] hover:text-[#e8e9ea]"
+                >
+                  Refresh
+                </button>
+              </>
             )}
-            {!showSettings && (
-              <button
-                onClick={handleRefresh}
-                className="rounded border border-[#1a1d21] px-3 py-1.5 text-xs font-medium text-[#9ca3af] transition-colors hover:border-[#c0c5cb] hover:text-[#e8e9ea]"
-              >
-                Refresh
-              </button>
-            )}
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className="rounded border border-[#1a1d21] px-3 py-1.5 text-xs font-medium text-[#9ca3af] transition-colors hover:border-[#c0c5cb] hover:text-[#e8e9ea]"
-            >
-              {showSettings ? "Dashboard" : "Settings"}
-            </button>
           </div>
         </div>
       </nav>
 
       {/* Content */}
       <main className="mx-auto max-w-6xl px-6 pt-24 pb-16">
-        {showSettings ? (
+        {view === "settings" && (
           <section className="mt-2">
             <RiskProfileEditor />
           </section>
-        ) : (
+        )}
+
+        {view === "analytics" && (
+          <section className="mt-2">
+            <PerformanceAnalytics refreshKey={refreshKey} />
+          </section>
+        )}
+
+        {view === "dashboard" && (
           <>
             {/* Stats bar */}
             <section>

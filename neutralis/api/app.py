@@ -224,6 +224,51 @@ def activate_profile_endpoint(profile_id: int):
     return profile.to_dict()
 
 
+# --- Analytics ---
+
+@app.get("/api/analytics/summary")
+def analytics_summary():
+    storage = _get_storage()
+    return storage.get_analytics_summary()
+
+
+@app.get("/api/analytics/pnl-timeline")
+def pnl_timeline(days: int = Query(90, ge=7, le=365)):
+    storage = _get_storage()
+    return _serialize(storage.get_daily_pnl(days=days))
+
+
+@app.get("/api/analytics/breakdown")
+def analytics_breakdown():
+    storage = _get_storage()
+    by_category: list = []
+    by_venue: list = []
+    pnl_dist: list = []
+    try:
+        by_category = storage.get_category_breakdown()
+    except Exception:
+        storage._safe_rollback()
+    try:
+        by_venue = storage.get_venue_breakdown()
+    except Exception:
+        storage._safe_rollback()
+    try:
+        pnl_dist = storage.get_pnl_distribution()
+    except Exception:
+        storage._safe_rollback()
+    return {
+        "by_category": _serialize(by_category),
+        "by_venue": _serialize(by_venue),
+        "pnl_distribution": _serialize(pnl_dist),
+    }
+
+
+@app.get("/api/analytics/guard-stats")
+def guard_stats():
+    storage = _get_storage()
+    return _serialize(storage.get_guard_effectiveness())
+
+
 # --- Categories ---
 
 @app.get("/api/categories")

@@ -26,6 +26,7 @@ export interface Position {
   trade_count: number;
   opened_at: string;
   closed_at: string | null;
+  category: string;
 }
 
 export interface Signal {
@@ -90,6 +91,54 @@ export interface CategoryOverride {
   enabled: boolean;
   risk_level: "conservative" | "moderate" | "aggressive";
   max_exposure_dollars: number | null;
+}
+
+export interface AnalyticsSummary {
+  total_pnl: number;
+  total_closed: number;
+  best_day: number;
+  worst_day: number;
+  max_drawdown: number;
+  avg_trade_pnl: number;
+  avg_win: number;
+  avg_loss: number;
+}
+
+export interface DailyPnL {
+  date: string;
+  pnl: number;
+  trades: number;
+  wins: number;
+  losses: number;
+}
+
+export interface CategoryBreakdown {
+  category: string;
+  total_trades: number;
+  wins: number;
+  losses: number;
+  total_pnl: number;
+  avg_pnl: number;
+}
+
+export interface VenueBreakdown {
+  venue: string;
+  total_trades: number;
+  wins: number;
+  losses: number;
+  total_pnl: number;
+}
+
+export interface PnLBucket {
+  bucket_start: number;
+  count: number;
+}
+
+export interface GuardStat {
+  guard_name: string;
+  total_evaluations: number;
+  rejections: number;
+  rejection_rate: number;
 }
 
 export interface RiskProfile {

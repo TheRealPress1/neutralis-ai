@@ -176,6 +176,7 @@ class Position:
     trade_count: int = 0
     opened_at: datetime = field(default_factory=datetime.now)
     closed_at: Optional[datetime] = None
+    category: str = "other"
 
 
 @dataclass(frozen=True)

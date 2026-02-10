@@ -47,6 +47,14 @@ class PostgresStorage:
     def __exit__(self, *args: object) -> None:
         self.close()
 
+    def _safe_rollback(self) -> None:
+        """Rollback the current transaction if one is in error state."""
+        if self._conn and not self._conn.closed:
+            try:
+                self._conn.rollback()
+            except Exception:
+                pass
+
     def _ensure_connected(self) -> psycopg.Connection:
         if self._conn is None or self._conn.closed:
             self.connect()
@@ -292,7 +300,7 @@ class PostgresStorage:
         "id, ticker, event_ticker, venue, side, status, "
         "entry_price, size_dollars, quantity, "
         "realized_pnl, unrealized_pnl, trade_count, "
-        "opened_at, closed_at"
+        "opened_at, closed_at, category"
     )
 
     @staticmethod
@@ -312,6 +320,7 @@ class PostgresStorage:
             trade_count=row[11],
             opened_at=row[12],
             closed_at=row[13],
+            category=row[14] if len(row) > 14 else "other",
         )
 
     def save_trade(self, trade: Trade) -> str:
@@ -358,12 +367,12 @@ class PostgresStorage:
                     id, ticker, event_ticker, venue, side, status,
                     entry_price, size_dollars, quantity,
                     realized_pnl, unrealized_pnl, trade_count,
-                    opened_at, closed_at
+                    opened_at, closed_at, category
                 ) VALUES (
                     %(id)s, %(ticker)s, %(event_ticker)s, %(venue)s, %(side)s, %(status)s,
                     %(entry_price)s, %(size_dollars)s, %(quantity)s,
                     %(realized_pnl)s, %(unrealized_pnl)s, %(trade_count)s,
-                    %(opened_at)s, %(closed_at)s
+                    %(opened_at)s, %(closed_at)s, %(category)s
                 )
                 """,
                 {
@@ -381,6 +390,7 @@ class PostgresStorage:
                     "trade_count": position.trade_count,
                     "opened_at": position.opened_at,
                     "closed_at": position.closed_at,
+                    "category": position.category,
                 },
             )
         conn.commit()
@@ -609,3 +619,122 @@ class PostgresStorage:
             "win_rate": round(row[4] / max(row[4] + row[5], 1), 4),  # type: ignore[index]
             "total_trades": trade_count,
         }
+
+    # -- Analytics queries --
+
+    def get_daily_pnl(self, days: int = 90) -> list[dict]:
+        """Daily realized P&L for closed positions over the last N days."""
+        return self._fetch_dicts(
+            """
+            SELECT
+                DATE(closed_at) AS date,
+                SUM(realized_pnl) AS pnl,
+                COUNT(*) AS trades,
+                SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) AS wins,
+                SUM(CASE WHEN realized_pnl <= 0 THEN 1 ELSE 0 END) AS losses
+            FROM positions
+            WHERE status = 'closed'
+              AND closed_at >= now() - make_interval(days => %(days)s)
+            GROUP BY DATE(closed_at)
+            ORDER BY date
+            """,
+            {"days": days},
+        )
+
+    def get_category_breakdown(self) -> list[dict]:
+        """P&L and trade counts per market category."""
+        return self._fetch_dicts("""
+            SELECT
+                category,
+                COUNT(*) AS total_trades,
+                SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) AS wins,
+                SUM(CASE WHEN realized_pnl <= 0 THEN 1 ELSE 0 END) AS losses,
+                COALESCE(SUM(realized_pnl), 0) AS total_pnl,
+                COALESCE(AVG(realized_pnl), 0) AS avg_pnl
+            FROM positions
+            WHERE status = 'closed'
+            GROUP BY category
+            ORDER BY total_pnl DESC
+        """)
+
+    def get_venue_breakdown(self) -> list[dict]:
+        """P&L and trade counts per venue."""
+        return self._fetch_dicts("""
+            SELECT
+                venue,
+                COUNT(*) AS total_trades,
+                SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) AS wins,
+                SUM(CASE WHEN realized_pnl <= 0 THEN 1 ELSE 0 END) AS losses,
+                COALESCE(SUM(realized_pnl), 0) AS total_pnl
+            FROM positions
+            WHERE status = 'closed'
+            GROUP BY venue
+        """)
+
+    def get_analytics_summary(self) -> dict:
+        """Aggregate analytics: total P&L, best/worst day, max drawdown, avg trade."""
+        rows = self._fetch_dicts("""
+            WITH daily AS (
+                SELECT DATE(closed_at) AS d, SUM(realized_pnl) AS pnl
+                FROM positions WHERE status = 'closed'
+                GROUP BY DATE(closed_at)
+            ),
+            cumulative AS (
+                SELECT d, pnl, SUM(pnl) OVER (ORDER BY d) AS cum_pnl
+                FROM daily
+            ),
+            drawdown AS (
+                SELECT d, cum_pnl,
+                       cum_pnl - MAX(cum_pnl) OVER (
+                           ORDER BY d ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                       ) AS dd
+                FROM cumulative
+            )
+            SELECT
+                (SELECT COALESCE(SUM(realized_pnl), 0) FROM positions WHERE status = 'closed')
+                    AS total_pnl,
+                (SELECT COUNT(*) FROM positions WHERE status = 'closed')
+                    AS total_closed,
+                (SELECT COALESCE(MAX(pnl), 0) FROM daily) AS best_day,
+                (SELECT COALESCE(MIN(pnl), 0) FROM daily) AS worst_day,
+                (SELECT COALESCE(MIN(dd), 0) FROM drawdown) AS max_drawdown,
+                (SELECT COALESCE(AVG(realized_pnl), 0) FROM positions WHERE status = 'closed')
+                    AS avg_trade_pnl,
+                (SELECT COALESCE(AVG(realized_pnl), 0) FROM positions
+                    WHERE status = 'closed' AND realized_pnl > 0) AS avg_win,
+                (SELECT COALESCE(ABS(AVG(realized_pnl)), 0) FROM positions
+                    WHERE status = 'closed' AND realized_pnl <= 0) AS avg_loss
+        """)
+        return rows[0] if rows else {}
+
+    def get_pnl_distribution(self, bucket_size: float = 5.0) -> list[dict]:
+        """Histogram of realized P&L values."""
+        return self._fetch_dicts(
+            """
+            SELECT
+                FLOOR(realized_pnl / %(bucket)s) * %(bucket)s AS bucket_start,
+                COUNT(*) AS count
+            FROM positions
+            WHERE status = 'closed'
+            GROUP BY bucket_start
+            ORDER BY bucket_start
+            """,
+            {"bucket": bucket_size},
+        )
+
+    def get_guard_effectiveness(self) -> list[dict]:
+        """Rejection rate per guard name from decisions."""
+        return self._fetch_dicts("""
+            SELECT
+                g->>'guard_name' AS guard_name,
+                COUNT(*) AS total_evaluations,
+                SUM(CASE WHEN (g->>'passed')::boolean = false THEN 1 ELSE 0 END)
+                    AS rejections,
+                ROUND(
+                    SUM(CASE WHEN (g->>'passed')::boolean = false THEN 1 ELSE 0 END)::numeric
+                    / NULLIF(COUNT(*), 0), 4
+                ) AS rejection_rate
+            FROM decisions, jsonb_array_elements(guard_results) AS g
+            GROUP BY g->>'guard_name'
+            ORDER BY rejections DESC
+        """)
