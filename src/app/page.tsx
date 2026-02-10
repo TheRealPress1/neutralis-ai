@@ -1,4 +1,5 @@
 import WaitlistForm from "./waitlist-form";
+import Navbar from "./navbar";
 
 const outputs = [
   {
@@ -48,67 +49,21 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#050608] text-[#e8e9ea]">
       {/* ── Nav ────────────────────────────────────────────── */}
-      <nav className="fixed top-0 z-50 w-full border-b border-[#1a1d21] bg-[#050608]/80 backdrop-blur-lg">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <a href="#" className="text-lg font-semibold tracking-tight">
-            Neutralis.ai
-          </a>
-          <ul className="hidden gap-6 text-sm font-medium text-[#9ca3af] sm:flex">
-            <li>
-              <a
-                href="#outputs"
-                className="transition-colors hover:text-[#e8e9ea]"
-              >
-                Outputs
-              </a>
-            </li>
-            <li>
-              <a
-                href="#method"
-                className="transition-colors hover:text-[#e8e9ea]"
-              >
-                Method
-              </a>
-            </li>
-            <li>
-              <a
-                href="#waitlist"
-                className="transition-colors hover:text-[#e8e9ea]"
-              >
-                Waitlist
-              </a>
-            </li>
-            <li>
-              <a
-                href="/dashboard"
-                className="transition-colors hover:text-[#e8e9ea]"
-              >
-                Dashboard
-              </a>
-            </li>
-          </ul>
-          <a
-            href="#waitlist"
-            className="btn-sheen btn-pill bg-[#e8e9ea] px-5 py-2 text-sm font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb]"
-          >
-            Request access
-          </a>
-        </div>
-      </nav>
+      <Navbar />
 
       {/* ── Hero ───────────────────────────────────────────── */}
       <div className="hero-glow flex min-h-screen items-center justify-center">
         <header className="relative z-10 mx-auto max-w-3xl px-6 text-center">
           <span className="text-xs font-medium uppercase tracking-[0.2em] text-[#c0c5cb]">
-            Neutral-first AI
+            Neutralis AI
           </span>
           <h1 className="mt-4 text-5xl font-bold leading-tight tracking-tight sm:text-6xl">
-            Clarity for every&nbsp;decision.
+            A modern hedge fund for prediction&nbsp;markets.
           </h1>
-          <p className="mx-auto mt-6 max-w-xl text-lg text-[#9ca3af]">
-            Neutralis produces structured, balanced analysis — neutral briefs,
-            viewpoint comparisons, evidence maps — so your team acts on
-            signal, not&nbsp;noise.
+          <p className="mx-auto mt-6 max-w-xl text-lg text-[#b0b5bc]">
+            Neutralis uses automated quantitative systems to identify
+            mis-priced probabilities, manage risk at the portfolio level, and
+            execute trades systematically across prediction&nbsp;markets.
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <a

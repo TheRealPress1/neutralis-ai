@@ -190,6 +190,14 @@ body::after {
   }
 }
 
+/* ── Nav link glow ────────────────────────────────── */
+.nav-link-glow {
+  transition: color 0.25s ease, filter 0.25s ease, text-shadow 0.25s ease;
+}
+.nav-link-glow:hover {
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+}
+
 /* ── Focus states ──────────────────────────────────── */
 a:focus-visible,
 button:focus-visible,
