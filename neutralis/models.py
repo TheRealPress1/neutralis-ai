@@ -27,6 +27,7 @@ class MarketType(str, Enum):
 
 class SignalType(str, Enum):
     COMPLEMENT_ARB = "complement_arb"
+    CROSS_PLATFORM_DISCREPANCY = "cross_platform_discrepancy"
 
 
 class DecisionVerdict(str, Enum):
@@ -66,7 +67,24 @@ class NormalizedMarket:
     yes_bids: tuple[OrderbookLevel, ...] = ()
     no_bids: tuple[OrderbookLevel, ...] = ()
 
+    venue: str = "kalshi"
+
     snapshot_ts: datetime = field(default_factory=datetime.now)
+
+
+@dataclass(frozen=True)
+class CrossPlatformMatch:
+    kalshi_ticker: str
+    kalshi_title: str
+    kalshi_yes_ask: float
+    kalshi_no_ask: float
+    polymarket_id: str
+    polymarket_question: str
+    polymarket_yes_price: float
+    polymarket_no_price: float
+    match_confidence: float
+    price_discrepancy_pct: float
+    favored_venue: str
 
 
 @dataclass(frozen=True)
@@ -93,6 +111,7 @@ class Signal:
 
     legs: tuple[TradeLeg, ...] = ()
     market_snapshot: Optional[NormalizedMarket] = None
+    cross_platform: Optional[CrossPlatformMatch] = None
     created_at: datetime = field(default_factory=datetime.now)
 
 

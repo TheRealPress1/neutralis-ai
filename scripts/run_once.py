@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Single-pass pipeline: fetch -> normalize -> scan -> guard -> store."""
+"""Single-pass pipeline: fetch -> normalize -> scan -> match -> store."""
 
 from __future__ import annotations
 
@@ -10,13 +10,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from neutralis.config import load_settings
+from neutralis.core.cross_scanner import scan_cross_platform
+from neutralis.core.matcher import match_markets
 from neutralis.core.scanners import scan_complement_arb
 from neutralis.guard.decision import evaluate_signal
 from neutralis.logging import get_logger
 from neutralis.models import MarketType, NormalizedMarket
 from neutralis.storage.postgres import PostgresStorage
 from neutralis.venues.kalshi_client import KalshiClient
-from neutralis.venues.kalshi_normalize import normalize_market
+from neutralis.venues.kalshi_normalize import normalize_market as kalshi_normalize
+from neutralis.venues.polymarket_client import PolymarketClient
+from neutralis.venues.polymarket_normalize import normalize_market as poly_normalize
 
 logger = get_logger("pipeline")
 
@@ -25,65 +29,100 @@ def run_once() -> None:
     settings = load_settings()
     start = time.monotonic()
 
-    # Step 1: Fetch active markets
-    logger.info("Step 1: Fetching active markets from Kalshi")
-    with KalshiClient(settings.kalshi) as client:
-        raw_markets = client.get_all_active_markets()
+    # Step 1a: Fetch active markets from Kalshi
+    logger.info("Step 1a: Fetching active markets from Kalshi")
+    with KalshiClient(settings.kalshi) as kalshi_client:
+        raw_kalshi = kalshi_client.get_all_active_markets()
 
-        # Step 2: Normalize (binary only)
-        logger.info("Step 2: Normalizing %d raw markets", len(raw_markets))
-        markets: list[NormalizedMarket] = []
-        for raw in raw_markets:
-            m = normalize_market(raw)
-            if m is not None and m.market_type == MarketType.BINARY:
-                markets.append(m)
+    # Step 1b: Fetch active markets from Polymarket
+    logger.info("Step 1b: Fetching active markets from Polymarket")
+    with PolymarketClient(settings.polymarket) as poly_client:
+        raw_poly = poly_client.get_all_active_markets()
 
-        logger.info("Normalized %d binary markets", len(markets))
+    # Step 2a: Normalize Kalshi (binary only)
+    logger.info("Step 2a: Normalizing %d raw Kalshi markets", len(raw_kalshi))
+    kalshi_markets: list[NormalizedMarket] = []
+    for raw in raw_kalshi:
+        m = kalshi_normalize(raw)
+        if m is not None and m.market_type == MarketType.BINARY:
+            kalshi_markets.append(m)
+    logger.info("Normalized %d Kalshi binary markets", len(kalshi_markets))
 
-        # Step 3: Scan for complement arb
-        logger.info("Step 3: Running complement arb scanner")
-        signals = scan_complement_arb(markets, settings.pipeline)
+    # Step 2b: Normalize Polymarket (binary only)
+    logger.info("Step 2b: Normalizing %d raw Polymarket markets", len(raw_poly))
+    poly_markets: list[NormalizedMarket] = []
+    for raw in raw_poly:
+        m = poly_normalize(raw)
+        if m is not None and m.market_type == MarketType.BINARY:
+            poly_markets.append(m)
+    logger.info("Normalized %d Polymarket binary markets", len(poly_markets))
 
-        if not signals:
-            logger.info("No signals found. Pipeline complete.")
-            elapsed = (time.monotonic() - start) * 1000
-            logger.info("Duration: %.0fms", elapsed, extra={"duration_ms": elapsed})
-            return
+    # Step 3a: Complement arb scan (Kalshi only)
+    logger.info("Step 3a: Running complement arb scanner")
+    complement_signals = scan_complement_arb(kalshi_markets, settings.pipeline)
 
-        logger.info("Found %d signals", len(signals))
+    # Step 3b: Cross-platform matching
+    logger.info("Step 3b: Matching markets across venues")
+    pairs = match_markets(kalshi_markets, poly_markets, settings.matching)
 
-        # Step 3b: Fetch orderbooks for signal markets (enrichment)
-        logger.info("Step 3b: Fetching orderbooks for %d signal markets", len(signals))
-        enriched_markets: dict[str, NormalizedMarket] = {}
-        for signal in signals:
-            if signal.ticker not in enriched_markets:
-                raw_market = next(
-                    (r for r in raw_markets if r.get("ticker") == signal.ticker),
-                    None,
-                )
-                if raw_market:
-                    ob_raw = client.get_orderbook(signal.ticker)
-                    enriched = normalize_market(raw_market, ob_raw)
-                    if enriched:
-                        enriched_markets[signal.ticker] = enriched
+    # Step 3c: Cross-platform signal scan
+    logger.info("Step 3c: Scanning matched pairs for price discrepancies")
+    xp_signals = scan_cross_platform(pairs, settings.matching)
 
-    # Step 4: Guard + Store
-    logger.info("Step 4: Evaluating signals through guards and storing")
+    # Step 3d: Orderbook enrichment for complement arb signals
+    enriched_markets: dict[str, NormalizedMarket] = {}
+    if complement_signals:
+        logger.info("Step 3d: Fetching orderbooks for %d complement arb signals", len(complement_signals))
+        with KalshiClient(settings.kalshi) as kalshi_client:
+            for signal in complement_signals:
+                if signal.ticker not in enriched_markets:
+                    raw_market = next(
+                        (r for r in raw_kalshi if r.get("ticker") == signal.ticker),
+                        None,
+                    )
+                    if raw_market:
+                        ob_raw = kalshi_client.get_orderbook(signal.ticker)
+                        enriched = kalshi_normalize(raw_market, ob_raw)
+                        if enriched:
+                            enriched_markets[signal.ticker] = enriched
+
+    # Step 4: Store everything
+    logger.info("Step 4: Storing results")
     with PostgresStorage(settings.db) as storage:
-        for signal in signals:
+        # 4a: Complement arb signals + guard decisions
+        for signal in complement_signals:
             market = enriched_markets.get(signal.ticker, signal.market_snapshot)
             if market is None:
                 continue
-
             snapshot_id = storage.save_market_snapshot(market)
             storage.save_signal(signal, snapshot_id=snapshot_id)
             decision = evaluate_signal(signal, market, settings.pipeline)
             storage.save_decision(decision)
 
+        # 4b: Cross-platform matches and signals
+        # Build a lookup from ticker to snapshot_id for signal storage
+        match_ids: dict[str, int] = {}  # "kalshi_ticker:poly_ticker" -> match_id
+        for pair in pairs:
+            k_snap = storage.save_market_snapshot(pair.kalshi_market)
+            p_snap = storage.save_market_snapshot(pair.polymarket_market)
+            mid = storage.save_market_match(pair, k_snap, p_snap)
+            key = f"{pair.kalshi_market.ticker}:{pair.polymarket_market.ticker}"
+            match_ids[key] = mid
+
+        for signal in xp_signals:
+            xp = signal.cross_platform
+            if xp is None:
+                continue
+            key = f"{xp.kalshi_ticker}:{xp.polymarket_id}"
+            mid = match_ids.get(key)
+            storage.save_cross_platform_signal(signal, match_id=mid)
+
     elapsed = (time.monotonic() - start) * 1000
     logger.info(
-        "Pipeline complete: %d signals, %.0fms",
-        len(signals),
+        "Pipeline complete: %d complement arb, %d cross-platform, %d matches, %.0fms",
+        len(complement_signals),
+        len(xp_signals),
+        len(pairs),
         elapsed,
         extra={"duration_ms": elapsed},
     )

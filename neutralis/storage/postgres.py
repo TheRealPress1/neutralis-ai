@@ -9,6 +9,7 @@ import psycopg
 
 from neutralis.config import DatabaseConfig
 from neutralis.logging import get_logger
+from neutralis.core.matcher import MarketPair
 from neutralis.models import Decision, NormalizedMarket, Signal
 
 logger = get_logger(__name__)
@@ -60,7 +61,8 @@ class PostgresStorage:
                     volume, volume_24h, liquidity, open_interest, notional_value,
                     close_time, expected_expiration, snapshot_ts,
                     ob_yes_best_bid, ob_yes_best_bid_qty,
-                    ob_no_best_bid, ob_no_best_bid_qty
+                    ob_no_best_bid, ob_no_best_bid_qty,
+                    venue
                 ) VALUES (
                     %(ticker)s, %(event_ticker)s, %(market_type)s, %(title)s, %(status)s,
                     %(yes_bid)s, %(yes_ask)s, %(no_bid)s, %(no_ask)s,
@@ -68,7 +70,8 @@ class PostgresStorage:
                     %(notional_value)s,
                     %(close_time)s, %(expected_expiration)s, %(snapshot_ts)s,
                     %(ob_yes_best_bid)s, %(ob_yes_best_bid_qty)s,
-                    %(ob_no_best_bid)s, %(ob_no_best_bid_qty)s
+                    %(ob_no_best_bid)s, %(ob_no_best_bid_qty)s,
+                    %(venue)s
                 )
                 RETURNING id
                 """,
@@ -94,6 +97,7 @@ class PostgresStorage:
                     "ob_yes_best_bid_qty": ob_yes_best.quantity_dollars if ob_yes_best else None,
                     "ob_no_best_bid": ob_no_best.price_dollars if ob_no_best else None,
                     "ob_no_best_bid_qty": ob_no_best.quantity_dollars if ob_no_best else None,
+                    "venue": m.venue,
                 },
             )
             row = cur.fetchone()
@@ -177,3 +181,94 @@ class PostgresStorage:
                 },
             )
         conn.commit()
+
+    def save_market_match(
+        self,
+        pair: MarketPair,
+        kalshi_snapshot_id: int | None = None,
+        polymarket_snapshot_id: int | None = None,
+    ) -> int:
+        """Insert a market match row. Returns the generated id."""
+        conn = self._ensure_connected()
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO market_matches (
+                    kalshi_ticker, kalshi_title,
+                    polymarket_id, polymarket_question,
+                    match_confidence,
+                    kalshi_snapshot_id, polymarket_snapshot_id
+                ) VALUES (
+                    %(kalshi_ticker)s, %(kalshi_title)s,
+                    %(polymarket_id)s, %(polymarket_question)s,
+                    %(match_confidence)s,
+                    %(kalshi_snapshot_id)s, %(polymarket_snapshot_id)s
+                )
+                RETURNING id
+                """,
+                {
+                    "kalshi_ticker": pair.kalshi_market.ticker,
+                    "kalshi_title": pair.kalshi_market.title,
+                    "polymarket_id": pair.polymarket_market.ticker,
+                    "polymarket_question": pair.polymarket_market.title,
+                    "match_confidence": pair.similarity,
+                    "kalshi_snapshot_id": kalshi_snapshot_id,
+                    "polymarket_snapshot_id": polymarket_snapshot_id,
+                },
+            )
+            row = cur.fetchone()
+            assert row is not None
+            match_id: int = row[0]
+
+        conn.commit()
+        return match_id
+
+    def save_cross_platform_signal(
+        self,
+        signal: Signal,
+        match_id: int | None = None,
+        kalshi_snapshot_id: int | None = None,
+        polymarket_snapshot_id: int | None = None,
+    ) -> str:
+        """Insert a cross-platform signal row. Returns the signal id."""
+        conn = self._ensure_connected()
+        xp = signal.cross_platform
+        assert xp is not None
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO cross_platform_signals (
+                    id, signal_type,
+                    kalshi_ticker, kalshi_yes_ask, kalshi_no_ask,
+                    polymarket_id, polymarket_yes_price, polymarket_no_price,
+                    match_confidence, price_discrepancy_pct, favored_venue,
+                    match_id, kalshi_snapshot_id, polymarket_snapshot_id
+                ) VALUES (
+                    %(id)s, %(signal_type)s,
+                    %(kalshi_ticker)s, %(kalshi_yes_ask)s, %(kalshi_no_ask)s,
+                    %(polymarket_id)s, %(polymarket_yes_price)s, %(polymarket_no_price)s,
+                    %(match_confidence)s, %(price_discrepancy_pct)s, %(favored_venue)s,
+                    %(match_id)s, %(kalshi_snapshot_id)s, %(polymarket_snapshot_id)s
+                )
+                """,
+                {
+                    "id": signal.id,
+                    "signal_type": signal.signal_type.value,
+                    "kalshi_ticker": xp.kalshi_ticker,
+                    "kalshi_yes_ask": xp.kalshi_yes_ask,
+                    "kalshi_no_ask": xp.kalshi_no_ask,
+                    "polymarket_id": xp.polymarket_id,
+                    "polymarket_yes_price": xp.polymarket_yes_price,
+                    "polymarket_no_price": xp.polymarket_no_price,
+                    "match_confidence": xp.match_confidence,
+                    "price_discrepancy_pct": xp.price_discrepancy_pct,
+                    "favored_venue": xp.favored_venue,
+                    "match_id": match_id,
+                    "kalshi_snapshot_id": kalshi_snapshot_id,
+                    "polymarket_snapshot_id": polymarket_snapshot_id,
+                },
+            )
+        conn.commit()
+        return signal.id

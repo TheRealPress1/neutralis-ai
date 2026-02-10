@@ -61,8 +61,25 @@ class PipelineConfig:
 
 
 @dataclass(frozen=True)
+class PolymarketConfig:
+    gamma_base_url: str = "https://gamma-api.polymarket.com"
+    clob_base_url: str = "https://clob.polymarket.com"
+    default_market_limit: int = 100
+    max_pages: int = 10
+
+
+@dataclass(frozen=True)
+class MatchingConfig:
+    min_similarity: float = 0.55
+    min_discrepancy_pct: float = 3.0
+    min_token_overlap: int = 1
+
+
+@dataclass(frozen=True)
 class Settings:
     kalshi: KalshiConfig = field(default_factory=KalshiConfig)
+    polymarket: PolymarketConfig = field(default_factory=PolymarketConfig)
+    matching: MatchingConfig = field(default_factory=MatchingConfig)
     db: DatabaseConfig = field(default_factory=DatabaseConfig)
     pipeline: PipelineConfig = field(default_factory=PipelineConfig)
 
