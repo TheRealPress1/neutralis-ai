@@ -36,7 +36,9 @@ class KalshiClient:
             time.sleep(_MIN_INTERVAL - elapsed)
         self._last_request_ts = time.monotonic()
 
-    def _get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _get(
+        self, path: str, params: dict[str, Any] | None = None, *, _retries: int = 0
+    ) -> dict[str, Any]:
         self._throttle()
         resp = self._http.get(path, params=params)
 
@@ -44,7 +46,16 @@ class KalshiClient:
             retry_after = float(resp.headers.get("Retry-After", "2"))
             logger.warning("Rate limited, sleeping %.1fs", retry_after)
             time.sleep(retry_after)
-            return self._get(path, params)
+            return self._get(path, params, _retries=_retries)
+
+        if resp.status_code >= 500 and _retries < 3:
+            wait = 2.0 * (2**_retries)
+            logger.warning(
+                "Server error %d on %s, retry %d/3 in %.1fs",
+                resp.status_code, path, _retries + 1, wait,
+            )
+            time.sleep(wait)
+            return self._get(path, params, _retries=_retries + 1)
 
         resp.raise_for_status()
         return resp.json()
@@ -84,16 +95,21 @@ class KalshiClient:
         )
         return markets, next_cursor
 
-    def get_all_active_markets(self) -> list[dict[str, Any]]:
-        """Page through ALL active markets."""
+    def get_all_active_markets(self, *, max_pages: int = 50) -> list[dict[str, Any]]:
+        """Page through active markets up to *max_pages* pages."""
         all_markets: list[dict[str, Any]] = []
         cursor: Optional[str] = None
+        page = 0
         while True:
             batch, cursor = self.get_markets(statuses="active", cursor=cursor)
             all_markets.extend(batch)
+            page += 1
             if cursor is None:
                 break
-        logger.info("Total active markets fetched: %d", len(all_markets))
+            if page >= max_pages:
+                logger.info("Reached page cap (%d pages), stopping early", max_pages)
+                break
+        logger.info("Total active markets fetched: %d (%d pages)", len(all_markets), page)
         return all_markets
 
     def get_orderbook(
