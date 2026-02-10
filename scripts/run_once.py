@@ -6,12 +6,15 @@ from __future__ import annotations
 import sys
 import time
 from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from neutralis.alerts.discord import DiscordNotifier
 from neutralis.config import load_settings, load_settings_with_profile
+from neutralis.execution.executor import PaperExecutor
+from neutralis.execution.models import TickContext
 from neutralis.profiles import load_active_profile
 from neutralis.core.cross_scanner import scan_cross_platform
 from neutralis.core.disagreement import compute_disagreement
@@ -54,6 +57,8 @@ class RunStats:
     exit_pnl: float = 0.0
     regime: str = "normal"
     disagreement_index: float = 0.0
+    orders_created: int = 0
+    fills_created: int = 0
 
 
 def _score_signal(
@@ -78,8 +83,13 @@ def _score_signal(
     )
 
 
-def run_once() -> RunStats:
+def run_once(run_number: int = 0) -> RunStats:
     base_settings = load_settings()
+
+    # Generate tick context for idempotency
+    tick_ts = datetime.now(timezone.utc)
+    tick_id = f"tick_{run_number}_{tick_ts.strftime('%Y-%m-%dT%H:%MZ')}"
+    tick_ctx = TickContext(tick_id=tick_id, run_number=run_number, timestamp=tick_ts)
     category_overrides = None
     with PostgresStorage(base_settings.db) as profile_storage:
         settings = load_settings_with_profile(profile_storage)
@@ -282,14 +292,22 @@ def run_once() -> RunStats:
             min_confidence=min_confidence,
         )
 
-        # 4e: Save decisions and fill only selected
+        # 4e: Save decisions and fill only selected (via PaperExecutor)
+        executor = PaperExecutor(storage, portfolio)
         selected_count = 0
+        total_orders = 0
+        total_fills = 0
         for signal, decision in ranked:
             decision_id = storage.save_decision(decision)
 
             if decision.verdict == DecisionVerdict.PASS and decision.selected:
                 selected_count += 1
-                portfolio.record_fill(signal, decision, decision_id)
+                market = enriched_markets.get(signal.ticker, signal.market_snapshot)
+                exec_result = executor.execute(
+                    signal, decision, decision_id, tick_ctx, market=market,
+                )
+                total_orders += len(exec_result.orders)
+                total_fills += len(exec_result.fills)
                 portfolio_snapshot = portfolio.get_snapshot()
                 for leg in signal.legs:
                     notifier.notify_fill(
@@ -342,6 +360,8 @@ def run_once() -> RunStats:
         exit_pnl=exit_pnl,
         regime=regime,
         disagreement_index=di_overall,
+        orders_created=total_orders,
+        fills_created=total_fills,
     )
 
     # Alert if anything interesting happened

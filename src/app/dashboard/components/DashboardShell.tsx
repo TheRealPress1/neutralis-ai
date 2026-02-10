@@ -8,8 +8,9 @@ import MatchesTable from "./MatchesTable";
 import RiskProfileEditor from "./RiskProfileEditor";
 import PerformanceAnalytics from "./PerformanceAnalytics";
 import BacktestPanel from "./BacktestPanel";
+import ExecutionPanel from "./ExecutionPanel";
 
-type View = "dashboard" | "analytics" | "backtest" | "settings";
+type View = "dashboard" | "execution" | "analytics" | "backtest" | "settings";
 
 function secondsAgo(date: Date) {
   return Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
@@ -43,6 +44,7 @@ export default function DashboardShell() {
 
   const NAV_ITEMS: { key: View; label: string }[] = [
     { key: "dashboard", label: "Dashboard" },
+    { key: "execution", label: "Execution" },
     { key: "analytics", label: "Analytics" },
     { key: "backtest", label: "Backtest" },
     { key: "settings", label: "Settings" },
@@ -96,6 +98,12 @@ export default function DashboardShell() {
         {view === "settings" && (
           <section className="mt-2">
             <RiskProfileEditor />
+          </section>
+        )}
+
+        {view === "execution" && (
+          <section className="mt-2">
+            <ExecutionPanel refreshKey={refreshKey} />
           </section>
         )}
 

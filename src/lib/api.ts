@@ -8,10 +8,14 @@ import type {
   CategoryBreakdown,
   CategoryMeta,
   DailyPnL,
+  DecisionReasons,
   EnrichedSignal,
+  ExecutionStats,
+  Fill,
   GuardStat,
   OptimizerRequest,
   OptimizerRun,
+  Order,
   PnLBucket,
   PortfolioStats,
   Position,
@@ -83,6 +87,30 @@ export function fetchCurrentRegime() {
 
 export function fetchMatches(limit = 25) {
   return apiFetch<MarketMatch[]>("/api/matches", { limit: String(limit) });
+}
+
+// --- Execution ---
+
+export function fetchOrders(limit = 50, status?: string) {
+  const params: Record<string, string> = { limit: String(limit) };
+  if (status) params.status = status;
+  return apiFetch<Order[]>("/api/orders", params);
+}
+
+export function fetchFills(limit = 50) {
+  return apiFetch<Fill[]>("/api/fills", { limit: String(limit) });
+}
+
+export function fetchFillsForOrder(orderId: string) {
+  return apiFetch<Fill[]>(`/api/fills/${orderId}`);
+}
+
+export function fetchDecisionReasons(decisionId: number) {
+  return apiFetch<DecisionReasons>(`/api/decisions/${decisionId}/reasons`);
+}
+
+export function fetchExecutionStats() {
+  return apiFetch<ExecutionStats>("/api/execution/stats");
 }
 
 // --- Analytics ---

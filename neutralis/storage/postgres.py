@@ -1028,6 +1028,240 @@ class PostgresStorage:
         conn.commit()
         return run_id
 
+    # -- Execution: orders and fills --
+
+    def save_order(self, order: object) -> str:
+        """Insert an order row (idempotent via ON CONFLICT DO NOTHING).
+
+        Returns the order id if inserted, or '' if skipped due to conflict.
+        """
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO orders (
+                    id, tick_id, signal_id, decision_id,
+                    ticker, event_ticker, venue, side, order_type,
+                    requested_price, requested_size_dollars, requested_quantity,
+                    status, filled_size_dollars, filled_quantity, fill_count,
+                    avg_fill_price, slippage_bps, fees_dollars,
+                    is_paper, user_id, created_at, updated_at, expired_at
+                ) VALUES (
+                    %(id)s, %(tick_id)s, %(signal_id)s, %(decision_id)s,
+                    %(ticker)s, %(event_ticker)s, %(venue)s, %(side)s, %(order_type)s,
+                    %(requested_price)s, %(requested_size_dollars)s, %(requested_quantity)s,
+                    %(status)s, %(filled_size_dollars)s, %(filled_quantity)s, %(fill_count)s,
+                    %(avg_fill_price)s, %(slippage_bps)s, %(fees_dollars)s,
+                    %(is_paper)s, %(user_id)s, %(created_at)s, %(updated_at)s, %(expired_at)s
+                )
+                ON CONFLICT (tick_id, decision_id, ticker, side) DO NOTHING
+                RETURNING id
+                """,
+                {
+                    "id": getattr(order, "id"),
+                    "tick_id": getattr(order, "tick_id"),
+                    "signal_id": getattr(order, "signal_id"),
+                    "decision_id": getattr(order, "decision_id"),
+                    "ticker": getattr(order, "ticker"),
+                    "event_ticker": getattr(order, "event_ticker"),
+                    "venue": getattr(order, "venue"),
+                    "side": getattr(order, "side"),
+                    "order_type": getattr(order, "order_type"),
+                    "requested_price": getattr(order, "requested_price"),
+                    "requested_size_dollars": getattr(order, "requested_size_dollars"),
+                    "requested_quantity": getattr(order, "requested_quantity"),
+                    "status": getattr(order, "status"),
+                    "filled_size_dollars": getattr(order, "filled_size_dollars"),
+                    "filled_quantity": getattr(order, "filled_quantity"),
+                    "fill_count": getattr(order, "fill_count"),
+                    "avg_fill_price": getattr(order, "avg_fill_price"),
+                    "slippage_bps": getattr(order, "slippage_bps"),
+                    "fees_dollars": getattr(order, "fees_dollars"),
+                    "is_paper": getattr(order, "is_paper"),
+                    "user_id": getattr(order, "user_id"),
+                    "created_at": getattr(order, "created_at"),
+                    "updated_at": getattr(order, "updated_at"),
+                    "expired_at": getattr(order, "expired_at"),
+                },
+            )
+            row = cur.fetchone()
+        conn.commit()
+        return row[0] if row else ""
+
+    def save_fill(self, fill: object) -> str:
+        """Insert a fill row. Returns the fill id."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO fills (
+                    id, order_id, fill_number,
+                    price, quantity, size_dollars,
+                    fee_dollars, slippage_bps, liquidity_consumed,
+                    trade_id, is_paper, user_id, created_at
+                ) VALUES (
+                    %(id)s, %(order_id)s, %(fill_number)s,
+                    %(price)s, %(quantity)s, %(size_dollars)s,
+                    %(fee_dollars)s, %(slippage_bps)s, %(liquidity_consumed)s,
+                    %(trade_id)s, %(is_paper)s, %(user_id)s, %(created_at)s
+                )
+                """,
+                {
+                    "id": getattr(fill, "id"),
+                    "order_id": getattr(fill, "order_id"),
+                    "fill_number": getattr(fill, "fill_number"),
+                    "price": getattr(fill, "price"),
+                    "quantity": getattr(fill, "quantity"),
+                    "size_dollars": getattr(fill, "size_dollars"),
+                    "fee_dollars": getattr(fill, "fee_dollars"),
+                    "slippage_bps": getattr(fill, "slippage_bps"),
+                    "liquidity_consumed": getattr(fill, "liquidity_consumed"),
+                    "trade_id": getattr(fill, "trade_id"),
+                    "is_paper": getattr(fill, "is_paper"),
+                    "user_id": getattr(fill, "user_id"),
+                    "created_at": getattr(fill, "created_at"),
+                },
+            )
+        conn.commit()
+        return getattr(fill, "id")
+
+    def update_order_status(
+        self,
+        order_id: str,
+        status: str,
+        filled_size_dollars: float = 0.0,
+        filled_quantity: float = 0.0,
+        fill_count: int = 0,
+        avg_fill_price: float | None = None,
+        slippage_bps: float | None = None,
+        fees_dollars: float = 0.0,
+        expired_at: object = None,
+    ) -> None:
+        """Update an order's status and fill aggregates."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE orders
+                SET status = %(status)s,
+                    filled_size_dollars = %(filled_size_dollars)s,
+                    filled_quantity = %(filled_quantity)s,
+                    fill_count = %(fill_count)s,
+                    avg_fill_price = %(avg_fill_price)s,
+                    slippage_bps = %(slippage_bps)s,
+                    fees_dollars = %(fees_dollars)s,
+                    expired_at = %(expired_at)s,
+                    updated_at = now()
+                WHERE id = %(id)s
+                """,
+                {
+                    "id": order_id,
+                    "status": status,
+                    "filled_size_dollars": filled_size_dollars,
+                    "filled_quantity": filled_quantity,
+                    "fill_count": fill_count,
+                    "avg_fill_price": avg_fill_price,
+                    "slippage_bps": slippage_bps,
+                    "fees_dollars": fees_dollars,
+                    "expired_at": expired_at,
+                },
+            )
+        conn.commit()
+
+    def update_fill_trade_id(self, fill_id: str, trade_id: str) -> None:
+        """Link a fill to a legacy trade row."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE fills SET trade_id = %(trade_id)s WHERE id = %(id)s",
+                {"id": fill_id, "trade_id": trade_id},
+            )
+        conn.commit()
+
+    def get_recent_orders(
+        self, limit: int = 50, status: str | None = None,
+    ) -> list[dict]:
+        """Return recent orders, optionally filtered by status."""
+        if status:
+            return self._fetch_dicts(
+                "SELECT * FROM orders WHERE status = %(status)s "
+                "ORDER BY created_at DESC LIMIT %(limit)s",
+                {"status": status, "limit": limit},
+            )
+        return self._fetch_dicts(
+            "SELECT * FROM orders ORDER BY created_at DESC LIMIT %(limit)s",
+            {"limit": limit},
+        )
+
+    def get_fills_for_order(self, order_id: str) -> list[dict]:
+        """Return all fills for a given order."""
+        return self._fetch_dicts(
+            "SELECT * FROM fills WHERE order_id = %(order_id)s "
+            "ORDER BY fill_number",
+            {"order_id": order_id},
+        )
+
+    def get_recent_fills(self, limit: int = 50) -> list[dict]:
+        """Return recent fills joined with order fields."""
+        return self._fetch_dicts(
+            """
+            SELECT f.*, o.ticker, o.venue, o.side, o.event_ticker,
+                   o.requested_price
+            FROM fills f
+            JOIN orders o ON f.order_id = o.id
+            ORDER BY f.created_at DESC
+            LIMIT %(limit)s
+            """,
+            {"limit": limit},
+        )
+
+    def get_decision_with_reasons(self, decision_id: int) -> dict | None:
+        """Return a decision with full guard results and signal features."""
+        rows = self._fetch_dicts(
+            """
+            SELECT d.*, s.ticker, s.event_ticker, s.edge_pct, s.signal_type,
+                   s.confidence_score, s.features_json, s.roi_per_day,
+                   s.time_to_resolution_days
+            FROM decisions d
+            JOIN signals s ON d.signal_id = s.id
+            WHERE d.id = %(id)s
+            """,
+            {"id": decision_id},
+        )
+        return rows[0] if rows else None
+
+    def get_execution_stats(self) -> dict:
+        """Aggregate execution statistics across all orders."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    COUNT(*) AS total_orders,
+                    COUNT(*) FILTER (WHERE status = 'filled') AS filled,
+                    COUNT(*) FILTER (WHERE status = 'partial') AS partial,
+                    COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled,
+                    COALESCE(AVG(slippage_bps) FILTER (WHERE slippage_bps IS NOT NULL), 0)
+                        AS avg_slippage_bps,
+                    COALESCE(SUM(fees_dollars), 0) AS total_fees
+                FROM orders
+            """)
+            row = cur.fetchone()
+
+        if row is None:
+            return {
+                "total_orders": 0, "filled": 0, "partial": 0,
+                "cancelled": 0, "avg_slippage_bps": 0.0, "total_fees": 0.0,
+            }
+
+        return {
+            "total_orders": row[0],
+            "filled": row[1],
+            "partial": row[2],
+            "cancelled": row[3],
+            "avg_slippage_bps": round(float(row[4]), 2),
+            "total_fees": round(float(row[5]), 4),
+        }
+
     def get_recent_snapshots_for_ticker(
         self, ticker: str, limit: int = 10,
     ) -> list[NormalizedMarket]:

@@ -168,7 +168,7 @@ def main() -> None:
 
     while not shutdown.is_set():
         try:
-            run_stats = run_once()
+            run_stats = run_once(run_number=stats.total_runs)
             stats.record_success(run_stats)
 
             # Persist per-run metrics

@@ -141,6 +141,84 @@ export interface GuardStat {
   rejection_rate: number;
 }
 
+// --- Execution ---
+
+export interface Order {
+  id: string;
+  tick_id: string;
+  signal_id: string;
+  decision_id: number;
+  ticker: string;
+  event_ticker: string;
+  venue: string;
+  side: "buy_yes" | "buy_no";
+  order_type: string;
+  requested_price: number;
+  requested_size_dollars: number;
+  requested_quantity: number;
+  status: "pending" | "filled" | "partial" | "cancelled";
+  filled_size_dollars: number;
+  filled_quantity: number;
+  fill_count: number;
+  avg_fill_price: number | null;
+  slippage_bps: number | null;
+  fees_dollars: number;
+  is_paper: boolean;
+  created_at: string;
+  updated_at: string;
+  expired_at: string | null;
+}
+
+export interface Fill {
+  id: string;
+  order_id: string;
+  fill_number: number;
+  price: number;
+  quantity: number;
+  size_dollars: number;
+  fee_dollars: number;
+  slippage_bps: number;
+  liquidity_consumed: number;
+  trade_id: string | null;
+  is_paper: boolean;
+  created_at: string;
+  // Joined from orders
+  ticker?: string;
+  venue?: string;
+  side?: "buy_yes" | "buy_no";
+  event_ticker?: string;
+  requested_price?: number;
+}
+
+export interface DecisionReasons {
+  id: number;
+  signal_id: string;
+  verdict: "pass" | "reject";
+  guard_results: GuardResult[];
+  suggested_size: number;
+  selected: boolean | null;
+  selection_score: number | null;
+  allocation_reasons: string[] | null;
+  created_at: string;
+  ticker: string;
+  event_ticker: string;
+  edge_pct: number;
+  signal_type: string;
+  confidence_score: number;
+  features_json: Record<string, unknown> | null;
+  roi_per_day: number;
+  time_to_resolution_days: number;
+}
+
+export interface ExecutionStats {
+  total_orders: number;
+  filled: number;
+  partial: number;
+  cancelled: number;
+  avg_slippage_bps: number;
+  total_fees: number;
+}
+
 // --- Enriched Signals & Regime ---
 
 export interface EnrichedSignal {

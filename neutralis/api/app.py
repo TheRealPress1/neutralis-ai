@@ -250,6 +250,46 @@ def activate_profile_endpoint(profile_id: int):
     return profile.to_dict()
 
 
+# --- Execution ---
+
+@app.get("/api/orders")
+def list_orders(
+    status: str | None = Query(None, pattern="^(pending|filled|partial|cancelled)$"),
+    limit: int = Query(50, ge=1, le=500),
+):
+    storage = _get_storage()
+    return JSONResponse(
+        content=_serialize(storage.get_recent_orders(limit=limit, status=status)),
+    )
+
+
+@app.get("/api/fills")
+def list_fills(limit: int = Query(50, ge=1, le=500)):
+    storage = _get_storage()
+    return JSONResponse(content=_serialize(storage.get_recent_fills(limit=limit)))
+
+
+@app.get("/api/fills/{order_id}")
+def fills_for_order(order_id: str):
+    storage = _get_storage()
+    return JSONResponse(content=_serialize(storage.get_fills_for_order(order_id)))
+
+
+@app.get("/api/decisions/{decision_id}/reasons")
+def decision_reasons(decision_id: int):
+    storage = _get_storage()
+    row = storage.get_decision_with_reasons(decision_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    return JSONResponse(content=_serialize(row))
+
+
+@app.get("/api/execution/stats")
+def execution_stats():
+    storage = _get_storage()
+    return storage.get_execution_stats()
+
+
 # --- Analytics ---
 
 @app.get("/api/analytics/summary")
