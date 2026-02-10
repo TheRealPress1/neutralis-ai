@@ -10,6 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from neutralis.alerts.discord import DiscordNotifier
 from neutralis.config import load_settings
 from neutralis.core.cross_scanner import scan_cross_platform
 from neutralis.core.matcher import match_markets
@@ -46,11 +47,12 @@ class RunStats:
 
 def run_once() -> RunStats:
     settings = load_settings()
+    notifier = DiscordNotifier(settings.alerts)
     start = time.monotonic()
 
     # Step 0: Settle resolved positions before scanning
     logger.info("Step 0: Checking for resolved markets")
-    settlement = run_settlement(settings)
+    settlement = run_settlement(settings, notifier=notifier)
 
     # Step 1a: Fetch active markets from Kalshi
     logger.info("Step 1a: Fetching active markets from Kalshi")
@@ -91,6 +93,10 @@ def run_once() -> RunStats:
     # Step 3c: Cross-platform signal scan
     logger.info("Step 3c: Scanning matched pairs for price discrepancies")
     xp_signals = scan_cross_platform(pairs, settings.matching)
+
+    # Alert on signals found
+    if complement_signals or xp_signals:
+        notifier.notify_signals(len(complement_signals), len(xp_signals), len(pairs))
 
     # Step 3d: Orderbook enrichment for complement arb signals
     enriched_markets: dict[str, NormalizedMarket] = {}
@@ -142,6 +148,14 @@ def run_once() -> RunStats:
             if decision.verdict == DecisionVerdict.PASS:
                 pass_count += 1
                 portfolio.record_fill(signal, decision, decision_id)
+                for leg in signal.legs:
+                    notifier.notify_fill(
+                        ticker=leg.ticker,
+                        side=leg.side,
+                        venue=leg.venue or "kalshi",
+                        size=leg.quantity_dollars,
+                        price=leg.price_dollars,
+                    )
             else:
                 reject_count += 1
 
@@ -177,6 +191,14 @@ def run_once() -> RunStats:
             if decision.verdict == DecisionVerdict.PASS:
                 pass_count += 1
                 portfolio.record_fill(signal, decision, decision_id)
+                for leg in signal.legs:
+                    notifier.notify_fill(
+                        ticker=leg.ticker,
+                        side=leg.side,
+                        venue=leg.venue or signal.venue,
+                        size=leg.quantity_dollars,
+                        price=leg.price_dollars,
+                    )
             else:
                 reject_count += 1
 
@@ -201,7 +223,7 @@ def run_once() -> RunStats:
         extra={"duration_ms": elapsed},
     )
 
-    return RunStats(
+    stats = RunStats(
         duration_ms=elapsed,
         kalshi_markets=len(kalshi_markets),
         poly_markets=len(poly_markets),
@@ -215,6 +237,12 @@ def run_once() -> RunStats:
         positions_settled=settlement.settled,
         settlement_pnl=settlement.pnl,
     )
+
+    # Alert if anything interesting happened
+    if pass_count > 0 or settlement.settled > 0:
+        notifier.notify_pipeline_summary(stats)
+
+    return stats
 
 
 if __name__ == "__main__":

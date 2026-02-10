@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from neutralis.alerts.discord import DiscordNotifier
 from neutralis.config import SchedulerConfig, load_settings
 from neutralis.logging import get_logger
 from neutralis.storage.postgres import PostgresStorage
@@ -87,6 +88,7 @@ def main() -> None:
     # Lazy import — avoid loading pipeline modules until we enter the loop
     from scripts.run_once import run_once
 
+    notifier = DiscordNotifier(settings.alerts)
     stats = _Stats()
 
     while not shutdown.is_set():
@@ -109,12 +111,17 @@ def main() -> None:
                 stats.total_errors,
                 stats.uptime_sec,
             )
-        except Exception:
+        except Exception as exc:
             stats.record_error()
             logger.exception(
                 "Pipeline error (%d/%d consecutive)",
                 stats.consecutive_errors,
                 cfg.max_consecutive_errors,
+            )
+            notifier.notify_error(
+                error_msg=str(exc),
+                consecutive=stats.consecutive_errors,
+                max_errors=cfg.max_consecutive_errors,
             )
             if stats.consecutive_errors >= cfg.max_consecutive_errors:
                 logger.error(
