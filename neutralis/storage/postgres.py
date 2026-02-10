@@ -416,6 +416,20 @@ class PostgresStorage:
             )
         conn.commit()
 
+    def update_unrealized_pnl(self, position_id: str, unrealized_pnl: float) -> None:
+        """Update the unrealized P&L for a single open position."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE positions
+                SET unrealized_pnl = %(pnl)s
+                WHERE id = %(id)s AND status = 'open'
+                """,
+                {"id": position_id, "pnl": unrealized_pnl},
+            )
+        conn.commit()
+
     def close_position(
         self,
         position_id: str,

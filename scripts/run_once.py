@@ -43,6 +43,7 @@ class RunStats:
     total_exposure: float = 0.0
     positions_settled: int = 0
     settlement_pnl: float = 0.0
+    marked_positions: int = 0
 
 
 def run_once() -> RunStats:
@@ -53,6 +54,12 @@ def run_once() -> RunStats:
     # Step 0: Settle resolved positions before scanning
     logger.info("Step 0: Checking for resolved markets")
     settlement = run_settlement(settings, notifier=notifier)
+
+    # Step 0b: Mark open positions to market (unrealized P&L)
+    logger.info("Step 0b: Marking positions to market")
+    with PostgresStorage(settings.db) as mtm_storage:
+        mtm_portfolio = PortfolioManager(mtm_storage, settings.portfolio)
+        marked_positions = mtm_portfolio.mark_to_market(settings)
 
     # Step 1a: Fetch active markets from Kalshi
     logger.info("Step 1a: Fetching active markets from Kalshi")
@@ -236,6 +243,7 @@ def run_once() -> RunStats:
         total_exposure=snapshot.total_exposure_dollars,
         positions_settled=settlement.settled,
         settlement_pnl=settlement.pnl,
+        marked_positions=marked_positions,
     )
 
     # Alert if anything interesting happened
