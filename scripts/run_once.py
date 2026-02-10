@@ -92,6 +92,14 @@ def run_once() -> None:
     with PostgresStorage(settings.db) as storage:
         portfolio = PortfolioManager(storage, settings.portfolio)
 
+        # Snapshot portfolio state once — all signals evaluated against same baseline
+        portfolio_snapshot = portfolio.get_snapshot()
+        logger.info(
+            "Portfolio baseline: %d open, $%.2f exposure",
+            portfolio_snapshot.open_position_count,
+            portfolio_snapshot.total_exposure_dollars,
+        )
+
         # 4a: Complement arb signals + guard decisions + portfolio
         for signal in complement_signals:
             market = enriched_markets.get(signal.ticker, signal.market_snapshot)
@@ -99,7 +107,11 @@ def run_once() -> None:
                 continue
             snapshot_id = storage.save_market_snapshot(market)
             storage.save_signal(signal, snapshot_id=snapshot_id)
-            decision = evaluate_signal(signal, market, settings.pipeline)
+            decision = evaluate_signal(
+                signal, market, settings.pipeline,
+                portfolio_snapshot=portfolio_snapshot,
+                portfolio_config=settings.portfolio,
+            )
             decision_id = storage.save_decision(decision)
 
             if decision.verdict == DecisionVerdict.PASS:
