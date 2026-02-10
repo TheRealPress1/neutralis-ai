@@ -1,0 +1,114 @@
+"""Domain models -- dataclasses that flow through the pipeline."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Optional
+from uuid import uuid4
+
+
+class MarketStatus(str, Enum):
+    INITIALIZED = "initialized"
+    INACTIVE = "inactive"
+    ACTIVE = "active"
+    CLOSED = "closed"
+    DETERMINED = "determined"
+    DISPUTED = "disputed"
+    AMENDED = "amended"
+    FINALIZED = "finalized"
+
+
+class MarketType(str, Enum):
+    BINARY = "binary"
+    SCALAR = "scalar"
+
+
+class SignalType(str, Enum):
+    COMPLEMENT_ARB = "complement_arb"
+
+
+class DecisionVerdict(str, Enum):
+    PASS = "pass"
+    REJECT = "reject"
+
+
+@dataclass(frozen=True)
+class OrderbookLevel:
+    price_dollars: float
+    quantity_dollars: float
+
+
+@dataclass(frozen=True)
+class NormalizedMarket:
+    ticker: str
+    event_ticker: str
+    market_type: MarketType
+    title: str
+    subtitle: str
+    status: MarketStatus
+
+    yes_bid: float
+    yes_ask: float
+    no_bid: float
+    no_ask: float
+
+    volume: float
+    volume_24h: float
+    liquidity: float
+    open_interest: float
+
+    close_time: Optional[datetime] = None
+    expected_expiration: Optional[datetime] = None
+    notional_value: float = 1.0
+
+    yes_bids: tuple[OrderbookLevel, ...] = ()
+    no_bids: tuple[OrderbookLevel, ...] = ()
+
+    snapshot_ts: datetime = field(default_factory=datetime.now)
+
+
+@dataclass(frozen=True)
+class TradeLeg:
+    ticker: str
+    side: str
+    price_dollars: float
+    quantity_dollars: float
+
+
+@dataclass(frozen=True)
+class Signal:
+    id: str = field(default_factory=lambda: uuid4().hex[:12])
+    signal_type: SignalType = SignalType.COMPLEMENT_ARB
+    ticker: str = ""
+    event_ticker: str = ""
+
+    yes_ask: float = 0.0
+    no_ask: float = 0.0
+    combined_cost: float = 0.0
+    gross_edge: float = 0.0
+    net_edge: float = 0.0
+    edge_pct: float = 0.0
+
+    legs: tuple[TradeLeg, ...] = ()
+    market_snapshot: Optional[NormalizedMarket] = None
+    created_at: datetime = field(default_factory=datetime.now)
+
+
+@dataclass(frozen=True)
+class GuardResult:
+    guard_name: str
+    passed: bool
+    reason: str = ""
+    value: Optional[float] = None
+    threshold: Optional[float] = None
+
+
+@dataclass(frozen=True)
+class Decision:
+    signal_id: str
+    verdict: DecisionVerdict
+    guard_results: tuple[GuardResult, ...] = ()
+    suggested_size_dollars: float = 0.0
+    created_at: datetime = field(default_factory=datetime.now)
