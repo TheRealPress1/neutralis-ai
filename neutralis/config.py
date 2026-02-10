@@ -93,6 +93,12 @@ class SchedulerConfig:
 
 
 @dataclass(frozen=True)
+class APIConfig:
+    host: str = "0.0.0.0"
+    port: int = 8000
+
+
+@dataclass(frozen=True)
 class Settings:
     kalshi: KalshiConfig = field(default_factory=KalshiConfig)
     polymarket: PolymarketConfig = field(default_factory=PolymarketConfig)
@@ -101,6 +107,7 @@ class Settings:
     pipeline: PipelineConfig = field(default_factory=PipelineConfig)
     portfolio: PortfolioConfig = field(default_factory=PortfolioConfig)
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
+    api: APIConfig = field(default_factory=APIConfig)
 
 
 def load_settings() -> Settings:

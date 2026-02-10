@@ -502,3 +502,96 @@ class PostgresStorage:
             )
             rows = cur.fetchall()
         return [self._row_to_position(row) for row in rows]
+
+    # -- Dashboard API read queries --
+
+    def _fetch_dicts(self, sql: str, params: dict | None = None) -> list[dict]:
+        """Execute a SELECT and return rows as dicts."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(sql, params or {})
+            if cur.description is None:
+                return []
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+    def get_recent_signals(self, limit: int = 50) -> list[dict]:
+        return self._fetch_dicts(
+            "SELECT * FROM signals ORDER BY created_at DESC LIMIT %(limit)s",
+            {"limit": limit},
+        )
+
+    def get_recent_decisions(
+        self, limit: int = 50, verdict: str | None = None,
+    ) -> list[dict]:
+        if verdict:
+            return self._fetch_dicts(
+                "SELECT d.*, s.ticker, s.edge_pct, s.signal_type "
+                "FROM decisions d JOIN signals s ON d.signal_id = s.id "
+                "WHERE d.verdict = %(verdict)s "
+                "ORDER BY d.created_at DESC LIMIT %(limit)s",
+                {"verdict": verdict, "limit": limit},
+            )
+        return self._fetch_dicts(
+            "SELECT d.*, s.ticker, s.edge_pct, s.signal_type "
+            "FROM decisions d JOIN signals s ON d.signal_id = s.id "
+            "ORDER BY d.created_at DESC LIMIT %(limit)s",
+            {"limit": limit},
+        )
+
+    def get_recent_trades(self, limit: int = 50) -> list[dict]:
+        return self._fetch_dicts(
+            "SELECT * FROM trades ORDER BY created_at DESC LIMIT %(limit)s",
+            {"limit": limit},
+        )
+
+    def get_closed_positions(self, limit: int = 50) -> list[dict]:
+        return self._fetch_dicts(
+            "SELECT * FROM positions WHERE status = 'closed' "
+            "ORDER BY closed_at DESC LIMIT %(limit)s",
+            {"limit": limit},
+        )
+
+    def get_recent_matches(self, limit: int = 50) -> list[dict]:
+        return self._fetch_dicts(
+            "SELECT * FROM market_matches "
+            "ORDER BY created_at DESC LIMIT %(limit)s",
+            {"limit": limit},
+        )
+
+    def get_recent_cross_platform_signals(self, limit: int = 50) -> list[dict]:
+        return self._fetch_dicts(
+            "SELECT * FROM cross_platform_signals "
+            "ORDER BY created_at DESC LIMIT %(limit)s",
+            {"limit": limit},
+        )
+
+    def get_portfolio_stats(self) -> dict:
+        """Aggregate portfolio statistics."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    COUNT(*) FILTER (WHERE status = 'open') AS open_positions,
+                    COUNT(*) FILTER (WHERE status = 'closed') AS closed_positions,
+                    COALESCE(SUM(size_dollars) FILTER (WHERE status = 'open'), 0) AS total_exposure,
+                    COALESCE(SUM(realized_pnl) FILTER (WHERE status = 'closed'), 0) AS total_realized_pnl,
+                    COUNT(*) FILTER (WHERE status = 'closed' AND realized_pnl > 0) AS wins,
+                    COUNT(*) FILTER (WHERE status = 'closed' AND realized_pnl <= 0) AS losses
+                FROM positions
+            """)
+            row = cur.fetchone()
+
+            cur.execute("SELECT COUNT(*) FROM trades")
+            trade_count = cur.fetchone()[0]  # type: ignore[index]
+
+        return {
+            "open_positions": row[0],  # type: ignore[index]
+            "closed_positions": row[1],  # type: ignore[index]
+            "total_exposure": float(row[2]),  # type: ignore[index]
+            "total_realized_pnl": float(row[3]),  # type: ignore[index]
+            "wins": row[4],  # type: ignore[index]
+            "losses": row[5],  # type: ignore[index]
+            "win_rate": round(row[4] / max(row[4] + row[5], 1), 4),  # type: ignore[index]
+            "total_trades": trade_count,
+        }
