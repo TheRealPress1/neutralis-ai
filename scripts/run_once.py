@@ -135,7 +135,21 @@ def run_once() -> None:
             mid = match_ids.get(key)
             storage.save_cross_platform_signal(signal, match_id=mid)
 
-        # 4c: Portfolio summary
+        # 4c: Evaluate cross-platform signals through Guard
+        for signal in xp_signals:
+            market = signal.market_snapshot
+            if market is None:
+                continue
+            decision = evaluate_signal(
+                signal, market, settings.pipeline,
+                portfolio_snapshot=portfolio_snapshot,
+                portfolio_config=settings.portfolio,
+            )
+            decision_id = storage.save_decision(decision)
+            if decision.verdict == DecisionVerdict.PASS:
+                portfolio.record_fill(signal, decision, decision_id)
+
+        # 4d: Portfolio summary
         snapshot = portfolio.get_snapshot()
         logger.info(
             "Portfolio: %d open positions, $%.2f total exposure",
