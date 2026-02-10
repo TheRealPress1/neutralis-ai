@@ -66,7 +66,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET", "PUT"],
+    allow_methods=["GET", "PUT", "POST"],
     allow_headers=["*"],
 )
 
@@ -124,6 +124,32 @@ def get_position(position_id: str):
 def list_signals(limit: int = Query(50, ge=1, le=500)):
     storage = _get_storage()
     return JSONResponse(content=_serialize(storage.get_recent_signals(limit=limit)))
+
+
+@app.get("/api/signals/enriched")
+def enriched_signals(
+    limit: int = Query(50, ge=1, le=200),
+    min_confidence: int = Query(0, ge=0, le=100),
+    signal_type: str | None = Query(None),
+    verdict: str | None = Query(None, pattern="^(pass|reject)$"),
+):
+    storage = _get_storage()
+    rows = storage.get_enriched_signals(
+        limit=limit,
+        min_confidence=min_confidence,
+        signal_type=signal_type,
+        verdict=verdict,
+    )
+    return JSONResponse(content=_serialize(rows))
+
+
+@app.get("/api/regime/current")
+def current_regime():
+    storage = _get_storage()
+    regime = storage.get_current_regime()
+    if regime is None:
+        return {"regime": "normal", "metrics_json": {}, "params_json": {}}
+    return _serialize(regime)
 
 
 # --- Decisions ---
@@ -293,6 +319,8 @@ class BacktestRequest(BaseModel):
     pipeline_overrides: dict[str, Any] | None = None
     portfolio_overrides: dict[str, Any] | None = None
     matching_overrides: dict[str, Any] | None = None
+    exit_overrides: dict[str, Any] | None = None
+    scoring_weights: dict[str, float] | None = None
 
 
 @app.post("/api/backtest/run")
@@ -306,6 +334,8 @@ def run_backtest_endpoint(req: BacktestRequest):
             pipeline_overrides=req.pipeline_overrides,
             portfolio_overrides=req.portfolio_overrides,
             matching_overrides=req.matching_overrides,
+            exit_overrides=req.exit_overrides,
+            scoring_weights=req.scoring_weights,
         )
         return result.to_dict()
     except Exception as e:
@@ -333,3 +363,65 @@ def backtest_data_range():
         "total_runs": row["total_runs"],
         "total_snapshots": row["total_snapshots"],
     }
+
+
+# --- Optimizer ---
+
+# In-memory progress tracking (simple single-process approach)
+_optimizer_runs: dict[int, dict] = {}
+_optimizer_next_id = 1
+
+
+class OptimizeRequest(BaseModel):
+    start_date: str
+    end_date: str
+    objective: str = "total_pnl"
+    step_size: float = 0.10
+    max_combos: int = 50
+    top_n: int = 10
+
+
+@app.post("/api/backtest/optimize")
+def optimize_weights(req: OptimizeRequest):
+    from neutralis.backtest.optimizer import run_optimization
+
+    global _optimizer_next_id  # noqa: PLW0603
+    run_id = _optimizer_next_id
+    _optimizer_next_id += 1
+
+    _optimizer_runs[run_id] = {
+        "id": run_id,
+        "status": "running",
+        "completed": 0,
+        "total_combos": req.max_combos,
+        "results": [],
+    }
+
+    def on_progress(completed: int, total: int) -> None:
+        _optimizer_runs[run_id]["completed"] = completed
+        _optimizer_runs[run_id]["total_combos"] = total
+
+    try:
+        results = run_optimization(
+            start_date=req.start_date,
+            end_date=req.end_date,
+            objective=req.objective,
+            step_size=req.step_size,
+            max_combos=req.max_combos,
+            top_n=req.top_n,
+            progress_callback=on_progress,
+        )
+        _optimizer_runs[run_id]["status"] = "completed"
+        _optimizer_runs[run_id]["results"] = results
+        return _optimizer_runs[run_id]
+    except Exception as e:
+        _optimizer_runs[run_id]["status"] = "failed"
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/backtest/optimize/{run_id}/progress")
+def optimizer_progress(run_id: int):
+    run = _optimizer_runs.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Optimizer run not found")
+    return run

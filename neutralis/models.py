@@ -186,6 +186,8 @@ class Position:
     opened_at: datetime = field(default_factory=datetime.now)
     closed_at: Optional[datetime] = None
     category: str = "other"
+    exit_reason: Optional[str] = None
+    exit_price: Optional[float] = None
 
 
 @dataclass(frozen=True)

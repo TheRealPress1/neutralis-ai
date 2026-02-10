@@ -16,9 +16,9 @@ import {
 import type {
   BacktestResult,
   BacktestDataRange,
-  BacktestEquityPoint,
+  OptimizerResult,
 } from "@/types/api";
-import { fetchBacktestDataRange, runBacktest } from "@/lib/api";
+import { fetchBacktestDataRange, runBacktest, runOptimization } from "@/lib/api";
 
 const CATEGORY_COLORS: Record<string, string> = {
   politics: "#3b82f6",
@@ -67,6 +67,15 @@ export default function BacktestPanel() {
   const [maxExposure, setMaxExposure] = useState("500");
   const [minSimilarity, setMinSimilarity] = useState("0.70");
 
+  // Optimizer state
+  const [optObjective, setOptObjective] = useState("total_pnl");
+  const [optMaxCombos, setOptMaxCombos] = useState("50");
+  const [optStepSize, setOptStepSize] = useState("0.10");
+  const [optRunning, setOptRunning] = useState(false);
+  const [optResults, setOptResults] = useState<OptimizerResult[] | null>(null);
+  const [optError, setOptError] = useState<string | null>(null);
+  const [optProgress, setOptProgress] = useState("");
+
   useEffect(() => {
     fetchBacktestDataRange()
       .then((range) => {
@@ -99,6 +108,61 @@ export default function BacktestPanel() {
         matching_overrides: {
           min_similarity: parseFloat(minSimilarity),
         },
+      });
+      setResult(res);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Backtest failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleOptimize() {
+    if (!startDate || !endDate) return;
+    setOptRunning(true);
+    setOptError(null);
+    setOptResults(null);
+    setOptProgress("Starting optimization...");
+
+    try {
+      const run = await runOptimization({
+        start_date: startDate,
+        end_date: endDate,
+        objective: optObjective as "total_pnl" | "sharpe_ratio" | "profit_factor" | "composite",
+        step_size: parseFloat(optStepSize),
+        max_combos: parseInt(optMaxCombos, 10),
+        top_n: 10,
+      });
+      setOptResults(run.results);
+      setOptProgress(`Completed: ${run.completed}/${run.total_combos} combos`);
+    } catch (e) {
+      setOptError(e instanceof Error ? e.message : "Optimization failed");
+    } finally {
+      setOptRunning(false);
+    }
+  }
+
+  async function handleApplyAndRun(weights: Record<string, number>) {
+    if (!startDate || !endDate) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const res = await runBacktest({
+        start_date: startDate,
+        end_date: endDate,
+        pipeline_overrides: {
+          min_edge_pct: parseFloat(minEdge),
+          max_position_dollars: parseFloat(maxPosition),
+        },
+        portfolio_overrides: {
+          max_total_exposure_dollars: parseFloat(maxExposure),
+        },
+        matching_overrides: {
+          min_similarity: parseFloat(minSimilarity),
+        },
+        scoring_weights: weights,
       });
       setResult(res);
     } catch (e) {
@@ -209,6 +273,134 @@ export default function BacktestPanel() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Optimizer Panel */}
+      <div className="rounded-lg border border-[#1a1d21] bg-[#0d0f11] p-4">
+        <h3 className="mb-3 text-sm font-medium text-[#e8e9ea]">
+          Weight Optimizer
+        </h3>
+        <p className="mb-3 text-xs text-[#6b7280]">
+          Grid search over scoring weight space to find optimal configurations
+        </p>
+        <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <label className="mb-1 block text-xs text-[#9ca3af]">Objective</label>
+            <select
+              value={optObjective}
+              onChange={(e) => setOptObjective(e.target.value)}
+              className="rounded border border-[#1a1d21] bg-[#050608] px-2 py-1.5 text-xs text-[#e8e9ea]"
+            >
+              <option value="total_pnl">Total P&L</option>
+              <option value="sharpe_ratio">Sharpe Ratio</option>
+              <option value="profit_factor">Profit Factor</option>
+              <option value="composite">Composite</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-[#9ca3af]">Max Combos</label>
+            <input
+              type="number"
+              value={optMaxCombos}
+              onChange={(e) => setOptMaxCombos(e.target.value)}
+              className="w-20 rounded border border-[#1a1d21] bg-[#050608] px-2 py-1.5 text-xs text-[#e8e9ea]"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-[#9ca3af]">Step Size</label>
+            <input
+              type="number"
+              step="0.05"
+              value={optStepSize}
+              onChange={(e) => setOptStepSize(e.target.value)}
+              className="w-20 rounded border border-[#1a1d21] bg-[#050608] px-2 py-1.5 text-xs text-[#e8e9ea]"
+            />
+          </div>
+          <button
+            onClick={handleOptimize}
+            disabled={optRunning || loading || !startDate || !endDate}
+            className="rounded bg-purple-600 px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-purple-700 disabled:opacity-40"
+          >
+            {optRunning ? "Optimizing..." : "Optimize Weights"}
+          </button>
+        </div>
+
+        {/* Optimizer progress / error */}
+        {optRunning && (
+          <p className="mt-3 text-xs text-[#9ca3af]">{optProgress}</p>
+        )}
+        {optError && (
+          <p className="mt-3 text-xs text-red-400">{optError}</p>
+        )}
+
+        {/* Optimizer results table */}
+        {optResults && optResults.length > 0 && (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-[#9ca3af]">
+                <tr>
+                  <th className="pb-2 text-left font-medium">#</th>
+                  <th className="pb-2 text-right font-medium">Objective</th>
+                  <th className="pb-2 text-right font-medium">P&L</th>
+                  <th className="pb-2 text-right font-medium">Win%</th>
+                  <th className="pb-2 text-right font-medium">Sharpe</th>
+                  <th className="pb-2 text-right font-medium">Trades</th>
+                  <th className="pb-2 text-right font-medium">Edge</th>
+                  <th className="pb-2 text-right font-medium">Liq</th>
+                  <th className="pb-2 text-right font-medium">Stab</th>
+                  <th className="pb-2 text-right font-medium">Sprd</th>
+                  <th className="pb-2 text-right font-medium">Time</th>
+                  <th className="pb-2 text-right font-medium">Match</th>
+                  <th className="pb-2 text-left font-medium"></th>
+                </tr>
+              </thead>
+              <tbody className="text-[#c0c5cb]">
+                {optResults.map((r) => (
+                  <tr key={r.rank} className="border-t border-[#1a1d21]/50">
+                    <td className="py-1.5 font-medium">{r.rank}</td>
+                    <td className="py-1.5 text-right font-mono">{r.objective_value.toFixed(2)}</td>
+                    <td
+                      className="py-1.5 text-right font-mono"
+                      style={{ color: r.total_pnl >= 0 ? "#22c55e" : "#ef4444" }}
+                    >
+                      ${r.total_pnl.toFixed(2)}
+                    </td>
+                    <td className="py-1.5 text-right">{(r.win_rate * 100).toFixed(0)}%</td>
+                    <td className="py-1.5 text-right font-mono">{r.sharpe_ratio.toFixed(2)}</td>
+                    <td className="py-1.5 text-right">{r.total_trades}</td>
+                    <td className="py-1.5 text-right font-mono">
+                      {(r.weights.edge_robustness ?? 0).toFixed(2)}
+                    </td>
+                    <td className="py-1.5 text-right font-mono">
+                      {(r.weights.liquidity_robustness ?? 0).toFixed(2)}
+                    </td>
+                    <td className="py-1.5 text-right font-mono">
+                      {(r.weights.price_stability ?? 0).toFixed(2)}
+                    </td>
+                    <td className="py-1.5 text-right font-mono">
+                      {(r.weights.spread_health ?? 0).toFixed(2)}
+                    </td>
+                    <td className="py-1.5 text-right font-mono">
+                      {(r.weights.time_efficiency ?? 0).toFixed(2)}
+                    </td>
+                    <td className="py-1.5 text-right font-mono">
+                      {(r.weights.match_confidence ?? 0).toFixed(2)}
+                    </td>
+                    <td className="py-1.5">
+                      <button
+                        onClick={() => handleApplyAndRun(r.weights)}
+                        disabled={loading}
+                        className="rounded bg-[#3b82f6] px-2 py-0.5 text-[10px] font-medium text-white hover:bg-[#2563eb] disabled:opacity-40"
+                      >
+                        Apply & Run
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Error */}

@@ -318,7 +318,7 @@ class PostgresStorage:
         "id, ticker, event_ticker, venue, side, status, "
         "entry_price, size_dollars, quantity, "
         "realized_pnl, unrealized_pnl, trade_count, "
-        "opened_at, closed_at, category"
+        "opened_at, closed_at, category, exit_reason, exit_price"
     )
 
     @staticmethod
@@ -339,6 +339,8 @@ class PostgresStorage:
             opened_at=row[12],
             closed_at=row[13],
             category=row[14] if len(row) > 14 else "other",
+            exit_reason=row[15] if len(row) > 15 else None,
+            exit_price=float(row[16]) if len(row) > 16 and row[16] is not None else None,
         )
 
     def save_trade(self, trade: Trade) -> str:
@@ -385,12 +387,13 @@ class PostgresStorage:
                     id, ticker, event_ticker, venue, side, status,
                     entry_price, size_dollars, quantity,
                     realized_pnl, unrealized_pnl, trade_count,
-                    opened_at, closed_at, category
+                    opened_at, closed_at, category, exit_reason, exit_price
                 ) VALUES (
                     %(id)s, %(ticker)s, %(event_ticker)s, %(venue)s, %(side)s, %(status)s,
                     %(entry_price)s, %(size_dollars)s, %(quantity)s,
                     %(realized_pnl)s, %(unrealized_pnl)s, %(trade_count)s,
-                    %(opened_at)s, %(closed_at)s, %(category)s
+                    %(opened_at)s, %(closed_at)s, %(category)s,
+                    %(exit_reason)s, %(exit_price)s
                 )
                 """,
                 {
@@ -409,6 +412,8 @@ class PostgresStorage:
                     "opened_at": position.opened_at,
                     "closed_at": position.closed_at,
                     "category": position.category,
+                    "exit_reason": position.exit_reason,
+                    "exit_price": position.exit_price,
                 },
             )
         conn.commit()
@@ -463,6 +468,8 @@ class PostgresStorage:
         position_id: str,
         realized_pnl: float,
         closed_at: object,
+        exit_reason: str | None = None,
+        exit_price: float | None = None,
     ) -> None:
         """Mark a position as closed with realized P&L."""
         conn = self._ensure_connected()
@@ -473,13 +480,17 @@ class PostgresStorage:
                 SET status = 'closed',
                     realized_pnl = %(realized_pnl)s,
                     unrealized_pnl = 0,
-                    closed_at = %(closed_at)s
+                    closed_at = %(closed_at)s,
+                    exit_reason = %(exit_reason)s,
+                    exit_price = %(exit_price)s
                 WHERE id = %(id)s AND status = 'open'
                 """,
                 {
                     "id": position_id,
                     "realized_pnl": realized_pnl,
                     "closed_at": closed_at,
+                    "exit_reason": exit_reason,
+                    "exit_price": exit_price,
                 },
             )
         conn.commit()
@@ -756,6 +767,51 @@ class PostgresStorage:
             GROUP BY g->>'guard_name'
             ORDER BY rejections DESC
         """)
+
+    # -- Signal feed & regime queries --
+
+    def get_enriched_signals(
+        self,
+        limit: int = 50,
+        min_confidence: int = 0,
+        signal_type: str | None = None,
+        verdict: str | None = None,
+    ) -> list[dict]:
+        """Signals joined with their latest decision, for the live feed."""
+        where_clauses = ["s.confidence_score >= %(min_confidence)s"]
+        params: dict = {"limit": limit, "min_confidence": min_confidence}
+
+        if signal_type:
+            where_clauses.append("s.signal_type = %(signal_type)s")
+            params["signal_type"] = signal_type
+        if verdict:
+            where_clauses.append("d.verdict = %(verdict)s")
+            params["verdict"] = verdict
+
+        where_sql = " AND ".join(where_clauses)
+
+        return self._fetch_dicts(f"""
+            SELECT
+                s.id, s.signal_type, s.ticker, s.event_ticker,
+                s.edge_pct, s.net_edge, s.confidence_score,
+                s.roi_per_day, s.time_to_resolution_days,
+                s.features_json, s.created_at AS signal_created_at,
+                d.id AS decision_id, d.verdict, d.selected,
+                d.selection_score, d.suggested_size,
+                d.guard_results, d.allocation_reasons
+            FROM signals s
+            LEFT JOIN decisions d ON d.signal_id = s.id
+            WHERE {where_sql}
+            ORDER BY s.created_at DESC
+            LIMIT %(limit)s
+        """, params)
+
+    def get_current_regime(self) -> dict | None:
+        """Return the most recent regime state."""
+        rows = self._fetch_dicts(
+            "SELECT * FROM regime_states ORDER BY created_at DESC LIMIT 1"
+        )
+        return rows[0] if rows else None
 
     # -- Backtest queries --
 

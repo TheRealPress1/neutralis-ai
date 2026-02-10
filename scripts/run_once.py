@@ -50,6 +50,8 @@ class RunStats:
     positions_settled: int = 0
     settlement_pnl: float = 0.0
     marked_positions: int = 0
+    exits_triggered: int = 0
+    exit_pnl: float = 0.0
     regime: str = "normal"
     disagreement_index: float = 0.0
 
@@ -96,6 +98,29 @@ def run_once() -> RunStats:
     with PostgresStorage(settings.db) as mtm_storage:
         mtm_portfolio = PortfolioManager(mtm_storage, settings.portfolio)
         marked_positions = mtm_portfolio.mark_to_market(settings)
+
+    # Step 0c: Evaluate exit strategies for open positions
+    exit_count = 0
+    exit_pnl = 0.0
+    if settings.exits.enabled:
+        logger.info("Step 0c: Evaluating exit strategies")
+        with PostgresStorage(settings.db) as exit_storage:
+            exit_portfolio = PortfolioManager(exit_storage, settings.portfolio)
+            exits = exit_portfolio.evaluate_exits(settings, settings.exits)
+            for pos, reason, price in exits:
+                closed = exit_portfolio.execute_exit(pos, reason, price)
+                exit_count += 1
+                exit_pnl += closed.realized_pnl
+                notifier.notify_exit(
+                    ticker=pos.ticker,
+                    side=pos.side.value,
+                    venue=pos.venue,
+                    exit_reason=reason,
+                    exit_price=price,
+                    pnl=closed.realized_pnl,
+                )
+            if exit_count > 0:
+                logger.info("Exits: %d positions closed, P&L=$%.2f", exit_count, exit_pnl)
 
     # Step 1a: Fetch active markets from Kalshi
     logger.info("Step 1a: Fetching active markets from Kalshi")
@@ -313,12 +338,14 @@ def run_once() -> RunStats:
         positions_settled=settlement.settled,
         settlement_pnl=settlement.pnl,
         marked_positions=marked_positions,
+        exits_triggered=exit_count,
+        exit_pnl=exit_pnl,
         regime=regime,
         disagreement_index=di_overall,
     )
 
     # Alert if anything interesting happened
-    if selected_count > 0 or settlement.settled > 0:
+    if selected_count > 0 or settlement.settled > 0 or exit_count > 0:
         notifier.notify_pipeline_summary(stats)
 
     return stats

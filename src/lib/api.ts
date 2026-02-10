@@ -8,10 +8,14 @@ import type {
   CategoryBreakdown,
   CategoryMeta,
   DailyPnL,
+  EnrichedSignal,
   GuardStat,
+  OptimizerRequest,
+  OptimizerRun,
   PnLBucket,
   PortfolioStats,
   Position,
+  RegimeState,
   Signal,
   Decision,
   MarketMatch,
@@ -56,6 +60,25 @@ export function fetchSignals(limit = 20) {
 
 export function fetchDecisions(limit = 20) {
   return apiFetch<Decision[]>("/api/decisions", { limit: String(limit) });
+}
+
+export function fetchEnrichedSignals(
+  limit = 50,
+  filters?: {
+    min_confidence?: number;
+    signal_type?: string;
+    verdict?: string;
+  },
+) {
+  const params: Record<string, string> = { limit: String(limit) };
+  if (filters?.min_confidence) params.min_confidence = String(filters.min_confidence);
+  if (filters?.signal_type) params.signal_type = filters.signal_type;
+  if (filters?.verdict) params.verdict = filters.verdict;
+  return apiFetch<EnrichedSignal[]>("/api/signals/enriched", params);
+}
+
+export function fetchCurrentRegime() {
+  return apiFetch<RegimeState>("/api/regime/current");
 }
 
 export function fetchMatches(limit = 25) {
@@ -145,4 +168,26 @@ export async function runBacktest(
     throw new Error(`Backtest failed (${res.status}): ${text}`);
   }
   return res.json() as Promise<BacktestResult>;
+}
+
+// --- Optimizer ---
+
+export async function runOptimization(
+  req: OptimizerRequest,
+): Promise<OptimizerRun> {
+  const url = new URL("/api/backtest/optimize", API_BASE);
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Optimization failed (${res.status}): ${text}`);
+  }
+  return res.json() as Promise<OptimizerRun>;
+}
+
+export function fetchOptimizerProgress(runId: number) {
+  return apiFetch<OptimizerRun>(`/api/backtest/optimize/${runId}/progress`);
 }

@@ -141,6 +141,64 @@ export interface GuardStat {
   rejection_rate: number;
 }
 
+// --- Enriched Signals & Regime ---
+
+export interface EnrichedSignal {
+  id: string;
+  signal_type: "complement_arb" | "cross_platform_discrepancy";
+  ticker: string;
+  event_ticker: string;
+  edge_pct: number;
+  net_edge: number;
+  confidence_score: number;
+  roi_per_day: number;
+  time_to_resolution_days: number;
+  features_json: Record<string, unknown> | null;
+  signal_created_at: string;
+  decision_id: number | null;
+  verdict: "pass" | "reject" | null;
+  selected: boolean | null;
+  selection_score: number | null;
+  suggested_size: number | null;
+  guard_results: GuardResult[] | null;
+  allocation_reasons: string[] | null;
+}
+
+export interface RegimeState {
+  regime: "normal" | "risk_off";
+  metrics_json: Record<string, unknown>;
+  params_json: Record<string, unknown>;
+}
+
+// --- Optimizer ---
+
+export interface OptimizerRequest {
+  start_date: string;
+  end_date: string;
+  objective: "total_pnl" | "sharpe_ratio" | "profit_factor" | "composite";
+  step_size?: number;
+  max_combos?: number;
+  top_n?: number;
+}
+
+export interface OptimizerResult {
+  rank: number;
+  objective_value: number;
+  total_pnl: number;
+  win_rate: number;
+  sharpe_ratio: number;
+  total_trades: number;
+  weights: Record<string, number>;
+}
+
+export interface OptimizerRun {
+  id: number;
+  status: "running" | "completed" | "failed";
+  completed: number;
+  total_combos: number;
+  results: OptimizerResult[];
+}
+
 // --- Backtest ---
 
 export interface BacktestRequest {
@@ -149,6 +207,8 @@ export interface BacktestRequest {
   pipeline_overrides?: Record<string, number>;
   portfolio_overrides?: Record<string, number>;
   matching_overrides?: Record<string, number>;
+  exit_overrides?: Record<string, number>;
+  scoring_weights?: Record<string, number>;
 }
 
 export interface BacktestEquityPoint {

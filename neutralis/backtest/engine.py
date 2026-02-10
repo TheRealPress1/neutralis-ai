@@ -9,6 +9,7 @@ from typing import Any
 
 from neutralis.backtest.portfolio import SimulatedPortfolio
 from neutralis.config import (
+    ExitConfig,
     MatchingConfig,
     PipelineConfig,
     PortfolioConfig,
@@ -148,12 +149,64 @@ def _try_settle(
     return total_pnl
 
 
+def _try_exits(
+    portfolio: SimulatedPortfolio,
+    markets: list[NormalizedMarket],
+    exit_cfg: ExitConfig,
+    ts: object,
+) -> tuple[int, float]:
+    """Evaluate stop-loss and take-profit exits using snapshot bid prices.
+
+    Returns (exit_count, total_pnl).
+    """
+    if not exit_cfg.enabled:
+        return 0, 0.0
+
+    # Build bid-price lookup from current market snapshots
+    bid_prices: dict[str, float] = {}
+    for m in markets:
+        bid_prices[m.ticker] = m.yes_bid if m.yes_bid > 0 else m.yes_ask
+
+    exit_count = 0
+    total_pnl = 0.0
+
+    # Iterate over a snapshot of positions (dict may change during iteration)
+    positions = list(portfolio._positions.items())
+    for key, pos in positions:
+        current_bid = bid_prices.get(pos.ticker)
+        if current_bid is None or current_bid <= 0.01:
+            continue
+
+        # Use the bid for the side we hold
+        if pos.side == TradeSide.BUY_NO:
+            current_bid = 1.0 - current_bid  # no_bid ≈ 1 - yes_bid
+
+        exit_value = current_bid * pos.quantity
+        pnl_dollars = exit_value - pos.size_dollars
+        pnl_pct = (pnl_dollars / pos.size_dollars * 100) if pos.size_dollars > 0 else 0.0
+
+        exit_reason = None
+        if pnl_pct <= -exit_cfg.stop_loss_pct:
+            exit_reason = "stop_loss"
+        elif pnl_pct >= exit_cfg.take_profit_pct:
+            exit_reason = "take_profit"
+
+        if exit_reason is not None:
+            pnl = portfolio.exit_position(pos.ticker, current_bid, ts)
+            total_pnl += pnl
+            exit_count += 1
+
+    return exit_count, total_pnl
+
+
 def run_backtest(
     start_date: str,
     end_date: str,
     pipeline_overrides: dict[str, Any] | None = None,
     portfolio_overrides: dict[str, Any] | None = None,
     matching_overrides: dict[str, Any] | None = None,
+    exit_overrides: dict[str, Any] | None = None,
+    scoring_weights: dict[str, float] | None = None,
 ) -> BacktestResult:
     """Run a backtest over historical data.
 
@@ -163,6 +216,8 @@ def run_backtest(
         pipeline_overrides: Override PipelineConfig fields
         portfolio_overrides: Override PortfolioConfig fields
         matching_overrides: Override MatchingConfig fields
+        exit_overrides: Override ExitConfig fields
+        scoring_weights: Custom scoring weights for optimizer
 
     Returns:
         BacktestResult with metrics, equity curve, and trade log.
@@ -173,6 +228,7 @@ def run_backtest(
     pipeline_cfg = _apply_overrides(base.pipeline, pipeline_overrides)
     portfolio_cfg = _apply_overrides(base.portfolio, portfolio_overrides)
     matching_cfg = _apply_overrides(base.matching, matching_overrides)
+    exit_cfg = _apply_overrides(base.exits, exit_overrides)
 
     logger.info(
         "Backtest: %s to %s | min_edge=%.1f%% max_pos=$%.0f",
@@ -211,6 +267,9 @@ def run_backtest(
             # Settlement check
             _try_settle(portfolio, all_markets, settled_tickers, ts)
 
+            # Exit strategy check
+            _try_exits(portfolio, all_markets, exit_cfg, ts)
+
             # Complement arb scan (Kalshi)
             complement_signals = scan_complement_arb(kalshi_markets, pipeline_cfg)
 
@@ -235,7 +294,7 @@ def run_backtest(
                 recent = storage.get_recent_snapshots_for_ticker(market.ticker, limit=10)
                 features = compute_market_features(market, recent_snapshots=recent)
                 costs = estimate_costs(signal, market)
-                result = score_signal(signal, features, costs)
+                result = score_signal(signal, features, costs, weights=scoring_weights)
                 scored = replace(
                     signal,
                     confidence_score=result["confidence_score"],
@@ -255,7 +314,7 @@ def run_backtest(
                 recent = storage.get_recent_snapshots_for_ticker(market.ticker, limit=10)
                 features = compute_market_features(market, recent_snapshots=recent)
                 costs = estimate_costs(signal, market)
-                result = score_signal(signal, features, costs, match_score=match_conf)
+                result = score_signal(signal, features, costs, match_score=match_conf, weights=scoring_weights)
                 scored = replace(
                     signal,
                     confidence_score=result["confidence_score"],
@@ -331,6 +390,8 @@ def run_backtest(
         pipeline_cfg=pipeline_cfg,
         portfolio_cfg=portfolio_cfg,
         matching_cfg=matching_cfg,
+        exit_cfg=exit_cfg,
+        scoring_weights=scoring_weights,
     )
 
 
@@ -347,6 +408,8 @@ def _build_result(
     pipeline_cfg: PipelineConfig,
     portfolio_cfg: PortfolioConfig,
     matching_cfg: MatchingConfig,
+    exit_cfg: ExitConfig | None = None,
+    scoring_weights: dict[str, float] | None = None,
 ) -> BacktestResult:
     """Compute final metrics from simulated portfolio state."""
     from dataclasses import asdict
@@ -444,7 +507,10 @@ def _build_result(
         "pipeline": asdict(pipeline_cfg),
         "portfolio": asdict(portfolio_cfg),
         "matching": asdict(matching_cfg),
+        "exits": asdict(exit_cfg) if exit_cfg else {},
     }
+    if scoring_weights:
+        config_snapshot["scoring_weights"] = scoring_weights
 
     return BacktestResult(
         start_date=start_date,

@@ -218,6 +218,45 @@ class SimulatedPortfolio:
 
         return total_pnl
 
+    def exit_position(
+        self,
+        ticker: str,
+        exit_price: float,
+        ts: datetime | None = None,
+    ) -> float:
+        """Exit all open positions for a ticker at a given bid price."""
+        total_pnl = 0.0
+        to_remove: list[tuple[str, str, str]] = []
+
+        for key, pos in self._positions.items():
+            if pos.ticker != ticker:
+                continue
+
+            exit_value = exit_price * pos.quantity
+            realized_pnl = round(exit_value - pos.size_dollars, 4)
+            total_pnl += realized_pnl
+            self._total_realized_pnl += realized_pnl
+
+            self._closed.append(SimClosedPosition(
+                ticker=pos.ticker,
+                event_ticker=pos.event_ticker,
+                venue=pos.venue,
+                side=pos.side.value,
+                entry_price=pos.entry_price,
+                size_dollars=pos.size_dollars,
+                quantity=pos.quantity,
+                realized_pnl=realized_pnl,
+                opened_at=pos.opened_at,
+                closed_at=ts or datetime.now(),
+                category=pos.category,
+            ))
+            to_remove.append(key)
+
+        for key in to_remove:
+            del self._positions[key]
+
+        return total_pnl
+
     def get_snapshot(self) -> PortfolioSnapshot:
         """Build a snapshot compatible with the guard system."""
         positions = list(self._positions.values())

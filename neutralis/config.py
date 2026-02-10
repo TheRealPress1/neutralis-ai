@@ -90,6 +90,16 @@ class PortfolioConfig:
 
 
 @dataclass(frozen=True)
+class ExitConfig:
+    stop_loss_pct: float = 15.0
+    take_profit_pct: float = 25.0
+    time_decay_hours: float = 24.0
+    time_decay_edge_floor_pct: float = 1.0
+    min_exit_liquidity_dollars: float = 10.0
+    enabled: bool = True
+
+
+@dataclass(frozen=True)
 class SchedulerConfig:
     scan_interval_sec: float = 30.0
     max_consecutive_errors: int = 5
@@ -122,6 +132,7 @@ class Settings:
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
     api: APIConfig = field(default_factory=APIConfig)
     alerts: AlertsConfig = field(default_factory=AlertsConfig)
+    exits: ExitConfig = field(default_factory=ExitConfig)
 
 
 def load_settings() -> Settings:
@@ -161,4 +172,5 @@ def load_settings_with_profile(storage: object) -> Settings:
         scheduler=base.scheduler,
         api=base.api,
         alerts=base.alerts,
+        exits=base.exits,
     )

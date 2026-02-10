@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import StatsBar from "./StatsBar";
 import PositionsTable from "./PositionsTable";
-import ActivityFeed from "./ActivityFeed";
+import SignalFeed from "./SignalFeed";
 import MatchesTable from "./MatchesTable";
 import RiskProfileEditor from "./RiskProfileEditor";
 import PerformanceAnalytics from "./PerformanceAnalytics";
@@ -121,7 +121,7 @@ export default function DashboardShell() {
             {/* Two-column: Positions + Activity */}
             <section className="mt-6 grid gap-6 lg:grid-cols-2">
               <PositionsTable refreshKey={refreshKey} />
-              <ActivityFeed refreshKey={refreshKey} />
+              <SignalFeed refreshKey={refreshKey} />
             </section>
 
             {/* Matches */}
