@@ -49,23 +49,23 @@ export default function DashboardShell() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#050608] text-[#e8e9ea]">
+    <div className="min-h-screen bg-[#08090c] text-[#eceef0]">
       {/* Nav */}
-      <nav className="fixed top-0 z-50 w-full border-b border-[#1a1d21] bg-[#050608]/80 backdrop-blur-lg">
+      <nav className="fixed top-0 z-50 w-full border-b border-[#22262d] bg-[#08090c]/80 backdrop-blur-lg">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-6">
             <a href="/" className="text-lg font-semibold tracking-tight">
               Neutralis.ai
             </a>
-            <div className="flex items-center gap-1 rounded-lg border border-[#1a1d21] p-0.5">
+            <div className="flex items-center gap-1 rounded-lg border border-[#22262d] p-0.5">
               {NAV_ITEMS.map((item) => (
                 <button
                   key={item.key}
                   onClick={() => setView(item.key)}
                   className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                     view === item.key
-                      ? "bg-[#1a1d21] text-[#e8e9ea]"
-                      : "text-[#9ca3af] hover:text-[#e8e9ea]"
+                      ? "bg-[#1a1f27] text-[#eceef0]"
+                      : "text-[#a1a8b3] hover:text-[#eceef0]"
                   }`}
                 >
                   {item.label}
@@ -76,12 +76,12 @@ export default function DashboardShell() {
           <div className="flex items-center gap-3">
             {view === "dashboard" && (
               <>
-                <span className="text-xs text-[#9ca3af]">
+                <span className="text-xs text-[#a1a8b3]">
                   Updated {elapsed}s ago
                 </span>
                 <button
                   onClick={handleRefresh}
-                  className="rounded border border-[#1a1d21] px-3 py-1.5 text-xs font-medium text-[#9ca3af] transition-colors hover:border-[#c0c5cb] hover:text-[#e8e9ea]"
+                  className="rounded border border-[#22262d] px-3 py-1.5 text-xs font-medium text-[#a1a8b3] transition-colors hover:border-[#c0c5cb] hover:text-[#eceef0]"
                 >
                   Refresh
                 </button>
