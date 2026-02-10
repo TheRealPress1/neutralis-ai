@@ -144,3 +144,138 @@ def evaluate_signal(
     )
 
     return decision
+
+
+# ---------------------------------------------------------------------------
+# Ranked selection (alpha vNext)
+# ---------------------------------------------------------------------------
+
+
+def select_portfolio(
+    decisions: list[tuple[Signal, Decision]],
+    portfolio_snapshot: PortfolioSnapshot,
+    portfolio_config: PortfolioConfig | None = None,
+    min_confidence: int = 0,
+) -> list[tuple[Signal, Decision]]:
+    """Rank approved decisions by selection_score and greedily select
+    the best subset that fits within portfolio constraints.
+
+    Each provisional PASS decision gets:
+    - selection_score = roi_per_day * confidence_score / 100
+    - selected = True if it fits within constraints
+
+    Non-PASS decisions are passed through unchanged.
+
+    Args:
+        decisions: List of (signal, decision) pairs from evaluate_signal.
+        portfolio_snapshot: Current portfolio state.
+        portfolio_config: Portfolio limits.
+        min_confidence: Minimum confidence score required (from regime).
+
+    Returns:
+        Updated list of (signal, decision) with selected flags set.
+    """
+    pcfg = portfolio_config or PortfolioConfig()
+
+    # Separate PASS and non-PASS
+    candidates: list[tuple[Signal, Decision, float]] = []
+    results: list[tuple[Signal, Decision]] = []
+
+    for signal, decision in decisions:
+        if decision.verdict != DecisionVerdict.PASS:
+            results.append((signal, decision))
+            continue
+
+        # Compute selection score
+        confidence = signal.confidence_score
+        roi = signal.roi_per_day
+        sel_score = roi * confidence / 100.0 if confidence > 0 else 0.0
+
+        # Reject if below regime confidence minimum
+        if confidence < min_confidence:
+            updated = Decision(
+                signal_id=decision.signal_id,
+                verdict=DecisionVerdict.REJECT,
+                guard_results=decision.guard_results + (
+                    GuardResult(
+                        guard_name="regime_confidence",
+                        passed=False,
+                        reason=f"confidence {confidence} < regime min {min_confidence}",
+                        value=float(confidence),
+                        threshold=float(min_confidence),
+                    ),
+                ),
+                suggested_size_dollars=0.0,
+                selected=False,
+                selection_score=sel_score,
+                allocation_reasons=("below regime confidence minimum",),
+            )
+            results.append((signal, updated))
+            continue
+
+        candidates.append((signal, decision, sel_score))
+
+    # Sort by selection score descending
+    candidates.sort(key=lambda c: c[2], reverse=True)
+
+    # Greedy allocation
+    used_exposure = portfolio_snapshot.total_exposure_dollars
+    used_positions = portfolio_snapshot.open_position_count
+    used_events: dict[str, float] = dict(portfolio_snapshot.event_exposure)
+    used_tickers: set[str] = set()
+    for p in portfolio_snapshot.positions:
+        used_tickers.add(p.ticker)
+
+    selected_count = 0
+
+    for signal, decision, sel_score in candidates:
+        size = decision.suggested_size_dollars
+        reasons: list[str] = []
+
+        # Check constraints
+        if used_positions >= pcfg.max_open_positions:
+            reasons.append("max open positions reached")
+        if used_exposure + size > pcfg.max_total_exposure_dollars:
+            reasons.append("total exposure budget exhausted")
+
+        event_exp = used_events.get(signal.event_ticker, 0.0)
+        if event_exp + size > pcfg.max_event_exposure_dollars:
+            reasons.append(f"event '{signal.event_ticker}' cap reached")
+
+        if reasons:
+            updated = Decision(
+                signal_id=decision.signal_id,
+                verdict=DecisionVerdict.PASS,
+                guard_results=decision.guard_results,
+                suggested_size_dollars=decision.suggested_size_dollars,
+                selected=False,
+                selection_score=sel_score,
+                allocation_reasons=tuple(reasons),
+            )
+            results.append((signal, updated))
+            continue
+
+        # Selected
+        updated = Decision(
+            signal_id=decision.signal_id,
+            verdict=DecisionVerdict.PASS,
+            guard_results=decision.guard_results,
+            suggested_size_dollars=decision.suggested_size_dollars,
+            selected=True,
+            selection_score=sel_score,
+            allocation_reasons=("selected",),
+        )
+        results.append((signal, updated))
+        selected_count += 1
+
+        # Update running totals
+        used_exposure += size
+        used_positions += 1
+        used_events[signal.event_ticker] = event_exp + size
+
+    logger.info(
+        "Ranked selection: %d candidates, %d selected, %d dropped",
+        len(candidates), selected_count, len(candidates) - selected_count,
+    )
+
+    return results

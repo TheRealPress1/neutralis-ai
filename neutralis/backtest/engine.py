@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any
 
@@ -15,14 +15,19 @@ from neutralis.config import (
     load_settings,
 )
 from neutralis.core.cross_scanner import scan_cross_platform
+from neutralis.core.disagreement import compute_disagreement
+from neutralis.core.features import compute_market_features, estimate_costs
 from neutralis.core.matcher import match_markets
 from neutralis.core.scanners import scan_complement_arb
-from neutralis.guard.decision import evaluate_signal
+from neutralis.core.scoring import score_signal
+from neutralis.guard.decision import evaluate_signal, select_portfolio
+from neutralis.guard.regime import apply_regime_to_pipeline, compute_regime
 from neutralis.logging import get_logger
 from neutralis.models import (
     DecisionVerdict,
     MarketType,
     NormalizedMarket,
+    Signal,
     TradeSide,
 )
 from neutralis.storage.postgres import PostgresStorage
@@ -213,28 +218,81 @@ def run_backtest(
             pairs = match_markets(kalshi_markets, poly_markets, matching_cfg)
             xp_signals = scan_cross_platform(pairs, matching_cfg)
 
-            all_signals = list(complement_signals) + list(xp_signals)
-            total_signals += len(all_signals)
+            # Compute regime for this time step
+            di_overall = 0.0
+            if pairs:
+                di_overall, _, _ = compute_disagreement(pairs)
+            _, _, regime_params = compute_regime(all_markets, disagreement=di_overall)
+            step_pipeline_cfg = apply_regime_to_pipeline(pipeline_cfg, regime_params)
+            min_confidence = regime_params.get("min_confidence", 0)
 
-            # Guard evaluation
-            snapshot = portfolio.get_snapshot()
-
-            for signal in all_signals:
+            # Score all signals
+            scored_pairs: list[tuple[Signal, NormalizedMarket]] = []
+            for signal in complement_signals:
                 market = signal.market_snapshot
                 if market is None:
                     continue
+                recent = storage.get_recent_snapshots_for_ticker(market.ticker, limit=10)
+                features = compute_market_features(market, recent_snapshots=recent)
+                costs = estimate_costs(signal, market)
+                result = score_signal(signal, features, costs)
+                scored = replace(
+                    signal,
+                    confidence_score=result["confidence_score"],
+                    time_to_resolution_days=result["time_to_resolution_days"],
+                    roi_per_day=result["roi_per_day"],
+                    net_edge=result["net_edge"],
+                    features_json=result,
+                )
+                scored_pairs.append((scored, market))
 
+            for signal in xp_signals:
+                market = signal.market_snapshot
+                if market is None:
+                    continue
+                xp = signal.cross_platform
+                match_conf = xp.match_confidence if xp else None
+                recent = storage.get_recent_snapshots_for_ticker(market.ticker, limit=10)
+                features = compute_market_features(market, recent_snapshots=recent)
+                costs = estimate_costs(signal, market)
+                result = score_signal(signal, features, costs, match_score=match_conf)
+                scored = replace(
+                    signal,
+                    confidence_score=result["confidence_score"],
+                    time_to_resolution_days=result["time_to_resolution_days"],
+                    roi_per_day=result["roi_per_day"],
+                    net_edge=result["net_edge"],
+                    features_json=result,
+                )
+                scored_pairs.append((scored, market))
+
+            total_signals += len(scored_pairs)
+
+            # Guard evaluation (provisional)
+            snapshot = portfolio.get_snapshot()
+            provisional = []
+
+            for scored_signal, market in scored_pairs:
                 decision = evaluate_signal(
-                    signal, market, pipeline_cfg,
+                    scored_signal, market, step_pipeline_cfg,
                     portfolio_snapshot=snapshot,
                     portfolio_config=portfolio_cfg,
                 )
+                provisional.append((scored_signal, decision))
 
-                if decision.verdict == DecisionVerdict.PASS:
+            # Ranked selection
+            ranked = select_portfolio(
+                provisional, snapshot,
+                portfolio_config=portfolio_cfg,
+                min_confidence=min_confidence,
+            )
+
+            for signal, decision in ranked:
+                if decision.verdict == DecisionVerdict.PASS and decision.selected:
                     pass_count += 1
                     portfolio.record_fill(signal, decision, ts)
                     snapshot = portfolio.get_snapshot()
-                else:
+                elif decision.verdict == DecisionVerdict.REJECT:
                     reject_count += 1
 
             # Record equity curve (one point per day)

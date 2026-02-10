@@ -129,6 +129,8 @@ class PostgresStorage:
         """Insert a signal row. Returns the signal id."""
         conn = self._ensure_connected()
 
+        features_json_str = json.dumps(signal.features_json) if signal.features_json else "{}"
+
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -136,12 +138,16 @@ class PostgresStorage:
                     id, signal_type, ticker, event_ticker,
                     yes_ask, no_ask, combined_cost,
                     gross_edge, net_edge, edge_pct,
-                    snapshot_id, created_at
+                    snapshot_id, created_at,
+                    confidence_score, time_to_resolution_days,
+                    roi_per_day, features_json
                 ) VALUES (
                     %(id)s, %(signal_type)s, %(ticker)s, %(event_ticker)s,
                     %(yes_ask)s, %(no_ask)s, %(combined_cost)s,
                     %(gross_edge)s, %(net_edge)s, %(edge_pct)s,
-                    %(snapshot_id)s, %(created_at)s
+                    %(snapshot_id)s, %(created_at)s,
+                    %(confidence_score)s, %(time_to_resolution_days)s,
+                    %(roi_per_day)s, %(features_json)s::jsonb
                 )
                 """,
                 {
@@ -157,6 +163,10 @@ class PostgresStorage:
                     "edge_pct": signal.edge_pct,
                     "snapshot_id": snapshot_id,
                     "created_at": signal.created_at,
+                    "confidence_score": signal.confidence_score,
+                    "time_to_resolution_days": signal.time_to_resolution_days,
+                    "roi_per_day": signal.roi_per_day,
+                    "features_json": features_json_str,
                 },
             )
         conn.commit()
@@ -178,16 +188,19 @@ class PostgresStorage:
                 for gr in decision.guard_results
             ]
         )
+        allocation_reasons_json = json.dumps(list(decision.allocation_reasons))
 
         with conn.cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO decisions (
                     signal_id, verdict, guard_results,
-                    suggested_size, created_at
+                    suggested_size, created_at,
+                    selected, selection_score, allocation_reasons
                 ) VALUES (
                     %(signal_id)s, %(verdict)s, %(guard_results)s::jsonb,
-                    %(suggested_size)s, %(created_at)s
+                    %(suggested_size)s, %(created_at)s,
+                    %(selected)s, %(selection_score)s, %(allocation_reasons)s::jsonb
                 )
                 RETURNING id
                 """,
@@ -197,6 +210,9 @@ class PostgresStorage:
                     "guard_results": guard_results_json,
                     "suggested_size": decision.suggested_size_dollars,
                     "created_at": decision.created_at,
+                    "selected": decision.selected,
+                    "selection_score": decision.selection_score,
+                    "allocation_reasons": allocation_reasons_json,
                 },
             )
             row = cur.fetchone()
@@ -850,3 +866,105 @@ class PostgresStorage:
         if yes_ask <= 0.10:
             return "no"
         return None
+
+    # -- Alpha vNext: regime & disagreement --
+
+    def save_regime_state(
+        self, regime: str, metrics: dict, params: dict,
+    ) -> int:
+        """Insert a regime state row. Returns the generated id."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO regime_states (regime, metrics_json, params_json)
+                VALUES (%(regime)s, %(metrics)s::jsonb, %(params)s::jsonb)
+                RETURNING id
+                """,
+                {
+                    "regime": regime,
+                    "metrics": json.dumps(metrics),
+                    "params": json.dumps(params),
+                },
+            )
+            row = cur.fetchone()
+            assert row is not None
+            state_id: int = row[0]
+        conn.commit()
+        return state_id
+
+    def save_disagreement_index(
+        self, overall: float, by_category: dict, sample_size: int,
+    ) -> int:
+        """Insert a disagreement index row. Returns the generated id."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO disagreement_index (overall, by_category, sample_size)
+                VALUES (%(overall)s, %(by_category)s::jsonb, %(sample_size)s)
+                RETURNING id
+                """,
+                {
+                    "overall": overall,
+                    "by_category": json.dumps(by_category),
+                    "sample_size": sample_size,
+                },
+            )
+            row = cur.fetchone()
+            assert row is not None
+            idx_id: int = row[0]
+        conn.commit()
+        return idx_id
+
+    def get_recent_snapshots_for_ticker(
+        self, ticker: str, limit: int = 10,
+    ) -> list[NormalizedMarket]:
+        """Fetch the most recent snapshots for a ticker, for feature extraction.
+
+        Used by the scoring pipeline to compute rolling volatility.
+        """
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    ticker, event_ticker, market_type, title, status,
+                    yes_bid, yes_ask, no_bid, no_ask,
+                    volume, volume_24h, liquidity, open_interest, notional_value,
+                    close_time, expected_expiration, snapshot_ts, venue
+                FROM market_snapshots
+                WHERE ticker = %(ticker)s
+                ORDER BY snapshot_ts DESC
+                LIMIT %(limit)s
+                """,
+                {"ticker": ticker, "limit": limit},
+            )
+            rows = cur.fetchall()
+
+        markets: list[NormalizedMarket] = []
+        for r in rows:
+            try:
+                markets.append(NormalizedMarket(
+                    ticker=r[0],
+                    event_ticker=r[1],
+                    market_type=MarketType(r[2]) if r[2] else MarketType.BINARY,
+                    title=r[3] or "",
+                    subtitle="",
+                    status=MarketStatus(r[4]) if r[4] else MarketStatus.ACTIVE,
+                    yes_bid=float(r[5]),
+                    yes_ask=float(r[6]),
+                    no_bid=float(r[7]),
+                    no_ask=float(r[8]),
+                    volume=float(r[9]),
+                    volume_24h=float(r[10]),
+                    liquidity=float(r[11]),
+                    open_interest=float(r[12]),
+                    notional_value=float(r[13]),
+                    close_time=r[14],
+                    expected_expiration=r[15],
+                    venue=r[17] or "kalshi",
+                ))
+            except (ValueError, TypeError):
+                continue
+        return markets

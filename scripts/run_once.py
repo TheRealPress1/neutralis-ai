@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Single-pass pipeline: fetch -> normalize -> scan -> match -> store."""
+"""Single-pass pipeline: fetch -> normalize -> scan -> match -> score -> rank -> store."""
 
 from __future__ import annotations
 
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -14,11 +14,15 @@ from neutralis.alerts.discord import DiscordNotifier
 from neutralis.config import load_settings, load_settings_with_profile
 from neutralis.profiles import load_active_profile
 from neutralis.core.cross_scanner import scan_cross_platform
+from neutralis.core.disagreement import compute_disagreement
+from neutralis.core.features import compute_market_features, estimate_costs
 from neutralis.core.matcher import match_markets
 from neutralis.core.scanners import scan_complement_arb
-from neutralis.guard.decision import evaluate_signal
+from neutralis.core.scoring import score_signal
+from neutralis.guard.decision import evaluate_signal, select_portfolio
+from neutralis.guard.regime import apply_regime_to_pipeline, compute_regime
 from neutralis.logging import get_logger
-from neutralis.models import DecisionVerdict, MarketType, NormalizedMarket
+from neutralis.models import Decision, DecisionVerdict, MarketType, NormalizedMarket, Signal
 from neutralis.portfolio.manager import PortfolioManager
 from neutralis.settlement.settler import run_settlement
 from neutralis.storage.postgres import PostgresStorage
@@ -40,11 +44,36 @@ class RunStats:
     matches: int = 0
     decisions_pass: int = 0
     decisions_reject: int = 0
+    decisions_selected: int = 0
     open_positions: int = 0
     total_exposure: float = 0.0
     positions_settled: int = 0
     settlement_pnl: float = 0.0
     marked_positions: int = 0
+    regime: str = "normal"
+    disagreement_index: float = 0.0
+
+
+def _score_signal(
+    signal: Signal,
+    market: NormalizedMarket,
+    storage: PostgresStorage,
+    match_score: float | None = None,
+) -> Signal:
+    """Enrich a signal with confidence scoring and capital efficiency metrics."""
+    recent = storage.get_recent_snapshots_for_ticker(market.ticker, limit=10)
+    features = compute_market_features(market, recent_snapshots=recent)
+    costs = estimate_costs(signal, market)
+    result = score_signal(signal, features, costs, match_score=match_score)
+
+    return replace(
+        signal,
+        confidence_score=result["confidence_score"],
+        time_to_resolution_days=result["time_to_resolution_days"],
+        roi_per_day=result["roi_per_day"],
+        net_edge=result["net_edge"],
+        features_json=result,
+    )
 
 
 def run_once() -> RunStats:
@@ -129,10 +158,30 @@ def run_once() -> RunStats:
                         if enriched:
                             enriched_markets[signal.ticker] = enriched
 
-    # Step 4: Store everything
-    logger.info("Step 4: Storing results")
+    # Step 3e: Compute disagreement index and regime
+    logger.info("Step 3e: Computing regime")
+    di_overall, di_by_category, di_sample = compute_disagreement(pairs)
+    all_markets = kalshi_markets + poly_markets
+    regime, regime_metrics, regime_params = compute_regime(
+        all_markets, disagreement=di_overall,
+    )
+    pipeline_cfg = apply_regime_to_pipeline(settings.pipeline, regime_params)
+    min_confidence = regime_params.get("min_confidence", 0)
+    logger.info(
+        "Regime: %s | disagreement=%.4f (%d pairs) | min_edge=%.1f%% min_conf=%d",
+        regime, di_overall, di_sample,
+        pipeline_cfg.min_edge_pct, min_confidence,
+    )
+
+    # Step 4: Score, evaluate, rank, and store
+    logger.info("Step 4: Scoring and evaluating signals")
     with PostgresStorage(settings.db) as storage:
         portfolio = PortfolioManager(storage, settings.portfolio)
+
+        # Save regime state and disagreement
+        storage.save_regime_state(regime, regime_metrics, regime_params)
+        if di_sample > 0:
+            storage.save_disagreement_index(di_overall, di_by_category, di_sample)
 
         # Snapshot portfolio state once — all signals evaluated against same baseline
         portfolio_snapshot = portfolio.get_snapshot()
@@ -142,43 +191,19 @@ def run_once() -> RunStats:
             portfolio_snapshot.total_exposure_dollars,
         )
 
-        # 4a: Complement arb signals + guard decisions + portfolio
-        pass_count = 0
-        reject_count = 0
+        # Build unified list of (scored_signal, market) pairs
+        signal_market_pairs: list[tuple[Signal, NormalizedMarket]] = []
 
+        # 4a: Score complement arb signals
         for signal in complement_signals:
             market = enriched_markets.get(signal.ticker, signal.market_snapshot)
             if market is None:
                 continue
-            snapshot_id = storage.save_market_snapshot(market)
-            storage.save_signal(signal, snapshot_id=snapshot_id)
-            decision = evaluate_signal(
-                signal, market, settings.pipeline,
-                portfolio_snapshot=portfolio_snapshot,
-                portfolio_config=settings.portfolio,
-                category_overrides=category_overrides,
-            )
-            decision_id = storage.save_decision(decision)
+            scored = _score_signal(signal, market, storage)
+            signal_market_pairs.append((scored, market))
 
-            if decision.verdict == DecisionVerdict.PASS:
-                pass_count += 1
-                portfolio.record_fill(signal, decision, decision_id)
-                # Refresh snapshot so next signal sees updated exposure/positions
-                portfolio_snapshot = portfolio.get_snapshot()
-                for leg in signal.legs:
-                    notifier.notify_fill(
-                        ticker=leg.ticker,
-                        side=leg.side,
-                        venue=leg.venue or "kalshi",
-                        size=leg.quantity_dollars,
-                        price=leg.price_dollars,
-                    )
-            else:
-                reject_count += 1
-
-        # 4b: Cross-platform matches and signals
-        # Build a lookup from ticker to snapshot_id for signal storage
-        match_ids: dict[str, int] = {}  # "kalshi_ticker:poly_ticker" -> match_id
+        # 4b: Store cross-platform matches and score xp signals
+        match_ids: dict[str, int] = {}
         for pair in pairs:
             k_snap = storage.save_market_snapshot(pair.kalshi_market)
             p_snap = storage.save_market_snapshot(pair.polymarket_market)
@@ -194,35 +219,63 @@ def run_once() -> RunStats:
             mid = match_ids.get(key)
             storage.save_cross_platform_signal(signal, match_id=mid)
 
-        # 4c: Evaluate cross-platform signals through Guard
-        for signal in xp_signals:
             market = signal.market_snapshot
             if market is None:
                 continue
+            match_conf = xp.match_confidence if xp else None
+            scored = _score_signal(signal, market, storage, match_score=match_conf)
+            signal_market_pairs.append((scored, market))
+
+        # 4c: Evaluate all signals through guard (provisional)
+        provisional: list[tuple[Signal, Decision]] = []
+        snapshot_ids: dict[str, int] = {}  # signal_id -> snapshot_id
+        pass_count = 0
+        reject_count = 0
+
+        for scored_signal, market in signal_market_pairs:
+            snap_id = storage.save_market_snapshot(market)
+            storage.save_signal(scored_signal, snapshot_id=snap_id)
+            snapshot_ids[scored_signal.id] = snap_id
+
             decision = evaluate_signal(
-                signal, market, settings.pipeline,
+                scored_signal, market, pipeline_cfg,
                 portfolio_snapshot=portfolio_snapshot,
                 portfolio_config=settings.portfolio,
                 category_overrides=category_overrides,
             )
-            decision_id = storage.save_decision(decision)
+            provisional.append((scored_signal, decision))
             if decision.verdict == DecisionVerdict.PASS:
                 pass_count += 1
+            else:
+                reject_count += 1
+
+        # 4d: Ranked selection — pick the best signals that fit
+        ranked = select_portfolio(
+            provisional,
+            portfolio_snapshot,
+            portfolio_config=settings.portfolio,
+            min_confidence=min_confidence,
+        )
+
+        # 4e: Save decisions and fill only selected
+        selected_count = 0
+        for signal, decision in ranked:
+            decision_id = storage.save_decision(decision)
+
+            if decision.verdict == DecisionVerdict.PASS and decision.selected:
+                selected_count += 1
                 portfolio.record_fill(signal, decision, decision_id)
-                # Refresh snapshot so next signal sees updated exposure/positions
                 portfolio_snapshot = portfolio.get_snapshot()
                 for leg in signal.legs:
                     notifier.notify_fill(
                         ticker=leg.ticker,
                         side=leg.side,
-                        venue=leg.venue or signal.venue,
+                        venue=leg.venue or signal.legs[0].venue or "kalshi",
                         size=leg.quantity_dollars,
                         price=leg.price_dollars,
                     )
-            else:
-                reject_count += 1
 
-        # 4d: Portfolio summary
+        # 4f: Portfolio summary
         snapshot = portfolio.get_snapshot()
         logger.info(
             "Portfolio: %d open positions, $%.2f total exposure",
@@ -233,12 +286,14 @@ def run_once() -> RunStats:
     elapsed = (time.monotonic() - start) * 1000
     logger.info(
         "Pipeline complete: %d complement arb, %d cross-platform, %d matches, "
-        "%d pass, %d reject, %.0fms",
+        "%d pass (%d selected), %d reject, regime=%s, %.0fms",
         len(complement_signals),
         len(xp_signals),
         len(pairs),
         pass_count,
+        selected_count,
         reject_count,
+        regime,
         elapsed,
         extra={"duration_ms": elapsed},
     )
@@ -252,15 +307,18 @@ def run_once() -> RunStats:
         matches=len(pairs),
         decisions_pass=pass_count,
         decisions_reject=reject_count,
+        decisions_selected=selected_count,
         open_positions=snapshot.open_position_count,
         total_exposure=snapshot.total_exposure_dollars,
         positions_settled=settlement.settled,
         settlement_pnl=settlement.pnl,
         marked_positions=marked_positions,
+        regime=regime,
+        disagreement_index=di_overall,
     )
 
     # Alert if anything interesting happened
-    if pass_count > 0 or settlement.settled > 0:
+    if selected_count > 0 or settlement.settled > 0:
         notifier.notify_pipeline_summary(stats)
 
     return stats
