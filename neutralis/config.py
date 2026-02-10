@@ -85,6 +85,7 @@ class PortfolioConfig:
     max_ticker_exposure_dollars: float = 50.0
     max_venue_exposure_pct: float = 0.80
     max_open_positions: int = 50
+    daily_loss_limit_dollars: float = 100.0
 
 
 @dataclass(frozen=True)

@@ -42,6 +42,9 @@ class RiskProfile:
     # Matching
     min_similarity: float
 
+    # Daily loss limit
+    daily_loss_limit_dollars: float = 100.0
+
     # Meta
     user_id: Optional[str] = None
     created_at: Optional[Any] = None
@@ -66,6 +69,7 @@ class RiskProfile:
             max_ticker_exposure_dollars=self.max_ticker_exposure_dollars,
             max_venue_exposure_pct=self.max_venue_exposure_pct,
             max_open_positions=self.max_open_positions,
+            daily_loss_limit_dollars=self.daily_loss_limit_dollars,
         )
 
     def to_matching_config(self) -> MatchingConfig:
@@ -93,6 +97,7 @@ class RiskProfile:
             "max_venue_exposure_pct": self.max_venue_exposure_pct,
             "max_open_positions": self.max_open_positions,
             "min_similarity": self.min_similarity,
+            "daily_loss_limit_dollars": self.daily_loss_limit_dollars,
             "user_id": self.user_id,
             "created_at": str(self.created_at) if self.created_at else None,
             "updated_at": str(self.updated_at) if self.updated_at else None,
@@ -106,7 +111,7 @@ _PROFILE_COLS = (
     "min_time_to_expiry_hours, fee_rate, max_position_dollars, "
     "max_total_exposure_dollars, max_event_exposure_dollars, "
     "max_ticker_exposure_dollars, max_venue_exposure_pct, max_open_positions, "
-    "min_similarity, user_id, created_at, updated_at"
+    "min_similarity, daily_loss_limit_dollars, user_id, created_at, updated_at"
 )
 
 
@@ -130,9 +135,10 @@ def _row_to_profile(row: tuple) -> RiskProfile:  # type: ignore[type-arg]
         max_venue_exposure_pct=row[15],
         max_open_positions=row[16],
         min_similarity=row[17],
-        user_id=str(row[18]) if row[18] else None,
-        created_at=row[19],
-        updated_at=row[20],
+        daily_loss_limit_dollars=row[18],
+        user_id=str(row[19]) if row[19] else None,
+        created_at=row[20],
+        updated_at=row[21],
     )
 
 
@@ -192,7 +198,7 @@ def update_profile(
         "min_time_to_expiry_hours", "fee_rate", "max_position_dollars",
         "max_total_exposure_dollars", "max_event_exposure_dollars",
         "max_ticker_exposure_dollars", "max_venue_exposure_pct",
-        "max_open_positions", "min_similarity",
+        "max_open_positions", "min_similarity", "daily_loss_limit_dollars",
     }
     filtered = {k: v for k, v in updates.items() if k in allowed}
     if not filtered:

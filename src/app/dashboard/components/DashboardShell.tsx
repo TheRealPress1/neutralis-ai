@@ -6,6 +6,18 @@ import PositionsTable from "./PositionsTable";
 import ActivityFeed from "./ActivityFeed";
 import MatchesTable from "./MatchesTable";
 import RiskProfileEditor from "./RiskProfileEditor";
+import AutomationPanel from "./AutomationPanel";
+import ActivityLog from "./ActivityLog";
+
+type NavTab = "dashboard" | "automation" | "activity" | "matches" | "settings";
+
+const NAV_ITEMS: { id: NavTab; label: string }[] = [
+  { id: "dashboard", label: "Dashboard" },
+  { id: "automation", label: "Automation" },
+  { id: "activity", label: "Activity" },
+  { id: "matches", label: "Explore" },
+  { id: "settings", label: "Settings" },
+];
 
 function secondsAgo(date: Date) {
   return Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
@@ -15,7 +27,7 @@ export default function DashboardShell() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [elapsed, setElapsed] = useState(0);
-  const [showSettings, setShowSettings] = useState(false);
+  const [activeTab, setActiveTab] = useState<NavTab>("dashboard");
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
@@ -39,65 +51,80 @@ export default function DashboardShell() {
 
   return (
     <div className="min-h-screen bg-[#050608] text-[#e8e9ea]">
-      {/* Nav */}
+      {/* Top Nav */}
       <nav className="fixed top-0 z-50 w-full border-b border-[#1a1d21] bg-[#050608]/80 backdrop-blur-lg">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-6">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
+          <div className="flex items-center gap-8">
             <a href="/" className="text-lg font-semibold tracking-tight">
               Neutralis.ai
             </a>
-            <span className="text-sm font-medium text-[#9ca3af]">
-              Dashboard
-            </span>
+            {/* Tab navigation */}
+            <div className="flex items-center gap-1">
+              {NAV_ITEMS.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    activeTab === item.id
+                      ? "bg-[#1a1d21] text-[#e8e9ea]"
+                      : "text-[#9ca3af] hover:text-[#e8e9ea]"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="flex items-center gap-3">
-            {!showSettings && (
-              <span className="text-xs text-[#9ca3af]">
-                Updated {elapsed}s ago
-              </span>
-            )}
-            {!showSettings && (
-              <button
-                onClick={handleRefresh}
-                className="rounded border border-[#1a1d21] px-3 py-1.5 text-xs font-medium text-[#9ca3af] transition-colors hover:border-[#c0c5cb] hover:text-[#e8e9ea]"
-              >
-                Refresh
-              </button>
-            )}
+            <span className="text-xs text-[#9ca3af]">
+              Updated {elapsed}s ago
+            </span>
             <button
-              onClick={() => setShowSettings(!showSettings)}
+              onClick={handleRefresh}
               className="rounded border border-[#1a1d21] px-3 py-1.5 text-xs font-medium text-[#9ca3af] transition-colors hover:border-[#c0c5cb] hover:text-[#e8e9ea]"
             >
-              {showSettings ? "Dashboard" : "Settings"}
+              Refresh
             </button>
           </div>
         </div>
       </nav>
 
       {/* Content */}
-      <main className="mx-auto max-w-6xl px-6 pt-24 pb-16">
-        {showSettings ? (
-          <section className="mt-2">
-            <RiskProfileEditor />
-          </section>
-        ) : (
+      <main className="mx-auto max-w-6xl px-6 pt-20 pb-16">
+        {activeTab === "dashboard" && (
           <>
-            {/* Stats bar */}
             <section>
               <StatsBar refreshKey={refreshKey} />
             </section>
-
-            {/* Two-column: Positions + Activity */}
             <section className="mt-6 grid gap-6 lg:grid-cols-2">
               <PositionsTable refreshKey={refreshKey} />
               <ActivityFeed refreshKey={refreshKey} />
             </section>
-
-            {/* Matches */}
-            <section className="mt-6">
-              <MatchesTable refreshKey={refreshKey} />
-            </section>
           </>
+        )}
+
+        {activeTab === "automation" && (
+          <section className="mt-2">
+            <AutomationPanel refreshKey={refreshKey} />
+          </section>
+        )}
+
+        {activeTab === "activity" && (
+          <section className="mt-2">
+            <ActivityLog refreshKey={refreshKey} />
+          </section>
+        )}
+
+        {activeTab === "matches" && (
+          <section className="mt-2">
+            <MatchesTable refreshKey={refreshKey} />
+          </section>
+        )}
+
+        {activeTab === "settings" && (
+          <section className="mt-2">
+            <RiskProfileEditor />
+          </section>
         )}
       </main>
     </div>

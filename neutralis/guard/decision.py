@@ -1,11 +1,17 @@
-"""Guard evaluator -- runs all constraints and produces a Decision."""
+"""Guard evaluator -- runs all constraints and produces a Decision.
+
+Includes kill switch and daily loss limit checks (v3).
+"""
 
 from __future__ import annotations
 
 from neutralis.config import PipelineConfig, PortfolioConfig
 from neutralis.guard.constraints import (
+    check_automation_active,
+    check_daily_loss_limit,
     check_duplicate_position,
     check_event_exposure,
+    check_kill_switch,
     check_liquidity,
     check_min_edge,
     check_open_position_count,
@@ -35,14 +41,24 @@ def evaluate_signal(
     config: PipelineConfig | None = None,
     portfolio_snapshot: PortfolioSnapshot | None = None,
     portfolio_config: PortfolioConfig | None = None,
+    *,
+    automation_active: bool = True,
+    kill_switch_engaged: bool = False,
+    daily_loss: float = 0.0,
 ) -> Decision:
     """Run all guard checks on a signal and produce a Decision.
 
-    When portfolio_snapshot is provided, runs 6 additional portfolio-aware
-    checks on top of the 4 market-level checks (v1). Without it, behaves
-    identically to Guard v1.
+    Phase 0 (v3): Automation + kill switch + daily loss safety checks.
+    Phase 1 (v1): Market-level checks (edge, liquidity, expiry, depth).
+    Phase 2 (v2): Portfolio-level checks (exposure, concentration, duplicates).
     """
     cfg = config or PipelineConfig()
+
+    # Phase 0: Safety checks (v3 — kill switch, automation state)
+    safety_results: list[GuardResult] = [
+        check_automation_active(automation_active),
+        check_kill_switch(kill_switch_engaged),
+    ]
 
     # Phase 1: Market-level checks (v1, unchanged)
     market_results: list[GuardResult] = [
@@ -52,7 +68,7 @@ def evaluate_signal(
         check_orderbook_depth(market),
     ]
 
-    # Phase 2: Portfolio-level checks (v2, only when snapshot provided)
+    # Phase 2: Portfolio-level checks (v2 + v3 daily loss)
     portfolio_results: list[GuardResult] = []
     if portfolio_snapshot is not None:
         pcfg = portfolio_config or PortfolioConfig()
@@ -61,6 +77,7 @@ def evaluate_signal(
         preliminary_size = compute_size(signal, market, cfg)
 
         portfolio_results = [
+            check_daily_loss_limit(daily_loss, pcfg),
             check_open_position_count(portfolio_snapshot, pcfg),
             check_duplicate_position(signal, portfolio_snapshot),
             check_total_exposure(preliminary_size, portfolio_snapshot, pcfg),
@@ -75,7 +92,7 @@ def evaluate_signal(
             ),
         ]
 
-    results = tuple(market_results + portfolio_results)
+    results = tuple(safety_results + market_results + portfolio_results)
     all_passed = all(r.passed for r in results)
 
     if all_passed:

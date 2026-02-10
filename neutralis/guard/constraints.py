@@ -231,6 +231,52 @@ def check_open_position_count(
     )
 
 
+def check_daily_loss_limit(
+    daily_loss: float,
+    config: PortfolioConfig,
+) -> GuardResult:
+    """Check if daily realized loss has exceeded the limit."""
+    limit = config.daily_loss_limit_dollars
+    passed = daily_loss < limit
+    return GuardResult(
+        guard_name="daily_loss_limit",
+        passed=passed,
+        reason=(
+            f"daily loss ${daily_loss:.2f} < limit ${limit:.2f}"
+            if passed
+            else f"daily loss ${daily_loss:.2f} >= limit ${limit:.2f}"
+        ),
+        value=daily_loss,
+        threshold=limit,
+    )
+
+
+def check_kill_switch(is_killed: bool) -> GuardResult:
+    """Check if the kill switch has been triggered."""
+    return GuardResult(
+        guard_name="kill_switch",
+        passed=not is_killed,
+        reason=(
+            "kill switch not triggered"
+            if not is_killed
+            else "KILL SWITCH ACTIVE — all trades blocked"
+        ),
+    )
+
+
+def check_automation_active(is_active: bool) -> GuardResult:
+    """Check if automation is running (not paused or killed)."""
+    return GuardResult(
+        guard_name="automation_active",
+        passed=is_active,
+        reason=(
+            "automation is running"
+            if is_active
+            else "automation is paused or stopped — trades blocked"
+        ),
+    )
+
+
 def check_duplicate_position(
     signal: Signal,
     snapshot: PortfolioSnapshot,

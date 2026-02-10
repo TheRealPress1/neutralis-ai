@@ -33,6 +33,13 @@ class SignalType(str, Enum):
 class DecisionVerdict(str, Enum):
     PASS = "pass"
     REJECT = "reject"
+    REDUCE = "reduce"
+
+
+class AutomationStatus(str, Enum):
+    RUNNING = "running"
+    PAUSED = "paused"
+    KILLED = "killed"
 
 
 class PositionStatus(str, Enum):

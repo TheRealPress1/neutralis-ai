@@ -107,7 +107,38 @@ export interface RiskProfile {
   // Matching
   min_similarity: number;
 
+  // Daily loss limit
+  daily_loss_limit_dollars: number;
+
   user_id: string | null;
   created_at: string | null;
   updated_at: string | null;
+}
+
+// --- Automation / Kill Switch ---
+
+export interface AutomationState {
+  id?: number;
+  status: "running" | "paused" | "killed";
+  kill_switch: boolean;
+  killed_reason: string | null;
+  paused_at: string | null;
+  killed_at: string | null;
+  started_at: string | null;
+  daily_loss_dollars: number;
+  daily_loss_reset_at: string | null;
+  peak_portfolio_value: number;
+  max_drawdown_dollars: number;
+  updated_at: string | null;
+}
+
+// --- Audit Logs ---
+
+export interface AuditLogEntry {
+  id: number;
+  event_type: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
 }

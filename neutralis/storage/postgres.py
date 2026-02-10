@@ -609,3 +609,28 @@ class PostgresStorage:
             "win_rate": round(row[4] / max(row[4] + row[5], 1), 4),  # type: ignore[index]
             "total_trades": trade_count,
         }
+
+    # -- Audit Logs --
+
+    def get_audit_logs(
+        self,
+        event_type: str | None = None,
+        entity_type: str | None = None,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Return recent audit log entries with optional filtering."""
+        conditions = []
+        params: dict = {"limit": limit}
+
+        if event_type:
+            conditions.append("event_type = %(event_type)s")
+            params["event_type"] = event_type
+        if entity_type:
+            conditions.append("entity_type = %(entity_type)s")
+            params["entity_type"] = entity_type
+
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        return self._fetch_dicts(
+            f"SELECT * FROM audit_logs {where} ORDER BY created_at DESC LIMIT %(limit)s",
+            params,
+        )
