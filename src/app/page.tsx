@@ -54,14 +54,18 @@ export default function Home() {
       {/* ── Hero ───────────────────────────────────────────── */}
       <div className="hero-glow flex min-h-screen items-center justify-center">
         <header className="relative z-10 mx-auto max-w-3xl px-6 text-center">
-          <span className="text-xs font-medium uppercase tracking-[0.2em] text-[#c0c5cb]">
+          <span className="text-xs font-medium uppercase tracking-[0.2em] text-[#e0e1e3]">
             Neutralis AI
           </span>
-          <h1 className="mt-4 text-5xl font-bold leading-[1.08] tracking-[-0.02em] font-[family-name:var(--font-fraunces)] sm:text-6xl">
-            A modern hedge fund for{" "}
-            <span className="headline-accent">prediction&nbsp;markets</span>.
+          <h1 className="mt-4 text-center">
+            <span className="block font-[family-name:var(--font-italiana)] text-4xl font-normal uppercase leading-[1.15] tracking-[0.14em] text-[#f0f0f0] sm:text-5xl">
+              The modern hedge fund for
+            </span>
+            <span className="headline-italic block font-[family-name:var(--font-cormorant)] text-5xl font-medium italic uppercase leading-[1.1] tracking-[0.08em] text-[#f5f5f5] sm:text-6xl">
+              Prediction Markets
+            </span>
           </h1>
-          <p className="mx-auto mt-6 max-w-xl text-lg text-[#b0b5bc]">
+          <p className="mx-auto mt-6 max-w-xl text-lg text-[#c8ccd2]">
             Neutralis uses automated quantitative systems to identify
             mis-priced probabilities, manage risk at the portfolio level, and
             execute trades systematically across prediction&nbsp;markets.

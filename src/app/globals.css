@@ -198,44 +198,43 @@ body::after {
   text-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
 }
 
-/* ── Headline accent ─────────────────────────────── */
-.headline-accent {
+/* ── Headline italic accent ──────────────────────── */
+.headline-italic {
   position: relative;
-  color: #f0f1f2;
-  letter-spacing: 0.01em;
 }
-.headline-accent::before {
+.headline-italic::after {
   content: "";
   position: absolute;
-  inset: -0.15em -0.25em;
-  background: radial-gradient(
-    ellipse at 30% 50%,
-    rgba(255, 255, 255, 0.12),
-    transparent 70%
-  );
-  filter: blur(10px);
-  z-index: -1;
-  pointer-events: none;
-}
-.headline-accent::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -0.08em;
+  left: 10%;
+  right: 10%;
+  bottom: -0.1em;
   height: 1px;
-  background: rgba(255, 255, 255, 0.3);
-  filter: blur(0.4px);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.25),
+    transparent
+  );
   pointer-events: none;
 }
 
 /* ── Nav spotlight ────────────────────────────────── */
 .nav-spotlight {
-  background: radial-gradient(
-    circle 200px at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
-    rgba(255, 255, 255, 0.1) 0%,
-    transparent 70%
-  );
+  background:
+    radial-gradient(
+      180px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+      rgba(255, 255, 255, 0.85) 0%,
+      rgba(255, 255, 255, 0.35) 35%,
+      rgba(255, 255, 255, 0.12) 55%,
+      transparent 70%
+    ),
+    radial-gradient(
+      380px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+      rgba(255, 255, 255, 0.18) 0%,
+      transparent 60%
+    );
+  filter: blur(2px);
+  mix-blend-mode: screen;
 }
 
 /* ── Focus states ──────────────────────────────────── */

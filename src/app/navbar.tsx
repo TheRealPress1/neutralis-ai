@@ -30,24 +30,24 @@ export default function Navbar() {
       onMouseMove={handleMouseMove}
       className={`fixed top-0 z-50 w-full border-b transition-all duration-300 relative overflow-hidden ${
         scrolled
-          ? "border-white/10 bg-[#050608]/90 backdrop-blur-xl"
-          : "border-[#1a1d21] bg-[#050608]/80 backdrop-blur-lg"
+          ? "border-white/10 bg-black/30 backdrop-blur-xl"
+          : "border-white/[0.06] bg-black/15 backdrop-blur-[10px]"
       }`}
     >
       <div
-        className={`nav-spotlight pointer-events-none absolute inset-0 z-0 transition-opacity duration-300 ${
+        className={`nav-spotlight pointer-events-none absolute -inset-4 z-0 transition-opacity duration-300 ${
           hovering ? "opacity-100" : "opacity-0"
         }`}
       />
       <div className="relative z-10 mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
         <a
           href="#"
-          className="text-lg font-semibold tracking-tight text-[#e8e9ea]"
+          className="text-lg font-semibold tracking-tight text-white/90"
         >
           Neutralis.ai
         </a>
 
-        <ul className="hidden gap-6 text-sm font-medium text-[#c0c5cb] sm:flex">
+        <ul className="hidden gap-6 text-sm font-medium text-white/70 sm:flex">
           <li>
             <a
               href="#outputs"
