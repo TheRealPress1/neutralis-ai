@@ -163,6 +163,8 @@ def run_once() -> RunStats:
             if decision.verdict == DecisionVerdict.PASS:
                 pass_count += 1
                 portfolio.record_fill(signal, decision, decision_id)
+                # Refresh snapshot so next signal sees updated exposure/positions
+                portfolio_snapshot = portfolio.get_snapshot()
                 for leg in signal.legs:
                     notifier.notify_fill(
                         ticker=leg.ticker,
@@ -207,6 +209,8 @@ def run_once() -> RunStats:
             if decision.verdict == DecisionVerdict.PASS:
                 pass_count += 1
                 portfolio.record_fill(signal, decision, decision_id)
+                # Refresh snapshot so next signal sees updated exposure/positions
+                portfolio_snapshot = portfolio.get_snapshot()
                 for leg in signal.legs:
                     notifier.notify_fill(
                         ticker=leg.ticker,
