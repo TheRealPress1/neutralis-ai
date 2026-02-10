@@ -29,6 +29,8 @@ class _Stats:
         self.total_signals = 0
         self.total_passes = 0
         self.total_rejects = 0
+        self.total_settled = 0
+        self.total_settlement_pnl = 0.0
 
     def record_success(self, run_stats: object) -> None:
         self.total_runs += 1
@@ -37,6 +39,8 @@ class _Stats:
         self.total_signals += getattr(run_stats, "cross_platform_signals", 0)
         self.total_passes += getattr(run_stats, "decisions_pass", 0)
         self.total_rejects += getattr(run_stats, "decisions_reject", 0)
+        self.total_settled += getattr(run_stats, "positions_settled", 0)
+        self.total_settlement_pnl += getattr(run_stats, "settlement_pnl", 0.0)
 
     def record_error(self) -> None:
         self.total_errors += 1

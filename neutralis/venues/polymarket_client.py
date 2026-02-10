@@ -117,6 +117,14 @@ class PolymarketClient:
         )
         return all_markets
 
+    def get_market(self, condition_id: str) -> dict[str, Any] | None:
+        """Fetch a single market by condition ID from the Gamma API."""
+        try:
+            return self._get(self._http, f"/markets/{condition_id}")
+        except httpx.HTTPStatusError:
+            logger.warning("Failed to fetch Polymarket market %s", condition_id)
+            return None
+
     def get_orderbook(self, token_id: str) -> dict[str, Any]:
         """Fetch orderbook from the CLOB API."""
         return self._get(self._clob_http, "/book", {"token_id": token_id})
