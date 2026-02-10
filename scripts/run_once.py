@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from neutralis.alerts.discord import DiscordNotifier
-from neutralis.config import load_settings
+from neutralis.config import load_settings, load_settings_with_profile
 from neutralis.core.cross_scanner import scan_cross_platform
 from neutralis.core.matcher import match_markets
 from neutralis.core.scanners import scan_complement_arb
@@ -47,7 +47,9 @@ class RunStats:
 
 
 def run_once() -> RunStats:
-    settings = load_settings()
+    base_settings = load_settings()
+    with PostgresStorage(base_settings.db) as profile_storage:
+        settings = load_settings_with_profile(profile_storage)
     notifier = DiscordNotifier(settings.alerts)
     start = time.monotonic()
 

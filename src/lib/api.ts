@@ -6,6 +6,7 @@ import type {
   Signal,
   Decision,
   MarketMatch,
+  RiskProfile,
 } from "@/types/api";
 
 const API_BASE =
@@ -49,4 +50,39 @@ export function fetchDecisions(limit = 20) {
 
 export function fetchMatches(limit = 25) {
   return apiFetch<MarketMatch[]>("/api/matches", { limit: String(limit) });
+}
+
+// --- Risk Profiles ---
+
+export function fetchProfiles() {
+  return apiFetch<RiskProfile[]>("/api/profiles");
+}
+
+export function fetchActiveProfile() {
+  return apiFetch<RiskProfile>("/api/profiles/active");
+}
+
+export async function updateProfile(
+  profileId: number,
+  updates: Partial<
+    Omit<RiskProfile, "id" | "is_active" | "user_id" | "created_at" | "updated_at">
+  >,
+): Promise<RiskProfile> {
+  const url = new URL(`/api/profiles/${profileId}`, API_BASE);
+  const res = await fetch(url.toString(), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+  return res.json() as Promise<RiskProfile>;
+}
+
+export async function activateProfile(
+  profileId: number,
+): Promise<RiskProfile> {
+  const url = new URL(`/api/profiles/${profileId}/activate`, API_BASE);
+  const res = await fetch(url.toString(), { method: "PUT" });
+  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+  return res.json() as Promise<RiskProfile>;
 }

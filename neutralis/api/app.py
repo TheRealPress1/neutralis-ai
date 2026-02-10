@@ -11,8 +11,15 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from neutralis.config import load_settings
+from neutralis.profiles import (
+    activate_profile,
+    load_active_profile,
+    load_all_profiles,
+    update_profile,
+)
 from neutralis.portfolio.manager import PortfolioManager
 from neutralis.storage.postgres import PostgresStorage
 
@@ -59,7 +66,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "PUT"],
     allow_headers=["*"],
 )
 
@@ -154,3 +161,62 @@ def list_cross_platform_signals(limit: int = Query(50, ge=1, le=500)):
     return JSONResponse(
         content=_serialize(storage.get_recent_cross_platform_signals(limit=limit)),
     )
+
+
+# --- Risk Profiles ---
+
+class ProfileUpdate(BaseModel):
+    name: str | None = None
+    preset: str | None = None
+    target_annual_return_pct: float | None = None
+    description: str | None = None
+    min_edge_pct: float | None = None
+    min_liquidity_dollars: float | None = None
+    max_time_to_expiry_hours: float | None = None
+    min_time_to_expiry_hours: float | None = None
+    fee_rate: float | None = None
+    max_position_dollars: float | None = None
+    max_total_exposure_dollars: float | None = None
+    max_event_exposure_dollars: float | None = None
+    max_ticker_exposure_dollars: float | None = None
+    max_venue_exposure_pct: float | None = None
+    max_open_positions: int | None = None
+    min_similarity: float | None = None
+
+
+@app.get("/api/profiles")
+def list_profiles():
+    storage = _get_storage()
+    profiles = load_all_profiles(storage)
+    return [p.to_dict() for p in profiles]
+
+
+@app.get("/api/profiles/active")
+def get_active_profile():
+    storage = _get_storage()
+    profile = load_active_profile(storage)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="No active profile found")
+    return profile.to_dict()
+
+
+@app.put("/api/profiles/{profile_id}")
+def update_profile_endpoint(profile_id: int, body: ProfileUpdate):
+    storage = _get_storage()
+    updates = body.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    updated = update_profile(storage, profile_id, updates)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return updated.to_dict()
+
+
+@app.put("/api/profiles/{profile_id}/activate")
+def activate_profile_endpoint(profile_id: int):
+    storage = _get_storage()
+    activate_profile(storage, profile_id)
+    profile = load_active_profile(storage)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Profile not found after activation")
+    return profile.to_dict()

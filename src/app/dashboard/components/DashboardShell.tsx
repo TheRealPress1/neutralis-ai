@@ -5,6 +5,7 @@ import StatsBar from "./StatsBar";
 import PositionsTable from "./PositionsTable";
 import ActivityFeed from "./ActivityFeed";
 import MatchesTable from "./MatchesTable";
+import RiskProfileEditor from "./RiskProfileEditor";
 
 function secondsAgo(date: Date) {
   return Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
@@ -14,6 +15,7 @@ export default function DashboardShell() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [elapsed, setElapsed] = useState(0);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
@@ -49,14 +51,24 @@ export default function DashboardShell() {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-[#9ca3af]">
-              Updated {elapsed}s ago
-            </span>
+            {!showSettings && (
+              <span className="text-xs text-[#9ca3af]">
+                Updated {elapsed}s ago
+              </span>
+            )}
+            {!showSettings && (
+              <button
+                onClick={handleRefresh}
+                className="rounded border border-[#1a1d21] px-3 py-1.5 text-xs font-medium text-[#9ca3af] transition-colors hover:border-[#c0c5cb] hover:text-[#e8e9ea]"
+              >
+                Refresh
+              </button>
+            )}
             <button
-              onClick={handleRefresh}
+              onClick={() => setShowSettings(!showSettings)}
               className="rounded border border-[#1a1d21] px-3 py-1.5 text-xs font-medium text-[#9ca3af] transition-colors hover:border-[#c0c5cb] hover:text-[#e8e9ea]"
             >
-              Refresh
+              {showSettings ? "Dashboard" : "Settings"}
             </button>
           </div>
         </div>
@@ -64,21 +76,29 @@ export default function DashboardShell() {
 
       {/* Content */}
       <main className="mx-auto max-w-6xl px-6 pt-24 pb-16">
-        {/* Stats bar */}
-        <section>
-          <StatsBar refreshKey={refreshKey} />
-        </section>
+        {showSettings ? (
+          <section className="mt-2">
+            <RiskProfileEditor />
+          </section>
+        ) : (
+          <>
+            {/* Stats bar */}
+            <section>
+              <StatsBar refreshKey={refreshKey} />
+            </section>
 
-        {/* Two-column: Positions + Activity */}
-        <section className="mt-6 grid gap-6 lg:grid-cols-2">
-          <PositionsTable refreshKey={refreshKey} />
-          <ActivityFeed refreshKey={refreshKey} />
-        </section>
+            {/* Two-column: Positions + Activity */}
+            <section className="mt-6 grid gap-6 lg:grid-cols-2">
+              <PositionsTable refreshKey={refreshKey} />
+              <ActivityFeed refreshKey={refreshKey} />
+            </section>
 
-        {/* Matches */}
-        <section className="mt-6">
-          <MatchesTable refreshKey={refreshKey} />
-        </section>
+            {/* Matches */}
+            <section className="mt-6">
+              <MatchesTable refreshKey={refreshKey} />
+            </section>
+          </>
+        )}
       </main>
     </div>
   );
