@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import type { RiskProfile } from "@/types/api";
+import type { RiskProfile, CategoryMeta, CategoryOverride } from "@/types/api";
 import {
+  fetchCategories,
   fetchProfiles,
   activateProfile,
   updateProfile,
@@ -194,6 +195,18 @@ const PRESET_STYLES: Record<
   },
 };
 
+const RISK_LEVEL_STYLES: Record<string, { bg: string; text: string }> = {
+  conservative: { bg: "bg-blue-400/15", text: "text-blue-400" },
+  moderate: { bg: "bg-amber-400/15", text: "text-amber-400" },
+  aggressive: { bg: "bg-red-400/15", text: "text-red-400" },
+};
+
+const DEFAULT_OVERRIDE: CategoryOverride = {
+  enabled: true,
+  risk_level: "moderate",
+  max_exposure_dollars: null,
+};
+
 /* ── Helpers ─────────────────────────────────────────────────────── */
 
 function toDisplay(value: number, def: ParamDef): number {
@@ -204,37 +217,63 @@ function fromDisplay(display: number, def: ParamDef): number {
   return def.displayMultiplier ? display / def.displayMultiplier : display;
 }
 
+function countEnabled(overrides: Record<string, CategoryOverride>): number {
+  return Object.values(overrides).filter((o) => o.enabled).length;
+}
+
+function summarizeStrategy(
+  overrides: Record<string, CategoryOverride>,
+): string {
+  const enabled = Object.entries(overrides).filter(([, o]) => o.enabled);
+  const aggressive = enabled.filter(([, o]) => o.risk_level === "aggressive");
+  const disabled = Object.entries(overrides).filter(([, o]) => !o.enabled);
+  const parts: string[] = [];
+  if (aggressive.length > 0)
+    parts.push(`${aggressive.length} aggressive`);
+  if (disabled.length > 0) parts.push(`${disabled.length} disabled`);
+  if (parts.length === 0) return `${enabled.length} categories active`;
+  return parts.join(", ");
+}
+
 /* ── Component ───────────────────────────────────────────────────── */
 
 export default function RiskProfileEditor() {
   const [profiles, setProfiles] = useState<RiskProfile[]>([]);
+  const [categories, setCategories] = useState<CategoryMeta[]>([]);
   const [active, setActive] = useState<RiskProfile | null>(null);
   const [form, setForm] = useState<Record<string, number>>({});
+  const [catForm, setCatForm] = useState<Record<string, CategoryOverride>>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    "Portfolio Limits": true,
+    "Market Categories": false,
+    "Portfolio Limits": false,
     "Signal Quality": false,
     "Position Sizing": false,
   });
 
-  const loadProfiles = useCallback(async () => {
+  const loadData = useCallback(async () => {
     try {
-      const data = await fetchProfiles();
-      setProfiles(data);
-      const current = data.find((p) => p.is_active);
+      const [profileData, catData] = await Promise.all([
+        fetchProfiles(),
+        fetchCategories(),
+      ]);
+      setProfiles(profileData);
+      setCategories(catData);
+      const current = profileData.find((p) => p.is_active);
       if (current) {
         setActive(current);
         populateForm(current);
+        populateCatForm(current, catData);
       }
     } catch {
-      /* profiles table may not exist yet */
+      /* tables may not exist yet */
     }
   }, []);
 
   useEffect(() => {
-    loadProfiles();
-  }, [loadProfiles]);
+    loadData();
+  }, [loadData]);
 
   function populateForm(profile: RiskProfile) {
     const values: Record<string, number> = {};
@@ -247,13 +286,35 @@ export default function RiskProfileEditor() {
     setForm(values);
   }
 
+  function populateCatForm(
+    profile: RiskProfile,
+    cats: CategoryMeta[],
+  ) {
+    const overrides: Record<string, CategoryOverride> = {};
+    for (const cat of cats) {
+      overrides[cat.slug] =
+        profile.category_overrides?.[cat.slug] ?? { ...DEFAULT_OVERRIDE };
+    }
+    setCatForm(overrides);
+  }
+
   function hasChanges(): boolean {
     if (!active) return false;
+    // Check param changes
     for (const group of PARAM_GROUPS) {
       for (const p of group.params) {
         const saved = toDisplay(active[p.key] as number, p);
         if (Math.abs((form[p.key] ?? 0) - saved) > 0.001) return true;
       }
+    }
+    // Check category override changes
+    const savedOverrides = active.category_overrides ?? {};
+    for (const [slug, override] of Object.entries(catForm)) {
+      const saved = savedOverrides[slug] ?? DEFAULT_OVERRIDE;
+      if (override.enabled !== saved.enabled) return true;
+      if (override.risk_level !== saved.risk_level) return true;
+      if (override.max_exposure_dollars !== saved.max_exposure_dollars)
+        return true;
     }
     return false;
   }
@@ -263,6 +324,7 @@ export default function RiskProfileEditor() {
       const updated = await activateProfile(profileId);
       setActive(updated);
       populateForm(updated);
+      populateCatForm(updated, categories);
       const all = await fetchProfiles();
       setProfiles(all);
       setMessage(`Switched to ${updated.name}`);
@@ -277,18 +339,21 @@ export default function RiskProfileEditor() {
     setSaving(true);
     setMessage(null);
 
-    const updates: Record<string, number> = {};
+    const updates: Record<string, unknown> = {};
     for (const group of PARAM_GROUPS) {
       for (const p of group.params) {
         const displayVal = form[p.key] ?? 0;
         updates[p.key] = fromDisplay(displayVal, p);
       }
     }
+    // Include category overrides
+    updates.category_overrides = catForm;
 
     try {
       const updated = await updateProfile(active.id, updates);
       setActive(updated);
       populateForm(updated);
+      populateCatForm(updated, categories);
       const all = await fetchProfiles();
       setProfiles(all);
       setMessage("Profile saved");
@@ -301,11 +366,24 @@ export default function RiskProfileEditor() {
   }
 
   function handleReset() {
-    if (active) populateForm(active);
+    if (active) {
+      populateForm(active);
+      populateCatForm(active, categories);
+    }
   }
 
   function toggleGroup(title: string) {
     setOpenGroups((prev) => ({ ...prev, [title]: !prev[title] }));
+  }
+
+  function updateCatOverride(
+    slug: string,
+    patch: Partial<CategoryOverride>,
+  ) {
+    setCatForm((prev) => ({
+      ...prev,
+      [slug]: { ...(prev[slug] ?? DEFAULT_OVERRIDE), ...patch },
+    }));
   }
 
   if (profiles.length === 0) {
@@ -318,6 +396,11 @@ export default function RiskProfileEditor() {
     );
   }
 
+  const basePresets = profiles.filter(
+    (p) => !p.strategy && p.preset !== "custom",
+  );
+  const strategies = profiles.filter((p) => p.strategy);
+
   return (
     <div className="mx-auto max-w-5xl px-6">
       <h2 className="text-2xl font-bold tracking-tight">Risk Profile</h2>
@@ -326,61 +409,252 @@ export default function RiskProfileEditor() {
         Changes take effect on the next pipeline cycle.
       </p>
 
-      {/* ── Preset Cards ──────────────────────────────────────── */}
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        {profiles
-          .filter((p) => p.preset !== "custom")
-          .map((profile) => {
-            const style =
-              PRESET_STYLES[profile.preset] ?? PRESET_STYLES.custom;
-            const isActive = profile.is_active;
-            return (
-              <button
-                key={profile.id}
-                onClick={() => handleActivate(profile.id)}
-                className={`card-panel rounded-xl p-5 text-left transition-all ${
-                  isActive
-                    ? `border ${style.border} ring-1 ring-inset ring-white/5`
-                    : "border border-transparent opacity-60 hover:opacity-100"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className={`text-sm font-semibold ${style.accent}`}>
-                    {style.label}
+      {/* ── Base Preset Cards ────────────────────────────────────── */}
+      <h3 className="mt-6 text-xs font-semibold uppercase tracking-wider text-[#9ca3af]">
+        Risk Presets
+      </h3>
+      <div className="mt-3 grid gap-4 sm:grid-cols-3">
+        {basePresets.map((profile) => {
+          const style =
+            PRESET_STYLES[profile.preset] ?? PRESET_STYLES.custom;
+          const isActive = profile.is_active;
+          return (
+            <button
+              key={profile.id}
+              onClick={() => handleActivate(profile.id)}
+              className={`card-panel rounded-xl p-5 text-left transition-all ${
+                isActive
+                  ? `border ${style.border} ring-1 ring-inset ring-white/5`
+                  : "border border-transparent opacity-60 hover:opacity-100"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className={`text-sm font-semibold ${style.accent}`}>
+                  {style.label}
+                </span>
+                {isActive && (
+                  <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+                    Active
                   </span>
-                  {isActive && (
-                    <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
-                      Active
-                    </span>
-                  )}
-                </div>
-                <p className="mt-1 text-xs text-[#9ca3af]">
-                  {profile.description}
-                </p>
-                <p className="mt-3 text-lg font-bold">
-                  {profile.target_annual_return_pct}%{" "}
-                  <span className="text-xs font-normal text-[#9ca3af]">
-                    target return
-                  </span>
-                </p>
-                <div className="mt-2 flex gap-3 text-[11px] text-[#9ca3af]">
-                  <span>${profile.max_total_exposure_dollars} max</span>
-                  <span>{profile.min_edge_pct}% min edge</span>
-                </div>
-              </button>
-            );
-          })}
+                )}
+              </div>
+              <p className="mt-1 text-xs text-[#9ca3af]">
+                {profile.description}
+              </p>
+              <p className="mt-3 text-lg font-bold">
+                {profile.target_annual_return_pct}%{" "}
+                <span className="text-xs font-normal text-[#9ca3af]">
+                  target return
+                </span>
+              </p>
+              <div className="mt-2 flex gap-3 text-[11px] text-[#9ca3af]">
+                <span>${profile.max_total_exposure_dollars} max</span>
+                <span>{profile.min_edge_pct}% min edge</span>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
-      {/* ── Active Profile Badge ──────────────────────────────── */}
+      {/* ── Strategy Cards ───────────────────────────────────────── */}
+      {strategies.length > 0 && (
+        <>
+          <h3 className="mt-8 text-xs font-semibold uppercase tracking-wider text-[#9ca3af]">
+            Category Strategies
+          </h3>
+          <p className="mt-1 text-xs text-[#9ca3af]">
+            Pre-built category configurations — pick one to set risk levels per
+            market type.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {strategies.map((profile) => {
+              const isActive = profile.is_active;
+              const overrides = profile.category_overrides ?? {};
+              const enabledCount = countEnabled(overrides);
+              return (
+                <button
+                  key={profile.id}
+                  onClick={() => handleActivate(profile.id)}
+                  className={`card-panel rounded-xl p-4 text-left transition-all ${
+                    isActive
+                      ? "border border-[#c0c5cb]/40 ring-1 ring-inset ring-white/5"
+                      : "border border-transparent opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-[#e8e9ea]">
+                      {profile.name}
+                    </span>
+                    {isActive && (
+                      <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+                        Active
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-[11px] leading-tight text-[#9ca3af]">
+                    {profile.description}
+                  </p>
+                  {/* Category badges */}
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {categories
+                      .filter((c) => c.slug !== "other")
+                      .map((cat) => {
+                        const ov = overrides[cat.slug];
+                        if (!ov || !ov.enabled) return null;
+                        const riskStyle =
+                          RISK_LEVEL_STYLES[ov.risk_level] ??
+                          RISK_LEVEL_STYLES.moderate;
+                        return (
+                          <span
+                            key={cat.slug}
+                            className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${riskStyle.bg} ${riskStyle.text}`}
+                          >
+                            {cat.label}
+                          </span>
+                        );
+                      })}
+                  </div>
+                  <div className="mt-2 flex gap-3 text-[11px] text-[#9ca3af]">
+                    <span>{enabledCount} categories</span>
+                    <span>{summarizeStrategy(overrides)}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* ── Active Profile Badge ──────────────────────────────────── */}
       {active && active.preset === "custom" && (
         <div className="mt-4 rounded-lg border border-[#c0c5cb]/20 bg-[#c0c5cb]/5 px-4 py-2 text-xs text-[#c0c5cb]">
           Custom profile — parameters differ from any preset
         </div>
       )}
 
-      {/* ── Parameter Groups ──────────────────────────────────── */}
+      {/* ── Category Tuning Grid ──────────────────────────────────── */}
       <div className="mt-8 space-y-4">
+        <div className="card-panel rounded-xl">
+          <button
+            onClick={() => toggleGroup("Market Categories")}
+            className="flex w-full items-center justify-between px-6 py-4 text-left"
+          >
+            <div>
+              <h3 className="text-sm font-semibold">Market Categories</h3>
+              <p className="mt-0.5 text-xs text-[#9ca3af]">
+                Enable/disable categories and set per-category risk levels
+              </p>
+            </div>
+            <span className="text-[#9ca3af] transition-transform">
+              {openGroups["Market Categories"] ? "\u25B2" : "\u25BC"}
+            </span>
+          </button>
+
+          {openGroups["Market Categories"] && (
+            <div className="border-t border-[#1a1d21] px-6 pb-6 pt-4">
+              <div className="space-y-3">
+                {categories.map((cat) => {
+                  const override = catForm[cat.slug] ?? DEFAULT_OVERRIDE;
+                  const isEnabled = override.enabled;
+                  return (
+                    <div
+                      key={cat.slug}
+                      className={`flex items-center gap-4 rounded-lg border border-[#1a1d21] p-3 transition-opacity ${
+                        isEnabled ? "" : "opacity-40"
+                      }`}
+                    >
+                      {/* Color dot + label */}
+                      <div className="flex min-w-[120px] items-center gap-2">
+                        <span
+                          className="inline-block h-2.5 w-2.5 rounded-full"
+                          style={{ backgroundColor: cat.color }}
+                        />
+                        <span className="text-sm font-medium">
+                          {cat.label}
+                        </span>
+                      </div>
+
+                      {/* Toggle */}
+                      <button
+                        onClick={() =>
+                          updateCatOverride(cat.slug, {
+                            enabled: !isEnabled,
+                          })
+                        }
+                        className={`relative h-5 w-9 rounded-full transition-colors ${
+                          isEnabled ? "bg-emerald-400" : "bg-[#1a1d21]"
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                            isEnabled ? "left-[18px]" : "left-0.5"
+                          }`}
+                        />
+                      </button>
+
+                      {/* Risk level buttons */}
+                      <div className="flex gap-1">
+                        {(
+                          ["conservative", "moderate", "aggressive"] as const
+                        ).map((level) => {
+                          const isSelected =
+                            override.risk_level === level;
+                          const style = RISK_LEVEL_STYLES[level];
+                          return (
+                            <button
+                              key={level}
+                              onClick={() =>
+                                updateCatOverride(cat.slug, {
+                                  risk_level: level,
+                                })
+                              }
+                              disabled={!isEnabled}
+                              className={`rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                                isSelected
+                                  ? `${style.bg} ${style.text}`
+                                  : "text-[#9ca3af] hover:text-[#e8e9ea]"
+                              } disabled:cursor-not-allowed`}
+                            >
+                              {level.charAt(0).toUpperCase() +
+                                level.slice(1, 4)}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Max exposure input */}
+                      <div className="ml-auto flex items-center gap-1.5">
+                        <span className="text-[10px] text-[#9ca3af]">
+                          Max $
+                        </span>
+                        <input
+                          type="number"
+                          placeholder="No limit"
+                          value={
+                            override.max_exposure_dollars ?? ""
+                          }
+                          disabled={!isEnabled}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            updateCatOverride(cat.slug, {
+                              max_exposure_dollars:
+                                val === ""
+                                  ? null
+                                  : parseFloat(val) || 0,
+                            });
+                          }}
+                          className="w-20 rounded border border-[#1a1d21] bg-[#050608] px-2 py-1 text-xs text-[#e8e9ea] outline-none transition-colors focus:border-[#c0c5cb] disabled:cursor-not-allowed disabled:opacity-40"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Advanced Parameter Groups ──────────────────────────── */}
         {PARAM_GROUPS.map((group) => {
           const isOpen = openGroups[group.title] ?? false;
           return (
@@ -427,7 +701,8 @@ export default function RiskProfileEditor() {
                             onChange={(e) =>
                               setForm((prev) => ({
                                 ...prev,
-                                [param.key]: parseFloat(e.target.value) || 0,
+                                [param.key]:
+                                  parseFloat(e.target.value) || 0,
                               }))
                             }
                             className="mt-2 w-full rounded-lg border border-[#1a1d21] bg-[#050608] px-3 py-2 text-sm text-[#e8e9ea] outline-none transition-colors focus:border-[#c0c5cb]"
@@ -443,7 +718,7 @@ export default function RiskProfileEditor() {
         })}
       </div>
 
-      {/* ── Actions ───────────────────────────────────────────── */}
+      {/* ── Actions ───────────────────────────────────────────────── */}
       <div className="mt-6 flex items-center gap-4">
         <button
           onClick={handleSave}

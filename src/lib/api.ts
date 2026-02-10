@@ -1,6 +1,7 @@
 /* Typed fetch client for the FastAPI dashboard endpoints. */
 
 import type {
+  CategoryMeta,
   PortfolioStats,
   Position,
   Signal,
@@ -53,6 +54,10 @@ export function fetchMatches(limit = 25) {
 }
 
 // --- Risk Profiles ---
+
+export function fetchCategories() {
+  return apiFetch<CategoryMeta[]>("/api/categories");
+}
 
 export function fetchProfiles() {
   return apiFetch<RiskProfile[]>("/api/profiles");

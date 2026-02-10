@@ -79,6 +79,19 @@ export type ActivityItem =
   | { kind: "signal"; data: Signal }
   | { kind: "decision"; data: Decision };
 
+export interface CategoryMeta {
+  slug: string;
+  label: string;
+  color: string;
+  description: string;
+}
+
+export interface CategoryOverride {
+  enabled: boolean;
+  risk_level: "conservative" | "moderate" | "aggressive";
+  max_exposure_dollars: number | null;
+}
+
 export interface RiskProfile {
   id: number;
   name: string;
@@ -106,6 +119,10 @@ export interface RiskProfile {
 
   // Matching
   min_similarity: number;
+
+  // Category overrides
+  category_overrides: Record<string, CategoryOverride>;
+  strategy: string | null;
 
   user_id: string | null;
   created_at: string | null;

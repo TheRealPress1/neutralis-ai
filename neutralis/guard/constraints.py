@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
+from neutralis.categories import classify_market
 from neutralis.config import PipelineConfig, PortfolioConfig
 from neutralis.models import GuardResult, NormalizedMarket, PortfolioSnapshot, Signal
 
@@ -252,4 +254,40 @@ def check_duplicate_position(
         guard_name="duplicate_position",
         passed=True,
         reason="no duplicate positions found",
+    )
+
+
+def check_category_exposure(
+    proposed_size: float,
+    category: str,
+    category_overrides: dict[str, Any],
+    snapshot: PortfolioSnapshot,
+) -> GuardResult:
+    """Check per-category exposure limit from category overrides."""
+    override = category_overrides.get(category, {})
+    cat_max = override.get("max_exposure_dollars")
+    if cat_max is None:
+        return GuardResult(
+            guard_name="category_exposure",
+            passed=True,
+            reason=f"no per-category limit for '{category}'",
+        )
+
+    current = sum(
+        p.size_dollars
+        for p in snapshot.positions
+        if classify_market(p.ticker, p.event_ticker) == category
+    )
+    new_total = current + proposed_size
+    passed = new_total <= cat_max
+    return GuardResult(
+        guard_name="category_exposure",
+        passed=passed,
+        reason=(
+            f"category '{category}' exposure ${new_total:.2f} <= cap ${cat_max:.2f}"
+            if passed
+            else f"category '{category}' exposure ${new_total:.2f} > cap ${cat_max:.2f}"
+        ),
+        value=new_total,
+        threshold=cat_max,
     )

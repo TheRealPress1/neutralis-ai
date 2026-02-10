@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from neutralis.alerts.discord import DiscordNotifier
 from neutralis.config import load_settings, load_settings_with_profile
+from neutralis.profiles import load_active_profile
 from neutralis.core.cross_scanner import scan_cross_platform
 from neutralis.core.matcher import match_markets
 from neutralis.core.scanners import scan_complement_arb
@@ -48,8 +49,12 @@ class RunStats:
 
 def run_once() -> RunStats:
     base_settings = load_settings()
+    category_overrides = None
     with PostgresStorage(base_settings.db) as profile_storage:
         settings = load_settings_with_profile(profile_storage)
+        profile = load_active_profile(profile_storage)
+        if profile and profile.category_overrides:
+            category_overrides = profile.category_overrides
     notifier = DiscordNotifier(settings.alerts)
     start = time.monotonic()
 
@@ -151,6 +156,7 @@ def run_once() -> RunStats:
                 signal, market, settings.pipeline,
                 portfolio_snapshot=portfolio_snapshot,
                 portfolio_config=settings.portfolio,
+                category_overrides=category_overrides,
             )
             decision_id = storage.save_decision(decision)
 
@@ -195,6 +201,7 @@ def run_once() -> RunStats:
                 signal, market, settings.pipeline,
                 portfolio_snapshot=portfolio_snapshot,
                 portfolio_config=settings.portfolio,
+                category_overrides=category_overrides,
             )
             decision_id = storage.save_decision(decision)
             if decision.verdict == DecisionVerdict.PASS:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from neutralis.config import MatchingConfig, PipelineConfig, PortfolioConfig
@@ -41,6 +41,10 @@ class RiskProfile:
 
     # Matching
     min_similarity: float
+
+    # Category overrides (JSONB from DB)
+    category_overrides: dict[str, Any] = field(default_factory=dict)
+    strategy: Optional[str] = None
 
     # Meta
     user_id: Optional[str] = None
@@ -93,6 +97,8 @@ class RiskProfile:
             "max_venue_exposure_pct": self.max_venue_exposure_pct,
             "max_open_positions": self.max_open_positions,
             "min_similarity": self.min_similarity,
+            "category_overrides": self.category_overrides,
+            "strategy": self.strategy,
             "user_id": self.user_id,
             "created_at": str(self.created_at) if self.created_at else None,
             "updated_at": str(self.updated_at) if self.updated_at else None,
@@ -106,7 +112,7 @@ _PROFILE_COLS = (
     "min_time_to_expiry_hours, fee_rate, max_position_dollars, "
     "max_total_exposure_dollars, max_event_exposure_dollars, "
     "max_ticker_exposure_dollars, max_venue_exposure_pct, max_open_positions, "
-    "min_similarity, user_id, created_at, updated_at"
+    "min_similarity, category_overrides, strategy, user_id, created_at, updated_at"
 )
 
 
@@ -130,9 +136,11 @@ def _row_to_profile(row: tuple) -> RiskProfile:  # type: ignore[type-arg]
         max_venue_exposure_pct=row[15],
         max_open_positions=row[16],
         min_similarity=row[17],
-        user_id=str(row[18]) if row[18] else None,
-        created_at=row[19],
-        updated_at=row[20],
+        category_overrides=row[18] if isinstance(row[18], dict) else {},
+        strategy=row[19],
+        user_id=str(row[20]) if row[20] else None,
+        created_at=row[21],
+        updated_at=row[22],
     )
 
 
@@ -193,16 +201,22 @@ def update_profile(
         "max_total_exposure_dollars", "max_event_exposure_dollars",
         "max_ticker_exposure_dollars", "max_venue_exposure_pct",
         "max_open_positions", "min_similarity",
+        "category_overrides", "strategy",
     }
     filtered = {k: v for k, v in updates.items() if k in allowed}
     if not filtered:
         return None
 
     # Auto-mark as custom when config fields change
-    meta_fields = {"name", "description", "preset"}
+    meta_fields = {"name", "description", "preset", "strategy"}
     if any(k not in meta_fields for k in filtered):
         if "preset" not in filtered:
             filtered["preset"] = "custom"
+
+    # Wrap JSONB values for psycopg
+    if "category_overrides" in filtered:
+        from psycopg.types.json import Jsonb
+        filtered["category_overrides"] = Jsonb(filtered["category_overrides"])
 
     set_clauses = ", ".join(f"{k} = %({k})s" for k in filtered)
     filtered["id"] = profile_id

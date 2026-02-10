@@ -182,6 +182,8 @@ class ProfileUpdate(BaseModel):
     max_venue_exposure_pct: float | None = None
     max_open_positions: int | None = None
     min_similarity: float | None = None
+    category_overrides: dict | None = None
+    strategy: str | None = None
 
 
 @app.get("/api/profiles")
@@ -220,3 +222,19 @@ def activate_profile_endpoint(profile_id: int):
     if profile is None:
         raise HTTPException(status_code=404, detail="Profile not found after activation")
     return profile.to_dict()
+
+
+# --- Categories ---
+
+@app.get("/api/categories")
+def list_categories():
+    from neutralis.categories import ALL_CATEGORIES
+    return [
+        {
+            "slug": c.slug,
+            "label": c.label,
+            "color": c.color,
+            "description": c.description,
+        }
+        for c in ALL_CATEGORIES
+    ]
