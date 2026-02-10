@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from neutralis.config import Settings
 from neutralis.logging import get_logger
@@ -11,6 +12,9 @@ from neutralis.portfolio.manager import PortfolioManager
 from neutralis.storage.postgres import PostgresStorage
 from neutralis.venues.kalshi_client import KalshiClient
 from neutralis.venues.polymarket_client import PolymarketClient
+
+if TYPE_CHECKING:
+    from neutralis.alerts.discord import DiscordNotifier
 
 logger = get_logger(__name__)
 
@@ -42,6 +46,7 @@ def _settle_kalshi(
     positions: list[Position],
     portfolio: PortfolioManager,
     settings: Settings,
+    notifier: DiscordNotifier | None = None,
 ) -> tuple[int, float]:
     """Check Kalshi positions for resolved markets. Returns (settled, pnl)."""
     if not positions:
@@ -89,6 +94,13 @@ def _settle_kalshi(
                 pos.side.value,
                 closed.realized_pnl,
             )
+            if notifier is not None:
+                notifier.notify_settlement(
+                    ticker=pos.ticker,
+                    side=pos.side.value,
+                    result=result,
+                    pnl=closed.realized_pnl,
+                )
 
     return settled, total_pnl
 
@@ -97,6 +109,7 @@ def _settle_polymarket(
     positions: list[Position],
     portfolio: PortfolioManager,
     settings: Settings,
+    notifier: DiscordNotifier | None = None,
 ) -> tuple[int, float]:
     """Check Polymarket positions for resolved markets. Returns (settled, pnl)."""
     if not positions:
@@ -161,11 +174,21 @@ def _settle_polymarket(
                 pos.side.value,
                 closed.realized_pnl,
             )
+            if notifier is not None:
+                notifier.notify_settlement(
+                    ticker=pos.ticker,
+                    side=pos.side.value,
+                    result=result,
+                    pnl=closed.realized_pnl,
+                )
 
     return settled, total_pnl
 
 
-def run_settlement(settings: Settings) -> SettlementStats:
+def run_settlement(
+    settings: Settings,
+    notifier: DiscordNotifier | None = None,
+) -> SettlementStats:
     """Check all open positions for resolved markets and settle them."""
     with PostgresStorage(settings.db) as storage:
         portfolio = PortfolioManager(storage, settings.portfolio)
@@ -181,8 +204,8 @@ def run_settlement(settings: Settings) -> SettlementStats:
         kalshi_pos = [p for p in positions if p.venue == "kalshi"]
         poly_pos = [p for p in positions if p.venue == "polymarket"]
 
-        k_settled, k_pnl = _settle_kalshi(kalshi_pos, portfolio, settings)
-        p_settled, p_pnl = _settle_polymarket(poly_pos, portfolio, settings)
+        k_settled, k_pnl = _settle_kalshi(kalshi_pos, portfolio, settings, notifier)
+        p_settled, p_pnl = _settle_polymarket(poly_pos, portfolio, settings, notifier)
 
         total_settled = k_settled + p_settled
         total_pnl = k_pnl + p_pnl
