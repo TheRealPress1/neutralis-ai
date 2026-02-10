@@ -103,6 +103,7 @@ class TradeLeg:
     side: str
     price_dollars: float
     quantity_dollars: float
+    venue: str = ""
 
 
 @dataclass(frozen=True)

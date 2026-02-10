@@ -60,6 +60,7 @@ class PortfolioManager:
 
         for leg in signal.legs:
             side = TradeSide.BUY_YES if leg.side == "yes" else TradeSide.BUY_NO
+            leg_venue = leg.venue or venue  # per-leg venue if set, else signal-level
 
             # Distribute suggested size proportionally across legs
             if signal.combined_cost > 0:
@@ -78,7 +79,7 @@ class PortfolioManager:
                 decision_id=decision_id,
                 ticker=leg.ticker,
                 event_ticker=signal.event_ticker,
-                venue=venue,
+                venue=leg_venue,
                 side=side,
                 price=leg.price_dollars,
                 size_dollars=leg_size,
