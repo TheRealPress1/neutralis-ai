@@ -1,40 +1,17 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useActionState } from "react";
+import { joinWaitlist, type WaitlistState } from "./actions/waitlist";
+
+const initialState: WaitlistState = { success: false, error: null };
 
 export default function WaitlistForm() {
-  const [submitted, setSubmitted] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [state, formAction, isPending] = useActionState(
+    joinWaitlist,
+    initialState,
+  );
 
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-
-    const form = e.currentTarget;
-    const email = new FormData(form).get("email") as string;
-
-    try {
-      const res = await fetch("/api/waitlist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to join waitlist");
-      }
-
-      setSubmitted(true);
-    } catch {
-      setError("Something went wrong. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  if (submitted) {
+  if (state.success) {
     return (
       <div className="card-panel rounded-xl px-6 py-5">
         <p className="text-lg text-[#c0c5cb]">
@@ -46,7 +23,7 @@ export default function WaitlistForm() {
 
   return (
     <form
-      onSubmit={handleSubmit}
+      action={formAction}
       className="flex w-full max-w-md flex-col gap-3 sm:flex-row"
     >
       <label htmlFor="waitlist-email" className="sr-only">
@@ -62,13 +39,13 @@ export default function WaitlistForm() {
       />
       <button
         type="submit"
-        disabled={loading}
+        disabled={isPending}
         className="btn-sheen rounded-lg bg-[#e8e9ea] px-6 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb] disabled:opacity-50"
       >
-        {loading ? "Joining…" : "Join waitlist"}
+        {isPending ? "Joining…" : "Join waitlist"}
       </button>
-      {error && (
-        <p className="text-sm text-red-400 sm:absolute sm:mt-14">{error}</p>
+      {state.error && (
+        <p className="text-sm text-red-400 sm:absolute sm:mt-14">{state.error}</p>
       )}
     </form>
   );
