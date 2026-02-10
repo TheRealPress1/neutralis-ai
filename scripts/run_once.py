@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -26,7 +27,21 @@ from neutralis.venues.polymarket_normalize import normalize_market as poly_norma
 logger = get_logger("pipeline")
 
 
-def run_once() -> None:
+@dataclass(frozen=True)
+class RunStats:
+    duration_ms: float = 0.0
+    kalshi_markets: int = 0
+    poly_markets: int = 0
+    complement_signals: int = 0
+    cross_platform_signals: int = 0
+    matches: int = 0
+    decisions_pass: int = 0
+    decisions_reject: int = 0
+    open_positions: int = 0
+    total_exposure: float = 0.0
+
+
+def run_once() -> RunStats:
     settings = load_settings()
     start = time.monotonic()
 
@@ -101,6 +116,9 @@ def run_once() -> None:
         )
 
         # 4a: Complement arb signals + guard decisions + portfolio
+        pass_count = 0
+        reject_count = 0
+
         for signal in complement_signals:
             market = enriched_markets.get(signal.ticker, signal.market_snapshot)
             if market is None:
@@ -115,7 +133,10 @@ def run_once() -> None:
             decision_id = storage.save_decision(decision)
 
             if decision.verdict == DecisionVerdict.PASS:
+                pass_count += 1
                 portfolio.record_fill(signal, decision, decision_id)
+            else:
+                reject_count += 1
 
         # 4b: Cross-platform matches and signals
         # Build a lookup from ticker to snapshot_id for signal storage
@@ -147,7 +168,10 @@ def run_once() -> None:
             )
             decision_id = storage.save_decision(decision)
             if decision.verdict == DecisionVerdict.PASS:
+                pass_count += 1
                 portfolio.record_fill(signal, decision, decision_id)
+            else:
+                reject_count += 1
 
         # 4d: Portfolio summary
         snapshot = portfolio.get_snapshot()
@@ -159,12 +183,28 @@ def run_once() -> None:
 
     elapsed = (time.monotonic() - start) * 1000
     logger.info(
-        "Pipeline complete: %d complement arb, %d cross-platform, %d matches, %.0fms",
+        "Pipeline complete: %d complement arb, %d cross-platform, %d matches, "
+        "%d pass, %d reject, %.0fms",
         len(complement_signals),
         len(xp_signals),
         len(pairs),
+        pass_count,
+        reject_count,
         elapsed,
         extra={"duration_ms": elapsed},
+    )
+
+    return RunStats(
+        duration_ms=elapsed,
+        kalshi_markets=len(kalshi_markets),
+        poly_markets=len(poly_markets),
+        complement_signals=len(complement_signals),
+        cross_platform_signals=len(xp_signals),
+        matches=len(pairs),
+        decisions_pass=pass_count,
+        decisions_reject=reject_count,
+        open_positions=snapshot.open_position_count,
+        total_exposure=snapshot.total_exposure_dollars,
     )
 
 
