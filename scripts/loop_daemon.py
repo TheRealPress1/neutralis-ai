@@ -32,6 +32,7 @@ class _Stats:
         self.total_rejects = 0
         self.total_settled = 0
         self.total_settlement_pnl = 0.0
+        self.total_marked = 0
 
     def record_success(self, run_stats: object) -> None:
         self.total_runs += 1
@@ -42,6 +43,7 @@ class _Stats:
         self.total_rejects += getattr(run_stats, "decisions_reject", 0)
         self.total_settled += getattr(run_stats, "positions_settled", 0)
         self.total_settlement_pnl += getattr(run_stats, "settlement_pnl", 0.0)
+        self.total_marked += getattr(run_stats, "marked_positions", 0)
 
     def record_error(self) -> None:
         self.total_errors += 1

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime
 
-from neutralis.config import PortfolioConfig
+from neutralis.config import PortfolioConfig, Settings
 from neutralis.logging import get_logger
 from neutralis.models import (
     Decision,
@@ -226,6 +226,89 @@ class PortfolioManager:
             venue_exposure=tuple(sorted(venue_map.items(), key=lambda x: -x[1])),
             event_exposure=tuple(sorted(event_map.items(), key=lambda x: -x[1])),
         )
+
+    def mark_to_market(self, settings: Settings) -> int:
+        """Fetch live prices for open positions and compute unrealized P&L.
+
+        Returns the number of positions marked.
+        """
+        from neutralis.venues.kalshi_client import KalshiClient
+        from neutralis.venues.polymarket_client import PolymarketClient
+
+        positions = self._storage.get_open_positions()
+        if not positions:
+            return 0
+
+        kalshi_pos = [p for p in positions if p.venue == "kalshi"]
+        poly_pos = [p for p in positions if p.venue == "polymarket"]
+        marked = 0
+
+        # Mark Kalshi positions
+        if kalshi_pos:
+            with KalshiClient(settings.kalshi) as client:
+                for pos in kalshi_pos:
+                    try:
+                        raw = client.get_market(pos.ticker)
+                    except Exception:
+                        logger.warning("MTM: error fetching Kalshi %s, skipping", pos.ticker)
+                        continue
+                    if raw is None:
+                        continue
+
+                    if pos.side == TradeSide.BUY_YES:
+                        price_str = raw.get("yes_bid_dollars")
+                    else:
+                        price_str = raw.get("no_bid_dollars")
+
+                    if price_str is None:
+                        continue
+                    try:
+                        current_price = float(price_str)
+                    except (ValueError, TypeError):
+                        continue
+
+                    pnl = round(current_price * pos.quantity - pos.size_dollars, 4)
+                    self._storage.update_unrealized_pnl(pos.id, pnl)
+                    marked += 1
+                    logger.debug(
+                        "MTM: %s %s price=%.4f pnl=$%.2f",
+                        pos.ticker, pos.side.value, current_price, pnl,
+                    )
+
+        # Mark Polymarket positions
+        if poly_pos:
+            with PolymarketClient(settings.polymarket) as client:
+                for pos in poly_pos:
+                    try:
+                        raw = client.get_market(pos.ticker)
+                    except Exception:
+                        logger.warning("MTM: error fetching Polymarket %s, skipping", pos.ticker)
+                        continue
+                    if raw is None:
+                        continue
+
+                    outcome_prices = raw.get("outcomePrices", [])
+                    if not outcome_prices or len(outcome_prices) < 2:
+                        continue
+
+                    try:
+                        if pos.side == TradeSide.BUY_YES:
+                            current_price = float(outcome_prices[0])
+                        else:
+                            current_price = float(outcome_prices[1])
+                    except (ValueError, TypeError):
+                        continue
+
+                    pnl = round(current_price * pos.quantity - pos.size_dollars, 4)
+                    self._storage.update_unrealized_pnl(pos.id, pnl)
+                    marked += 1
+                    logger.debug(
+                        "MTM: %s %s price=%.4f pnl=$%.2f",
+                        pos.ticker, pos.side.value, current_price, pnl,
+                    )
+
+        logger.info("Marked %d/%d open positions to market", marked, len(positions))
+        return marked
 
     def get_event_exposure(self, event_ticker: str) -> float:
         """Return total dollar exposure to a specific event."""
