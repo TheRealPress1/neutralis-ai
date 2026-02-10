@@ -7,8 +7,9 @@ import ActivityFeed from "./ActivityFeed";
 import MatchesTable from "./MatchesTable";
 import RiskProfileEditor from "./RiskProfileEditor";
 import PerformanceAnalytics from "./PerformanceAnalytics";
+import BacktestPanel from "./BacktestPanel";
 
-type View = "dashboard" | "analytics" | "settings";
+type View = "dashboard" | "analytics" | "backtest" | "settings";
 
 function secondsAgo(date: Date) {
   return Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
@@ -43,6 +44,7 @@ export default function DashboardShell() {
   const NAV_ITEMS: { key: View; label: string }[] = [
     { key: "dashboard", label: "Dashboard" },
     { key: "analytics", label: "Analytics" },
+    { key: "backtest", label: "Backtest" },
     { key: "settings", label: "Settings" },
   ];
 
@@ -100,6 +102,12 @@ export default function DashboardShell() {
         {view === "analytics" && (
           <section className="mt-2">
             <PerformanceAnalytics refreshKey={refreshKey} />
+          </section>
+        )}
+
+        {view === "backtest" && (
+          <section className="mt-2">
+            <BacktestPanel />
           </section>
         )}
 

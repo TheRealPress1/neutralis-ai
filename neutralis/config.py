@@ -70,12 +70,14 @@ class PolymarketConfig:
 
 @dataclass(frozen=True)
 class MatchingConfig:
-    min_similarity: float = 0.55
+    min_similarity: float = 0.70
     min_discrepancy_pct: float = 3.0
-    min_token_overlap: int = 1
+    min_token_overlap: int = 2
     weight_text: float = 0.50
     weight_entity: float = 0.35
     weight_temporal: float = 0.15
+    max_liquidity_ratio: float = 10.0  # reject if venue liquidity differs >Nx
+    max_spread: float = 0.40  # reject if bid-ask spread > this on either side
 
 
 @dataclass(frozen=True)

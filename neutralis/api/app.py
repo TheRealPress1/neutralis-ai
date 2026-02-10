@@ -283,3 +283,53 @@ def list_categories():
         }
         for c in ALL_CATEGORIES
     ]
+
+
+# --- Backtest ---
+
+class BacktestRequest(BaseModel):
+    start_date: str
+    end_date: str
+    pipeline_overrides: dict[str, Any] | None = None
+    portfolio_overrides: dict[str, Any] | None = None
+    matching_overrides: dict[str, Any] | None = None
+
+
+@app.post("/api/backtest/run")
+def run_backtest_endpoint(req: BacktestRequest):
+    from neutralis.backtest.engine import run_backtest
+
+    try:
+        result = run_backtest(
+            start_date=req.start_date,
+            end_date=req.end_date,
+            pipeline_overrides=req.pipeline_overrides,
+            portfolio_overrides=req.portfolio_overrides,
+            matching_overrides=req.matching_overrides,
+        )
+        return result.to_dict()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/backtest/data-range")
+def backtest_data_range():
+    """Return the date range of available historical data."""
+    storage = _get_storage()
+    rows = storage._fetch_dicts("""
+        SELECT
+            MIN(snapshot_ts)::date AS earliest,
+            MAX(snapshot_ts)::date AS latest,
+            COUNT(DISTINCT date_trunc('minute', snapshot_ts)) AS total_runs,
+            COUNT(*) AS total_snapshots
+        FROM market_snapshots
+    """)
+    if not rows:
+        return {"earliest": None, "latest": None, "total_runs": 0, "total_snapshots": 0}
+    row = rows[0]
+    return {
+        "earliest": str(row["earliest"]) if row["earliest"] else None,
+        "latest": str(row["latest"]) if row["latest"] else None,
+        "total_runs": row["total_runs"],
+        "total_snapshots": row["total_snapshots"],
+    }

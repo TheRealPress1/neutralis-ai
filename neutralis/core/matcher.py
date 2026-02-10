@@ -199,6 +199,21 @@ def _temporal_score(market_a: NormalizedMarket, market_b: NormalizedMarket) -> f
 # Main matching function
 # ---------------------------------------------------------------------------
 
+def _spread(market: NormalizedMarket) -> float:
+    """Bid-ask spread on the YES side. Returns 0 if no two-sided quote."""
+    if market.yes_ask > 0 and market.yes_bid > 0:
+        return market.yes_ask - market.yes_bid
+    return 0.0
+
+
+def _liquidity_ratio(a: NormalizedMarket, b: NormalizedMarket) -> float:
+    """Ratio of the larger liquidity to the smaller.  Returns inf if either is zero."""
+    la, lb = a.liquidity, b.liquidity
+    if la <= 0 or lb <= 0:
+        return float("inf")
+    return max(la, lb) / min(la, lb)
+
+
 def match_markets(
     kalshi_markets: list[NormalizedMarket],
     poly_markets: list[NormalizedMarket],
@@ -211,10 +226,12 @@ def match_markets(
     2. Entity overlap — shared proper nouns (person, team, event names)
     3. Temporal proximity — how close the expiration dates are
 
-    Each Kalshi market matches at most one Polymarket market (best score).
+    Post-filters:
+    - Liquidity parity: reject if venue liquidity differs by >max_liquidity_ratio
+    - Spread check: reject if either side has a bid-ask spread >max_spread
+    - Uniqueness: each Polymarket market matches at most one Kalshi market
     """
     cfg = config or MatchingConfig()
-    pairs: list[MarketPair] = []
 
     # Pre-compute normalised text and tokens
     # Filter out Kalshi multi-leg parlays (commas in title = combo bet)
@@ -244,12 +261,13 @@ def match_markets(
     kalshi_entities = [_extract_entities(m.title) for m, _, _ in kalshi_prepared]
     poly_entities = [_extract_entities(m.title) for m, _, _ in poly_prepared]
 
+    # Collect (score, kalshi_idx, poly_idx, pair) candidates — we'll deduplicate after
+    candidates: list[tuple[float, int, int, MarketPair]] = []
+
     for ki, (k_market, k_text, k_tokens) in enumerate(kalshi_prepared):
         if not k_tokens:
             continue
 
-        best_match: Optional[MarketPair] = None
-        best_score = 0.0
         k_ents = kalshi_entities[ki]
 
         for pi, (p_market, p_text, p_tokens) in enumerate(poly_prepared):
@@ -273,16 +291,49 @@ def match_markets(
                 + cfg.weight_temporal * temporal
             )
 
-            if composite >= cfg.min_similarity and composite > best_score:
-                best_score = composite
-                best_match = MarketPair(
-                    kalshi_market=k_market,
-                    polymarket_market=p_market,
-                    similarity=round(composite, 4),
-                )
+            if composite < cfg.min_similarity:
+                continue
 
-        if best_match is not None:
-            pairs.append(best_match)
+            # Post-filter: liquidity parity
+            liq_ratio = _liquidity_ratio(k_market, p_market)
+            if liq_ratio > cfg.max_liquidity_ratio:
+                logger.debug(
+                    "Rejected (liquidity): '%s' <-> '%s' ratio=%.1f",
+                    k_market.title[:40], p_market.title[:40], liq_ratio,
+                )
+                continue
+
+            # Post-filter: bid-ask spread
+            k_spread = _spread(k_market)
+            p_spread = _spread(p_market)
+            if k_spread > cfg.max_spread or p_spread > cfg.max_spread:
+                logger.debug(
+                    "Rejected (spread): '%s' (%.2f) <-> '%s' (%.2f)",
+                    k_market.title[:40], k_spread,
+                    p_market.title[:40], p_spread,
+                )
+                continue
+
+            pair = MarketPair(
+                kalshi_market=k_market,
+                polymarket_market=p_market,
+                similarity=round(composite, 4),
+            )
+            candidates.append((composite, ki, pi, pair))
+
+    # Deduplicate: each Kalshi and each Polymarket market matches at most once.
+    # Sort by score descending so higher-confidence matches win ties.
+    candidates.sort(key=lambda c: c[0], reverse=True)
+    used_kalshi: set[int] = set()
+    used_poly: set[int] = set()
+    pairs: list[MarketPair] = []
+
+    for score, ki, pi, pair in candidates:
+        if ki in used_kalshi or pi in used_poly:
+            continue
+        used_kalshi.add(ki)
+        used_poly.add(pi)
+        pairs.append(pair)
 
     logger.info("Matching complete: %d pairs found", len(pairs))
     for pair in pairs[:10]:

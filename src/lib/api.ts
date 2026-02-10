@@ -2,6 +2,9 @@
 
 import type {
   AnalyticsSummary,
+  BacktestDataRange,
+  BacktestRequest,
+  BacktestResult,
   CategoryBreakdown,
   CategoryMeta,
   DailyPnL,
@@ -120,4 +123,26 @@ export async function activateProfile(
   const res = await fetch(url.toString(), { method: "PUT" });
   if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
   return res.json() as Promise<RiskProfile>;
+}
+
+// --- Backtest ---
+
+export function fetchBacktestDataRange() {
+  return apiFetch<BacktestDataRange>("/api/backtest/data-range");
+}
+
+export async function runBacktest(
+  req: BacktestRequest,
+): Promise<BacktestResult> {
+  const url = new URL("/api/backtest/run", API_BASE);
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Backtest failed (${res.status}): ${text}`);
+  }
+  return res.json() as Promise<BacktestResult>;
 }

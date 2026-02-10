@@ -141,6 +141,88 @@ export interface GuardStat {
   rejection_rate: number;
 }
 
+// --- Backtest ---
+
+export interface BacktestRequest {
+  start_date: string;
+  end_date: string;
+  pipeline_overrides?: Record<string, number>;
+  portfolio_overrides?: Record<string, number>;
+  matching_overrides?: Record<string, number>;
+}
+
+export interface BacktestEquityPoint {
+  ts: string;
+  realized_pnl: number;
+  open_positions: number;
+  total_exposure: number;
+}
+
+export interface BacktestTrade {
+  ts: string;
+  ticker: string;
+  venue: string;
+  side: string;
+  price: number;
+  size_dollars: number;
+  signal_type: string;
+  edge_pct: number;
+}
+
+export interface BacktestClosedPosition {
+  ticker: string;
+  venue: string;
+  side: string;
+  entry_price: number;
+  size_dollars: number;
+  realized_pnl: number;
+  opened_at: string;
+  closed_at: string;
+  category: string;
+}
+
+export interface BacktestBreakdown {
+  trades: number;
+  pnl: number;
+  wins: number;
+  losses: number;
+}
+
+export interface BacktestResult {
+  start_date: string;
+  end_date: string;
+  time_steps: number;
+  duration_ms: number;
+  total_pnl: number;
+  total_trades: number;
+  total_signals: number;
+  total_passed: number;
+  total_rejected: number;
+  positions_opened: number;
+  positions_closed: number;
+  win_count: number;
+  loss_count: number;
+  best_trade: number;
+  worst_trade: number;
+  max_drawdown: number;
+  avg_trade_pnl: number;
+  win_rate: number;
+  equity_curve: BacktestEquityPoint[];
+  trades: BacktestTrade[];
+  closed_positions: BacktestClosedPosition[];
+  by_category: Record<string, BacktestBreakdown>;
+  by_venue: Record<string, BacktestBreakdown>;
+  by_signal_type: Record<string, { trades: number; total_edge_pct: number }>;
+  config_snapshot: Record<string, Record<string, number>>;
+}
+
+export interface BacktestDataRange {
+  earliest: string | null;
+  latest: string | null;
+  total_runs: number;
+  total_snapshots: number;
+}
+
 export interface RiskProfile {
   id: number;
   name: string;

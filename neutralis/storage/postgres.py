@@ -12,6 +12,8 @@ from neutralis.logging import get_logger
 from neutralis.core.matcher import MarketPair
 from neutralis.models import (
     Decision,
+    MarketStatus,
+    MarketType,
     NormalizedMarket,
     Position,
     PositionStatus,
@@ -738,3 +740,113 @@ class PostgresStorage:
             GROUP BY g->>'guard_name'
             ORDER BY rejections DESC
         """)
+
+    # -- Backtest queries --
+
+    def get_snapshot_timestamps(
+        self, start_date: str, end_date: str,
+    ) -> list[dict]:
+        """Get distinct pipeline-run timestamps within a date range.
+
+        Groups snapshots into runs by rounding snapshot_ts to the nearest minute.
+        Returns [{ts, kalshi_count, poly_count}] ordered chronologically.
+        """
+        return self._fetch_dicts(
+            """
+            SELECT
+                date_trunc('minute', snapshot_ts) AS ts,
+                COUNT(*) FILTER (WHERE venue = 'kalshi') AS kalshi_count,
+                COUNT(*) FILTER (WHERE venue = 'polymarket') AS poly_count
+            FROM market_snapshots
+            WHERE snapshot_ts >= %(start)s::timestamptz
+              AND snapshot_ts < %(end)s::timestamptz
+            GROUP BY date_trunc('minute', snapshot_ts)
+            HAVING COUNT(*) >= 2
+            ORDER BY ts
+            """,
+            {"start": start_date, "end": end_date},
+        )
+
+    def get_snapshots_at(
+        self, ts: object, venue: str | None = None,
+    ) -> list[NormalizedMarket]:
+        """Fetch all market snapshots at a given pipeline-run timestamp.
+
+        Matches within a 1-minute window around `ts`.
+        """
+        conn = self._ensure_connected()
+        sql = """
+            SELECT
+                ticker, event_ticker, market_type, title, status,
+                yes_bid, yes_ask, no_bid, no_ask,
+                volume, volume_24h, liquidity, open_interest, notional_value,
+                close_time, expected_expiration, snapshot_ts, venue
+            FROM market_snapshots
+            WHERE snapshot_ts >= %(ts)s::timestamptz
+              AND snapshot_ts < %(ts)s::timestamptz + interval '1 minute'
+        """
+        params: dict = {"ts": str(ts)}
+        if venue:
+            sql += " AND venue = %(venue)s"
+            params["venue"] = venue
+
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+
+        markets: list[NormalizedMarket] = []
+        for r in rows:
+            try:
+                markets.append(NormalizedMarket(
+                    ticker=r[0],
+                    event_ticker=r[1],
+                    market_type=MarketType(r[2]) if r[2] else MarketType.BINARY,
+                    title=r[3] or "",
+                    subtitle="",
+                    status=MarketStatus(r[4]) if r[4] else MarketStatus.ACTIVE,
+                    yes_bid=float(r[5]),
+                    yes_ask=float(r[6]),
+                    no_bid=float(r[7]),
+                    no_ask=float(r[8]),
+                    volume=float(r[9]),
+                    volume_24h=float(r[10]),
+                    liquidity=float(r[11]),
+                    open_interest=float(r[12]),
+                    notional_value=float(r[13]),
+                    close_time=r[14],
+                    expected_expiration=r[15],
+                    venue=r[17] or "kalshi",
+                ))
+            except (ValueError, TypeError):
+                continue
+        return markets
+
+    def get_market_outcome(self, ticker: str) -> str | None:
+        """Check if a market resolved by looking at the latest snapshot status.
+
+        Returns 'yes', 'no', or None if not yet resolved.
+        Uses the last snapshot: if status is determined/finalized/closed,
+        infers outcome from yes_ask (near 1.0 = yes won, near 0.0 = no won).
+        """
+        rows = self._fetch_dicts(
+            """
+            SELECT status, yes_ask, no_ask
+            FROM market_snapshots
+            WHERE ticker = %(ticker)s
+            ORDER BY snapshot_ts DESC
+            LIMIT 1
+            """,
+            {"ticker": ticker},
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        status = row.get("status", "")
+        if status not in ("determined", "finalized", "closed"):
+            return None
+        yes_ask = float(row.get("yes_ask", 0.5))
+        if yes_ask >= 0.90:
+            return "yes"
+        if yes_ask <= 0.10:
+            return "no"
+        return None
