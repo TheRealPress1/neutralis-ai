@@ -73,6 +73,9 @@ class MatchingConfig:
     min_similarity: float = 0.55
     min_discrepancy_pct: float = 3.0
     min_token_overlap: int = 1
+    weight_text: float = 0.50
+    weight_entity: float = 0.35
+    weight_temporal: float = 0.15
 
 
 @dataclass(frozen=True)
