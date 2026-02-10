@@ -105,6 +105,8 @@ class SchedulerConfig:
     max_consecutive_errors: int = 5
     max_backoff_sec: float = 300.0
     startup_health_check: bool = True
+    heartbeat_every_n_runs: int = 10
+    health_port: int = 9090
 
 
 @dataclass(frozen=True)

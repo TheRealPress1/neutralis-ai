@@ -973,6 +973,61 @@ class PostgresStorage:
         conn.commit()
         return idx_id
 
+    def save_scheduler_run(self, run_number: int, run_stats: object) -> int:
+        """Insert a scheduler run metrics row. Returns the generated id."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO scheduler_runs (
+                    run_number, duration_ms,
+                    kalshi_markets, poly_markets,
+                    complement_signals, cross_platform_signals, matches,
+                    decisions_pass, decisions_reject, decisions_selected,
+                    open_positions, total_exposure,
+                    positions_settled, settlement_pnl, marked_positions,
+                    exits_triggered, exit_pnl,
+                    regime, disagreement_index
+                ) VALUES (
+                    %(run_number)s, %(duration_ms)s,
+                    %(kalshi_markets)s, %(poly_markets)s,
+                    %(complement_signals)s, %(cross_platform_signals)s, %(matches)s,
+                    %(decisions_pass)s, %(decisions_reject)s, %(decisions_selected)s,
+                    %(open_positions)s, %(total_exposure)s,
+                    %(positions_settled)s, %(settlement_pnl)s, %(marked_positions)s,
+                    %(exits_triggered)s, %(exit_pnl)s,
+                    %(regime)s, %(disagreement_index)s
+                )
+                RETURNING id
+                """,
+                {
+                    "run_number": run_number,
+                    "duration_ms": getattr(run_stats, "duration_ms", 0.0),
+                    "kalshi_markets": getattr(run_stats, "kalshi_markets", 0),
+                    "poly_markets": getattr(run_stats, "poly_markets", 0),
+                    "complement_signals": getattr(run_stats, "complement_signals", 0),
+                    "cross_platform_signals": getattr(run_stats, "cross_platform_signals", 0),
+                    "matches": getattr(run_stats, "matches", 0),
+                    "decisions_pass": getattr(run_stats, "decisions_pass", 0),
+                    "decisions_reject": getattr(run_stats, "decisions_reject", 0),
+                    "decisions_selected": getattr(run_stats, "decisions_selected", 0),
+                    "open_positions": getattr(run_stats, "open_positions", 0),
+                    "total_exposure": getattr(run_stats, "total_exposure", 0.0),
+                    "positions_settled": getattr(run_stats, "positions_settled", 0),
+                    "settlement_pnl": getattr(run_stats, "settlement_pnl", 0.0),
+                    "marked_positions": getattr(run_stats, "marked_positions", 0),
+                    "exits_triggered": getattr(run_stats, "exits_triggered", 0),
+                    "exit_pnl": getattr(run_stats, "exit_pnl", 0.0),
+                    "regime": getattr(run_stats, "regime", "normal"),
+                    "disagreement_index": getattr(run_stats, "disagreement_index", 0.0),
+                },
+            )
+            row = cur.fetchone()
+            assert row is not None
+            run_id: int = row[0]
+        conn.commit()
+        return run_id
+
     def get_recent_snapshots_for_ticker(
         self, ticker: str, limit: int = 10,
     ) -> list[NormalizedMarket]:
