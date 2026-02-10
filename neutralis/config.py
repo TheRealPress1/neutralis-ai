@@ -85,6 +85,14 @@ class PortfolioConfig:
 
 
 @dataclass(frozen=True)
+class SchedulerConfig:
+    scan_interval_sec: float = 30.0
+    max_consecutive_errors: int = 5
+    max_backoff_sec: float = 300.0
+    startup_health_check: bool = True
+
+
+@dataclass(frozen=True)
 class Settings:
     kalshi: KalshiConfig = field(default_factory=KalshiConfig)
     polymarket: PolymarketConfig = field(default_factory=PolymarketConfig)
@@ -92,6 +100,7 @@ class Settings:
     db: DatabaseConfig = field(default_factory=DatabaseConfig)
     pipeline: PipelineConfig = field(default_factory=PipelineConfig)
     portfolio: PortfolioConfig = field(default_factory=PortfolioConfig)
+    scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
 
 
 def load_settings() -> Settings:

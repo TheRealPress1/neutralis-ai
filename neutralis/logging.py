@@ -21,7 +21,8 @@ class JSONFormatter(logging.Formatter):
         if record.exc_info and record.exc_info[0] is not None:
             payload["exception"] = self.formatException(record.exc_info)
         for key in ("ticker", "edge_pct", "signal_id", "duration_ms",
-                    "match_confidence", "discrepancy_pct", "venue"):
+                    "match_confidence", "discrepancy_pct", "venue",
+                    "run_number", "consecutive_errors", "uptime_sec"):
             if hasattr(record, key):
                 payload[key] = getattr(record, key)
         return json.dumps(payload)
