@@ -76,12 +76,22 @@ class MatchingConfig:
 
 
 @dataclass(frozen=True)
+class PortfolioConfig:
+    max_total_exposure_dollars: float = 500.0
+    max_event_exposure_dollars: float = 100.0
+    max_ticker_exposure_dollars: float = 50.0
+    max_venue_exposure_pct: float = 0.80
+    max_open_positions: int = 50
+
+
+@dataclass(frozen=True)
 class Settings:
     kalshi: KalshiConfig = field(default_factory=KalshiConfig)
     polymarket: PolymarketConfig = field(default_factory=PolymarketConfig)
     matching: MatchingConfig = field(default_factory=MatchingConfig)
     db: DatabaseConfig = field(default_factory=DatabaseConfig)
     pipeline: PipelineConfig = field(default_factory=PipelineConfig)
+    portfolio: PortfolioConfig = field(default_factory=PortfolioConfig)
 
 
 def load_settings() -> Settings:
