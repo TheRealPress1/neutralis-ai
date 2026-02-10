@@ -18,6 +18,7 @@ from neutralis.guard.decision import evaluate_signal
 from neutralis.logging import get_logger
 from neutralis.models import DecisionVerdict, MarketType, NormalizedMarket
 from neutralis.portfolio.manager import PortfolioManager
+from neutralis.settlement.settler import run_settlement
 from neutralis.storage.postgres import PostgresStorage
 from neutralis.venues.kalshi_client import KalshiClient
 from neutralis.venues.kalshi_normalize import normalize_market as kalshi_normalize
@@ -39,11 +40,17 @@ class RunStats:
     decisions_reject: int = 0
     open_positions: int = 0
     total_exposure: float = 0.0
+    positions_settled: int = 0
+    settlement_pnl: float = 0.0
 
 
 def run_once() -> RunStats:
     settings = load_settings()
     start = time.monotonic()
+
+    # Step 0: Settle resolved positions before scanning
+    logger.info("Step 0: Checking for resolved markets")
+    settlement = run_settlement(settings)
 
     # Step 1a: Fetch active markets from Kalshi
     logger.info("Step 1a: Fetching active markets from Kalshi")
@@ -205,6 +212,8 @@ def run_once() -> RunStats:
         decisions_reject=reject_count,
         open_positions=snapshot.open_position_count,
         total_exposure=snapshot.total_exposure_dollars,
+        positions_settled=settlement.settled,
+        settlement_pnl=settlement.pnl,
     )
 
 

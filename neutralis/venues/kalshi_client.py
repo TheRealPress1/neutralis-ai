@@ -112,6 +112,15 @@ class KalshiClient:
         logger.info("Total active markets fetched: %d (%d pages)", len(all_markets), page)
         return all_markets
 
+    def get_market(self, ticker: str) -> dict[str, Any] | None:
+        """Fetch a single market by ticker. Returns raw dict or None."""
+        try:
+            resp = self._get(f"/markets/{ticker}")
+            return resp.get("market")
+        except httpx.HTTPStatusError:
+            logger.warning("Failed to fetch market %s", ticker)
+            return None
+
     def get_orderbook(
         self, ticker: str, *, depth: int | None = None
     ) -> dict[str, Any]:
