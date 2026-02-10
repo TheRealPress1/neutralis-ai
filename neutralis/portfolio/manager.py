@@ -1,0 +1,237 @@
+"""Portfolio state manager -- records trades, tracks positions, builds snapshots."""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from datetime import datetime
+
+from neutralis.config import PortfolioConfig
+from neutralis.logging import get_logger
+from neutralis.models import (
+    Decision,
+    DecisionVerdict,
+    Position,
+    PositionStatus,
+    PortfolioSnapshot,
+    Signal,
+    Trade,
+    TradeSide,
+)
+from neutralis.storage.postgres import PostgresStorage
+
+logger = get_logger(__name__)
+
+
+class PortfolioManager:
+    """Manages portfolio state through PostgresStorage.
+
+    Core operations:
+    - record_fill: Create trades + update positions from a PASS decision
+    - get_snapshot: Build a PortfolioSnapshot for Guard queries
+    - close_position: Mark a position as closed with realized P&L
+    """
+
+    def __init__(
+        self,
+        storage: PostgresStorage,
+        config: PortfolioConfig | None = None,
+    ) -> None:
+        self._storage = storage
+        self._config = config or PortfolioConfig()
+
+    def record_fill(
+        self,
+        signal: Signal,
+        decision: Decision,
+        decision_id: int,
+    ) -> list[Trade]:
+        """Record paper trades from a PASS decision and update positions.
+
+        For each leg in the signal, create a Trade and upsert the Position.
+        Returns the list of created Trade objects.
+        """
+        if decision.verdict != DecisionVerdict.PASS:
+            return []
+
+        trades: list[Trade] = []
+        venue = "kalshi"
+        if signal.market_snapshot is not None:
+            venue = signal.market_snapshot.venue
+
+        for leg in signal.legs:
+            side = TradeSide.BUY_YES if leg.side == "yes" else TradeSide.BUY_NO
+
+            # Distribute suggested size proportionally across legs
+            if signal.combined_cost > 0:
+                leg_fraction = leg.price_dollars / signal.combined_cost
+            else:
+                leg_fraction = 1.0 / max(len(signal.legs), 1)
+            leg_size = round(decision.suggested_size_dollars * leg_fraction, 2)
+
+            if leg_size <= 0:
+                continue
+
+            quantity = leg_size / leg.price_dollars if leg.price_dollars > 0 else 0.0
+
+            trade = Trade(
+                signal_id=signal.id,
+                decision_id=decision_id,
+                ticker=leg.ticker,
+                event_ticker=signal.event_ticker,
+                venue=venue,
+                side=side,
+                price=leg.price_dollars,
+                size_dollars=leg_size,
+                quantity=round(quantity, 4),
+                is_paper=True,
+            )
+
+            self._storage.save_trade(trade)
+            self._upsert_position(trade)
+            trades.append(trade)
+
+            logger.info(
+                "Trade: %s %s %s $%.2f @ %.4f (%d contracts)",
+                trade.venue, trade.side.value, trade.ticker,
+                trade.size_dollars, trade.price, trade.quantity,
+            )
+
+        return trades
+
+    def _upsert_position(self, trade: Trade) -> Position:
+        """Create or update an open position for this trade's ticker/venue/side."""
+        existing = self._storage.get_open_position(
+            ticker=trade.ticker, venue=trade.venue, side=trade.side,
+        )
+
+        if existing is None:
+            position = Position(
+                ticker=trade.ticker,
+                event_ticker=trade.event_ticker,
+                venue=trade.venue,
+                side=trade.side,
+                status=PositionStatus.OPEN,
+                entry_price=trade.price,
+                size_dollars=trade.size_dollars,
+                quantity=trade.quantity,
+                trade_count=1,
+            )
+            self._storage.save_position(position)
+            return position
+
+        # Add to existing -- compute new VWAP and totals
+        new_quantity = existing.quantity + trade.quantity
+        new_size = existing.size_dollars + trade.size_dollars
+        if new_quantity > 0:
+            new_vwap = (
+                existing.entry_price * existing.quantity
+                + trade.price * trade.quantity
+            ) / new_quantity
+        else:
+            new_vwap = existing.entry_price
+
+        self._storage.update_position(
+            position_id=existing.id,
+            entry_price=round(new_vwap, 6),
+            size_dollars=round(new_size, 2),
+            quantity=round(new_quantity, 4),
+            trade_count=existing.trade_count + 1,
+        )
+        return Position(
+            id=existing.id,
+            ticker=existing.ticker,
+            event_ticker=existing.event_ticker,
+            venue=existing.venue,
+            side=existing.side,
+            status=PositionStatus.OPEN,
+            entry_price=round(new_vwap, 6),
+            size_dollars=round(new_size, 2),
+            quantity=round(new_quantity, 4),
+            trade_count=existing.trade_count + 1,
+            opened_at=existing.opened_at,
+        )
+
+    def close_position(
+        self,
+        position_id: str,
+        settlement_price: float,
+    ) -> Position:
+        """Close a position at a settlement price and calculate realized P&L.
+
+        settlement_price: 1.0 if the position's side won, 0.0 if it lost.
+        """
+        position = self._storage.get_position(position_id)
+        if position is None:
+            raise ValueError(f"Position {position_id} not found")
+        if position.status == PositionStatus.CLOSED:
+            raise ValueError(f"Position {position_id} already closed")
+
+        settlement_value = position.quantity * settlement_price
+        realized_pnl = settlement_value - position.size_dollars
+
+        now = datetime.now()
+        self._storage.close_position(
+            position_id=position_id,
+            realized_pnl=round(realized_pnl, 4),
+            closed_at=now,
+        )
+
+        logger.info(
+            "Position closed: %s %s %s | P&L=$%.2f",
+            position.ticker, position.side.value, position.venue,
+            realized_pnl,
+        )
+
+        return Position(
+            id=position.id,
+            ticker=position.ticker,
+            event_ticker=position.event_ticker,
+            venue=position.venue,
+            side=position.side,
+            status=PositionStatus.CLOSED,
+            entry_price=position.entry_price,
+            size_dollars=position.size_dollars,
+            quantity=position.quantity,
+            realized_pnl=round(realized_pnl, 4),
+            unrealized_pnl=0.0,
+            trade_count=position.trade_count,
+            opened_at=position.opened_at,
+            closed_at=now,
+        )
+
+    def get_snapshot(self) -> PortfolioSnapshot:
+        """Build an immutable snapshot of current portfolio state."""
+        positions = self._storage.get_open_positions()
+
+        total_exposure = 0.0
+        total_realized = 0.0
+        total_unrealized = 0.0
+        venue_map: dict[str, float] = defaultdict(float)
+        event_map: dict[str, float] = defaultdict(float)
+
+        for p in positions:
+            total_exposure += p.size_dollars
+            total_realized += p.realized_pnl
+            total_unrealized += p.unrealized_pnl
+            venue_map[p.venue] += p.size_dollars
+            event_map[p.event_ticker] += p.size_dollars
+
+        return PortfolioSnapshot(
+            positions=tuple(positions),
+            total_exposure_dollars=round(total_exposure, 2),
+            total_realized_pnl=round(total_realized, 4),
+            total_unrealized_pnl=round(total_unrealized, 4),
+            open_position_count=len(positions),
+            venue_exposure=tuple(sorted(venue_map.items(), key=lambda x: -x[1])),
+            event_exposure=tuple(sorted(event_map.items(), key=lambda x: -x[1])),
+        )
+
+    def get_event_exposure(self, event_ticker: str) -> float:
+        """Return total dollar exposure to a specific event."""
+        positions = self._storage.get_positions_by_event(event_ticker)
+        return sum(p.size_dollars for p in positions)
+
+    def get_ticker_exposure(self, ticker: str) -> float:
+        """Return total dollar exposure to a specific ticker."""
+        positions = self._storage.get_positions_by_ticker(ticker)
+        return sum(p.size_dollars for p in positions)

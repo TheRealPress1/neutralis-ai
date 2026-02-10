@@ -10,7 +10,15 @@ import psycopg
 from neutralis.config import DatabaseConfig
 from neutralis.logging import get_logger
 from neutralis.core.matcher import MarketPair
-from neutralis.models import Decision, NormalizedMarket, Signal
+from neutralis.models import (
+    Decision,
+    NormalizedMarket,
+    Position,
+    PositionStatus,
+    Signal,
+    Trade,
+    TradeSide,
+)
 
 logger = get_logger(__name__)
 
@@ -144,8 +152,8 @@ class PostgresStorage:
         conn.commit()
         return signal.id
 
-    def save_decision(self, decision: Decision) -> None:
-        """Insert a decision row."""
+    def save_decision(self, decision: Decision) -> int:
+        """Insert a decision row. Returns the generated decision id."""
         conn = self._ensure_connected()
 
         guard_results_json = json.dumps(
@@ -171,6 +179,7 @@ class PostgresStorage:
                     %(signal_id)s, %(verdict)s, %(guard_results)s::jsonb,
                     %(suggested_size)s, %(created_at)s
                 )
+                RETURNING id
                 """,
                 {
                     "signal_id": decision.signal_id,
@@ -180,7 +189,11 @@ class PostgresStorage:
                     "created_at": decision.created_at,
                 },
             )
+            row = cur.fetchone()
+            assert row is not None
+            decision_id: int = row[0]
         conn.commit()
+        return decision_id
 
     def save_market_match(
         self,
@@ -272,3 +285,220 @@ class PostgresStorage:
             )
         conn.commit()
         return signal.id
+
+    # -- Portfolio: trades and positions --
+
+    _POSITION_COLS = (
+        "id, ticker, event_ticker, venue, side, status, "
+        "entry_price, size_dollars, quantity, "
+        "realized_pnl, unrealized_pnl, trade_count, "
+        "opened_at, closed_at"
+    )
+
+    @staticmethod
+    def _row_to_position(row: tuple) -> Position:
+        return Position(
+            id=row[0],
+            ticker=row[1],
+            event_ticker=row[2],
+            venue=row[3],
+            side=TradeSide(row[4]),
+            status=PositionStatus(row[5]),
+            entry_price=row[6],
+            size_dollars=row[7],
+            quantity=row[8],
+            realized_pnl=row[9],
+            unrealized_pnl=row[10],
+            trade_count=row[11],
+            opened_at=row[12],
+            closed_at=row[13],
+        )
+
+    def save_trade(self, trade: Trade) -> str:
+        """Insert a trade row. Returns the trade id."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO trades (
+                    id, signal_id, decision_id, ticker, event_ticker,
+                    venue, side, price, size_dollars, quantity,
+                    is_paper, created_at
+                ) VALUES (
+                    %(id)s, %(signal_id)s, %(decision_id)s, %(ticker)s, %(event_ticker)s,
+                    %(venue)s, %(side)s, %(price)s, %(size_dollars)s, %(quantity)s,
+                    %(is_paper)s, %(created_at)s
+                )
+                """,
+                {
+                    "id": trade.id,
+                    "signal_id": trade.signal_id,
+                    "decision_id": trade.decision_id,
+                    "ticker": trade.ticker,
+                    "event_ticker": trade.event_ticker,
+                    "venue": trade.venue,
+                    "side": trade.side.value,
+                    "price": trade.price,
+                    "size_dollars": trade.size_dollars,
+                    "quantity": trade.quantity,
+                    "is_paper": trade.is_paper,
+                    "created_at": trade.created_at,
+                },
+            )
+        conn.commit()
+        return trade.id
+
+    def save_position(self, position: Position) -> str:
+        """Insert a new position row. Returns the position id."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO positions (
+                    id, ticker, event_ticker, venue, side, status,
+                    entry_price, size_dollars, quantity,
+                    realized_pnl, unrealized_pnl, trade_count,
+                    opened_at, closed_at
+                ) VALUES (
+                    %(id)s, %(ticker)s, %(event_ticker)s, %(venue)s, %(side)s, %(status)s,
+                    %(entry_price)s, %(size_dollars)s, %(quantity)s,
+                    %(realized_pnl)s, %(unrealized_pnl)s, %(trade_count)s,
+                    %(opened_at)s, %(closed_at)s
+                )
+                """,
+                {
+                    "id": position.id,
+                    "ticker": position.ticker,
+                    "event_ticker": position.event_ticker,
+                    "venue": position.venue,
+                    "side": position.side.value,
+                    "status": position.status.value,
+                    "entry_price": position.entry_price,
+                    "size_dollars": position.size_dollars,
+                    "quantity": position.quantity,
+                    "realized_pnl": position.realized_pnl,
+                    "unrealized_pnl": position.unrealized_pnl,
+                    "trade_count": position.trade_count,
+                    "opened_at": position.opened_at,
+                    "closed_at": position.closed_at,
+                },
+            )
+        conn.commit()
+        return position.id
+
+    def update_position(
+        self,
+        position_id: str,
+        entry_price: float,
+        size_dollars: float,
+        quantity: float,
+        trade_count: int,
+    ) -> None:
+        """Update an open position's size fields (for adding to a position)."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE positions
+                SET entry_price = %(entry_price)s,
+                    size_dollars = %(size_dollars)s,
+                    quantity = %(quantity)s,
+                    trade_count = %(trade_count)s
+                WHERE id = %(id)s AND status = 'open'
+                """,
+                {
+                    "id": position_id,
+                    "entry_price": entry_price,
+                    "size_dollars": size_dollars,
+                    "quantity": quantity,
+                    "trade_count": trade_count,
+                },
+            )
+        conn.commit()
+
+    def close_position(
+        self,
+        position_id: str,
+        realized_pnl: float,
+        closed_at: object,
+    ) -> None:
+        """Mark a position as closed with realized P&L."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE positions
+                SET status = 'closed',
+                    realized_pnl = %(realized_pnl)s,
+                    unrealized_pnl = 0,
+                    closed_at = %(closed_at)s
+                WHERE id = %(id)s AND status = 'open'
+                """,
+                {
+                    "id": position_id,
+                    "realized_pnl": realized_pnl,
+                    "closed_at": closed_at,
+                },
+            )
+        conn.commit()
+
+    def get_open_positions(self) -> list[Position]:
+        """Return all open positions."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT {self._POSITION_COLS} FROM positions "
+                "WHERE status = 'open' ORDER BY opened_at"
+            )
+            rows = cur.fetchall()
+        return [self._row_to_position(row) for row in rows]
+
+    def get_open_position(
+        self, ticker: str, venue: str, side: TradeSide,
+    ) -> Position | None:
+        """Return the open position for a ticker/venue/side combo, or None."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT {self._POSITION_COLS} FROM positions "
+                "WHERE ticker = %(ticker)s AND venue = %(venue)s "
+                "AND side = %(side)s AND status = 'open'",
+                {"ticker": ticker, "venue": venue, "side": side.value},
+            )
+            row = cur.fetchone()
+        return self._row_to_position(row) if row else None
+
+    def get_position(self, position_id: str) -> Position | None:
+        """Return a position by ID."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT {self._POSITION_COLS} FROM positions WHERE id = %(id)s",
+                {"id": position_id},
+            )
+            row = cur.fetchone()
+        return self._row_to_position(row) if row else None
+
+    def get_positions_by_event(self, event_ticker: str) -> list[Position]:
+        """Return all open positions for an event."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT {self._POSITION_COLS} FROM positions "
+                "WHERE event_ticker = %(event_ticker)s AND status = 'open'",
+                {"event_ticker": event_ticker},
+            )
+            rows = cur.fetchall()
+        return [self._row_to_position(row) for row in rows]
+
+    def get_positions_by_ticker(self, ticker: str) -> list[Position]:
+        """Return all open positions for a ticker."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT {self._POSITION_COLS} FROM positions "
+                "WHERE ticker = %(ticker)s AND status = 'open'",
+                {"ticker": ticker},
+            )
+            rows = cur.fetchall()
+        return [self._row_to_position(row) for row in rows]

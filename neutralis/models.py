@@ -35,6 +35,16 @@ class DecisionVerdict(str, Enum):
     REJECT = "reject"
 
 
+class PositionStatus(str, Enum):
+    OPEN = "open"
+    CLOSED = "closed"
+
+
+class TradeSide(str, Enum):
+    BUY_YES = "buy_yes"
+    BUY_NO = "buy_no"
+
+
 @dataclass(frozen=True)
 class OrderbookLevel:
     price_dollars: float
@@ -131,3 +141,49 @@ class Decision:
     guard_results: tuple[GuardResult, ...] = ()
     suggested_size_dollars: float = 0.0
     created_at: datetime = field(default_factory=datetime.now)
+
+
+@dataclass(frozen=True)
+class Trade:
+    id: str = field(default_factory=lambda: uuid4().hex[:12])
+    signal_id: str = ""
+    decision_id: int = 0
+    ticker: str = ""
+    event_ticker: str = ""
+    venue: str = "kalshi"
+    side: TradeSide = TradeSide.BUY_YES
+    price: float = 0.0
+    size_dollars: float = 0.0
+    quantity: float = 0.0
+    is_paper: bool = True
+    created_at: datetime = field(default_factory=datetime.now)
+
+
+@dataclass(frozen=True)
+class Position:
+    id: str = field(default_factory=lambda: uuid4().hex[:12])
+    ticker: str = ""
+    event_ticker: str = ""
+    venue: str = "kalshi"
+    side: TradeSide = TradeSide.BUY_YES
+    status: PositionStatus = PositionStatus.OPEN
+    entry_price: float = 0.0
+    size_dollars: float = 0.0
+    quantity: float = 0.0
+    realized_pnl: float = 0.0
+    unrealized_pnl: float = 0.0
+    trade_count: int = 0
+    opened_at: datetime = field(default_factory=datetime.now)
+    closed_at: Optional[datetime] = None
+
+
+@dataclass(frozen=True)
+class PortfolioSnapshot:
+    positions: tuple[Position, ...] = ()
+    total_exposure_dollars: float = 0.0
+    total_realized_pnl: float = 0.0
+    total_unrealized_pnl: float = 0.0
+    open_position_count: int = 0
+    venue_exposure: tuple[tuple[str, float], ...] = ()
+    event_exposure: tuple[tuple[str, float], ...] = ()
+    snapshot_ts: datetime = field(default_factory=datetime.now)

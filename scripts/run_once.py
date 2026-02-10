@@ -15,7 +15,8 @@ from neutralis.core.matcher import match_markets
 from neutralis.core.scanners import scan_complement_arb
 from neutralis.guard.decision import evaluate_signal
 from neutralis.logging import get_logger
-from neutralis.models import MarketType, NormalizedMarket
+from neutralis.models import DecisionVerdict, MarketType, NormalizedMarket
+from neutralis.portfolio.manager import PortfolioManager
 from neutralis.storage.postgres import PostgresStorage
 from neutralis.venues.kalshi_client import KalshiClient
 from neutralis.venues.kalshi_normalize import normalize_market as kalshi_normalize
@@ -89,7 +90,9 @@ def run_once() -> None:
     # Step 4: Store everything
     logger.info("Step 4: Storing results")
     with PostgresStorage(settings.db) as storage:
-        # 4a: Complement arb signals + guard decisions
+        portfolio = PortfolioManager(storage, settings.portfolio)
+
+        # 4a: Complement arb signals + guard decisions + portfolio
         for signal in complement_signals:
             market = enriched_markets.get(signal.ticker, signal.market_snapshot)
             if market is None:
@@ -97,7 +100,10 @@ def run_once() -> None:
             snapshot_id = storage.save_market_snapshot(market)
             storage.save_signal(signal, snapshot_id=snapshot_id)
             decision = evaluate_signal(signal, market, settings.pipeline)
-            storage.save_decision(decision)
+            decision_id = storage.save_decision(decision)
+
+            if decision.verdict == DecisionVerdict.PASS:
+                portfolio.record_fill(signal, decision, decision_id)
 
         # 4b: Cross-platform matches and signals
         # Build a lookup from ticker to snapshot_id for signal storage
@@ -116,6 +122,14 @@ def run_once() -> None:
             key = f"{xp.kalshi_ticker}:{xp.polymarket_id}"
             mid = match_ids.get(key)
             storage.save_cross_platform_signal(signal, match_id=mid)
+
+        # 4c: Portfolio summary
+        snapshot = portfolio.get_snapshot()
+        logger.info(
+            "Portfolio: %d open positions, $%.2f total exposure",
+            snapshot.open_position_count,
+            snapshot.total_exposure_dollars,
+        )
 
     elapsed = (time.monotonic() - start) * 1000
     logger.info(
