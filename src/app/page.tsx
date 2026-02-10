@@ -78,6 +78,14 @@ export default function Home() {
                 Waitlist
               </a>
             </li>
+            <li>
+              <a
+                href="/dashboard"
+                className="transition-colors hover:text-[#e8e9ea]"
+              >
+                Dashboard
+              </a>
+            </li>
           </ul>
           <a
             href="#waitlist"
