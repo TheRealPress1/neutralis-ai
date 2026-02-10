@@ -57,8 +57,9 @@ export default function Home() {
           <span className="text-xs font-medium uppercase tracking-[0.2em] text-[#c0c5cb]">
             Neutralis AI
           </span>
-          <h1 className="mt-4 text-5xl font-bold leading-tight tracking-tight sm:text-6xl">
-            A modern hedge fund for prediction&nbsp;markets.
+          <h1 className="mt-4 text-5xl font-bold leading-[1.08] tracking-[-0.02em] font-[family-name:var(--font-fraunces)] sm:text-6xl">
+            A modern hedge fund for{" "}
+            <span className="headline-accent">prediction&nbsp;markets</span>.
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-lg text-[#b0b5bc]">
             Neutralis uses automated quantitative systems to identify

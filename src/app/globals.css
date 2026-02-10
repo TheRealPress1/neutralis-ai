@@ -198,6 +198,46 @@ body::after {
   text-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
 }
 
+/* ── Headline accent ─────────────────────────────── */
+.headline-accent {
+  position: relative;
+  color: #f0f1f2;
+  letter-spacing: 0.01em;
+}
+.headline-accent::before {
+  content: "";
+  position: absolute;
+  inset: -0.15em -0.25em;
+  background: radial-gradient(
+    ellipse at 30% 50%,
+    rgba(255, 255, 255, 0.12),
+    transparent 70%
+  );
+  filter: blur(10px);
+  z-index: -1;
+  pointer-events: none;
+}
+.headline-accent::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.08em;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.3);
+  filter: blur(0.4px);
+  pointer-events: none;
+}
+
+/* ── Nav spotlight ────────────────────────────────── */
+.nav-spotlight {
+  background: radial-gradient(
+    circle 200px at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+    rgba(255, 255, 255, 0.1) 0%,
+    transparent 70%
+  );
+}
+
 /* ── Focus states ──────────────────────────────────── */
 a:focus-visible,
 button:focus-visible,

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
+  const [hovering, setHovering] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 8);
@@ -12,15 +14,32 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLElement>) => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const rect = nav.getBoundingClientRect();
+    nav.style.setProperty("--spotlight-x", e.clientX - rect.left + "px");
+    nav.style.setProperty("--spotlight-y", e.clientY - rect.top + "px");
+  };
+
   return (
     <nav
-      className={`fixed top-0 z-50 w-full border-b transition-all duration-300 ${
+      ref={navRef}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+      onMouseMove={handleMouseMove}
+      className={`fixed top-0 z-50 w-full border-b transition-all duration-300 relative overflow-hidden ${
         scrolled
           ? "border-white/10 bg-[#050608]/90 backdrop-blur-xl"
           : "border-[#1a1d21] bg-[#050608]/80 backdrop-blur-lg"
       }`}
     >
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+      <div
+        className={`nav-spotlight pointer-events-none absolute inset-0 z-0 transition-opacity duration-300 ${
+          hovering ? "opacity-100" : "opacity-0"
+        }`}
+      />
+      <div className="relative z-10 mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
         <a
           href="#"
           className="text-lg font-semibold tracking-tight text-[#e8e9ea]"
