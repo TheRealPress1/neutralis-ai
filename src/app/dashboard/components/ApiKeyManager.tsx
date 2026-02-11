@@ -1,0 +1,343 @@
+"use client";
+
+import { useEffect, useState, useTransition, useRef } from "react";
+import {
+  getApiKeys,
+  saveApiKeys,
+  deleteApiKey,
+  type ApiKeyData,
+} from "@/app/actions/api-keys";
+
+const INPUT_CLASS =
+  "w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors text-sm";
+
+interface StoredKey {
+  id: number;
+  platform: string;
+  api_key_id: string;
+  api_secret: string;
+  private_key_pem: string;
+  is_valid: boolean;
+  updated_at: string;
+}
+
+function mask(value: string, visibleChars = 6) {
+  if (!value || value.length <= visibleChars) return value;
+  return value.slice(0, visibleChars) + "..." + value.slice(-4);
+}
+
+export default function ApiKeyManager() {
+  const [keys, setKeys] = useState<StoredKey[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Form state
+  const [kalshiKeyId, setKalshiKeyId] = useState("");
+  const [kalshiPem, setKalshiPem] = useState("");
+  const [polyKey, setPolyKey] = useState("");
+  const [polySecret, setPolySecret] = useState("");
+
+  async function load() {
+    const result = await getApiKeys();
+    if (result.error) setError(result.error);
+    setKeys((result.keys as StoredKey[]) ?? []);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const kalshiKey = keys.find((k) => k.platform === "kalshi");
+  const polymarketKey = keys.find((k) => k.platform === "polymarket");
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    setKalshiPem(text);
+  }
+
+  function handleSave(platform: "kalshi" | "polymarket") {
+    setError(null);
+
+    const keyData: ApiKeyData[] = [];
+
+    if (platform === "kalshi") {
+      if (!kalshiKeyId || !kalshiPem) {
+        setError("Both API Key ID and Private Key are required.");
+        return;
+      }
+      keyData.push({
+        platform: "kalshi",
+        api_key_id: kalshiKeyId.trim(),
+        api_secret: "",
+        private_key_pem: kalshiPem.trim(),
+      });
+    } else {
+      if (!polyKey || !polySecret) {
+        setError("Both API Key and API Secret are required.");
+        return;
+      }
+      keyData.push({
+        platform: "polymarket",
+        api_key_id: polyKey.trim(),
+        api_secret: polySecret.trim(),
+        private_key_pem: "",
+      });
+    }
+
+    startTransition(async () => {
+      const result = await saveApiKeys(keyData);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setEditing(null);
+        setKalshiKeyId("");
+        setKalshiPem("");
+        setPolyKey("");
+        setPolySecret("");
+        await load();
+      }
+    });
+  }
+
+  function handleRemove(platform: string) {
+    setError(null);
+    startTransition(async () => {
+      const result = await deleteApiKey(platform);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setEditing(null);
+        await load();
+      }
+    });
+  }
+
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-[#22262d] bg-[#0e1117] p-6">
+        <p className="text-sm text-[#a1a8b3]">Loading API keys...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold text-[#eceef0]">
+          Exchange Connections
+        </h2>
+        <p className="text-sm text-[#a1a8b3] mt-1">
+          Manage your Kalshi and Polymarket API credentials.
+        </p>
+      </div>
+
+      {error && (
+        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+          {error}
+        </div>
+      )}
+
+      {/* Kalshi */}
+      <div className="rounded-xl border border-[#22262d] bg-[#0e1117] p-5">
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-medium text-[#eceef0]">Kalshi</h3>
+          {kalshiKey ? (
+            <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2.5 py-0.5">
+              Connected
+            </span>
+          ) : (
+            <span className="text-xs font-medium text-[#a1a8b3] bg-[#1a1d21] border border-[#22262d] rounded-full px-2.5 py-0.5">
+              Not configured
+            </span>
+          )}
+        </div>
+
+        {kalshiKey && editing !== "kalshi" ? (
+          <div className="mt-3 space-y-2">
+            <p className="text-xs text-[#a1a8b3]">
+              Key ID:{" "}
+              <span className="font-mono text-[#e8e9ea]">
+                {mask(kalshiKey.api_key_id)}
+              </span>
+            </p>
+            <p className="text-xs text-[#a1a8b3]">
+              Private key: <span className="text-[#e8e9ea]">configured</span>
+            </p>
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => setEditing("kalshi")}
+                className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors"
+              >
+                Update
+              </button>
+              <button
+                onClick={() => handleRemove("kalshi")}
+                disabled={isPending}
+                className="text-xs text-red-400 hover:text-red-300 transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ) : (
+          (editing === "kalshi" || !kalshiKey) && (
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+                  API Key ID
+                </label>
+                <input
+                  type="text"
+                  value={kalshiKeyId}
+                  onChange={(e) => setKalshiKeyId(e.target.value)}
+                  className={INPUT_CLASS}
+                  placeholder="e.g. 6cd6375f-c6a7-440a-9f6f-c41c3bc68ff0"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+                  RSA Private Key (PEM)
+                </label>
+                <textarea
+                  value={kalshiPem}
+                  onChange={(e) => setKalshiPem(e.target.value)}
+                  rows={5}
+                  className={`${INPUT_CLASS} font-mono text-xs`}
+                  placeholder={"-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"}
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pem,.key,.txt"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="mt-1.5 text-xs text-[#a1a8b3] hover:text-[#e8e9ea] transition-colors underline underline-offset-2"
+                >
+                  or upload a .pem file
+                </button>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => handleSave("kalshi")}
+                  disabled={isPending}
+                  className="rounded-lg bg-[#e8e9ea] px-4 py-2 text-xs font-medium text-[#050608] hover:bg-[#c0c5cb] disabled:opacity-50 transition-colors"
+                >
+                  {isPending ? "Saving..." : "Save"}
+                </button>
+                {editing === "kalshi" && (
+                  <button
+                    onClick={() => setEditing(null)}
+                    className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors px-3"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        )}
+      </div>
+
+      {/* Polymarket */}
+      <div className="rounded-xl border border-[#22262d] bg-[#0e1117] p-5">
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-medium text-[#eceef0]">Polymarket</h3>
+          {polymarketKey ? (
+            <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2.5 py-0.5">
+              Connected
+            </span>
+          ) : (
+            <span className="text-xs font-medium text-[#a1a8b3] bg-[#1a1d21] border border-[#22262d] rounded-full px-2.5 py-0.5">
+              Not configured
+            </span>
+          )}
+        </div>
+
+        {polymarketKey && editing !== "polymarket" ? (
+          <div className="mt-3 space-y-2">
+            <p className="text-xs text-[#a1a8b3]">
+              API Key:{" "}
+              <span className="font-mono text-[#e8e9ea]">
+                {mask(polymarketKey.api_key_id)}
+              </span>
+            </p>
+            <p className="text-xs text-[#a1a8b3]">
+              Secret: <span className="text-[#e8e9ea]">configured</span>
+            </p>
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => setEditing("polymarket")}
+                className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors"
+              >
+                Update
+              </button>
+              <button
+                onClick={() => handleRemove("polymarket")}
+                disabled={isPending}
+                className="text-xs text-red-400 hover:text-red-300 transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ) : (
+          (editing === "polymarket" || !polymarketKey) && (
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+                  API Key
+                </label>
+                <input
+                  type="text"
+                  value={polyKey}
+                  onChange={(e) => setPolyKey(e.target.value)}
+                  className={INPUT_CLASS}
+                  placeholder="Your Polymarket API key"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+                  API Secret
+                </label>
+                <input
+                  type="password"
+                  value={polySecret}
+                  onChange={(e) => setPolySecret(e.target.value)}
+                  className={INPUT_CLASS}
+                  placeholder="Your Polymarket API secret"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => handleSave("polymarket")}
+                  disabled={isPending}
+                  className="rounded-lg bg-[#e8e9ea] px-4 py-2 text-xs font-medium text-[#050608] hover:bg-[#c0c5cb] disabled:opacity-50 transition-colors"
+                >
+                  {isPending ? "Saving..." : "Save"}
+                </button>
+                {editing === "polymarket" && (
+                  <button
+                    onClick={() => setEditing(null)}
+                    className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors px-3"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  );
+}

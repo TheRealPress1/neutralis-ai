@@ -9,6 +9,7 @@ import RiskProfileEditor from "./RiskProfileEditor";
 import PerformanceAnalytics from "./PerformanceAnalytics";
 import BacktestPanel from "./BacktestPanel";
 import ExecutionPanel from "./ExecutionPanel";
+import ApiKeyManager from "./ApiKeyManager";
 
 type View = "dashboard" | "execution" | "analytics" | "backtest" | "settings";
 
@@ -96,7 +97,8 @@ export default function DashboardShell() {
       {/* Content */}
       <main className="mx-auto max-w-6xl px-6 pt-24 pb-16">
         {view === "settings" && (
-          <section className="mt-2">
+          <section className="mt-2 space-y-8">
+            <ApiKeyManager />
             <RiskProfileEditor />
           </section>
         )}

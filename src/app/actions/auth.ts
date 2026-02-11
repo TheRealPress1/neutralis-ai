@@ -39,7 +39,7 @@ export async function signUp(formData: FormData) {
   // Only redirect if signup was successful
   if (data.user) {
     revalidatePath("/", "layout");
-    redirect("/dashboard");
+    redirect("/onboarding");
   }
 
   return { error: "Something went wrong. Please try again." };
