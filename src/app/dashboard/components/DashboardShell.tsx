@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import StatsBar from "./StatsBar";
 import PositionsTable from "./PositionsTable";
 import SignalFeed from "./SignalFeed";
@@ -10,6 +11,7 @@ import PerformanceAnalytics from "./PerformanceAnalytics";
 import BacktestPanel from "./BacktestPanel";
 import ExecutionPanel from "./ExecutionPanel";
 import ApiKeyManager from "./ApiKeyManager";
+import AuthNav from "@/app/components/AuthNav";
 
 type View = "dashboard" | "execution" | "analytics" | "backtest" | "settings";
 
@@ -18,10 +20,12 @@ function secondsAgo(date: Date) {
 }
 
 export default function DashboardShell() {
+  const searchParams = useSearchParams();
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [elapsed, setElapsed] = useState(0);
-  const [view, setView] = useState<View>("dashboard");
+  const initialTab = (searchParams.get("tab") as View) || "dashboard";
+  const [view, setView] = useState<View>(initialTab);
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
@@ -94,6 +98,9 @@ export default function DashboardShell() {
                 </button>
               </>
             )}
+            <ul className="flex items-center">
+              <AuthNav />
+            </ul>
           </div>
         </div>
       </nav>

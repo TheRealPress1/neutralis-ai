@@ -153,8 +153,7 @@ export default function ProfileSettings() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-medium text-[#eceef0]">Connected Exchanges</h2>
           <Link
-            href="/dashboard"
-            onClick={() => {}}
+            href="/dashboard?tab=settings"
             className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors"
           >
             Manage in Settings
