@@ -53,7 +53,7 @@ export default function DashboardShell() {
     { key: "analytics", label: "Analytics" },
     { key: "backtest", label: "Backtest" },
     { key: "connections", label: "Connections" },
-    { key: "settings", label: "Portfolio Settings" },
+    { key: "settings", label: "Fund Strategy" },
   ];
 
   return (
