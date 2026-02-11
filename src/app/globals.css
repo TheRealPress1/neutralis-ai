@@ -152,27 +152,26 @@ body::after {
   border-color: rgba(192, 197, 203, 0.25);
 }
 
-/* ── Metallic banding ──────────────────────────────── */
-@keyframes metallic-shift {
-  0%, 100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
+/* ── Card accent border ───────────────────────────── */
+.card-accent {
+  position: relative;
 }
 
-.metallic-band {
+.card-accent::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
   background: linear-gradient(
-    135deg,
-    var(--titanium-black) 0%,
-    var(--titanium-darker) 25%,
-    #0f1215 50%,
-    var(--titanium-darker) 75%,
-    var(--titanium-black) 100%
+    90deg,
+    transparent,
+    rgba(192, 197, 203, 0.3),
+    transparent
   );
-  background-size: 200% 200%;
-  animation: metallic-shift 10s ease infinite;
+  pointer-events: none;
+  border-radius: inherit;
 }
 
 /* ── Reduced motion ────────────────────────────────── */

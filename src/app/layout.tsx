@@ -28,9 +28,9 @@ const cormorantGaramond = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "Neutralis.ai — Calm, clear AI for thoughtful teams",
+  title: "Neutralis.ai — Systematic edge in prediction markets",
   description:
-    "Neutralis.ai helps teams make better decisions with balanced, transparent AI. No hype — just clarity.",
+    "Automated quantitative systems that identify mispriced probabilities, manage portfolio risk, and execute trades across prediction markets.",
 };
 
 export default function RootLayout({

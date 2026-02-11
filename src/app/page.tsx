@@ -1,47 +1,51 @@
 import WaitlistForm from "./waitlist-form";
 import Navbar from "./navbar";
 
-const outputs = [
+const capabilities = [
   {
-    title: "Neutral brief",
+    number: "01",
+    title: "Signal detection",
     description:
-      "A balanced summary with key claims and counterarguments, stripped of loaded framing.",
+      "Scans thousands of contracts across Kalshi and Polymarket to find statistically mispriced probabilities in real time.",
   },
   {
-    title: "Viewpoint comparison",
+    number: "02",
+    title: "12-guard risk filter",
     description:
-      "The strongest arguments across multiple sides, presented with equal weight and clarity.",
+      "Every opportunity passes through 12 independent constraints — correlation limits, liquidity floors, concentration caps — before a dollar moves.",
   },
   {
-    title: "Evidence map",
+    number: "03",
+    title: "Paper execution",
     description:
-      "Each claim scored by source quality and consensus strength — what's solid, uncertain, or missing.",
+      "Orders simulate realistic fills with venue-specific slippage, partial fills, and fee modeling so P&L reflects what live trading would produce.",
   },
   {
-    title: "Decision memo",
+    number: "04",
+    title: "Portfolio analytics",
     description:
-      "Recommended next steps with assumptions and risks made explicit, ready for your team.",
+      "Tracks positions, VWAP entry costs, P&L attribution, and win rate across the full book with automatic risk-profile enforcement.",
   },
 ];
 
-const methodSteps = [
+const pipelineSteps = [
   {
     number: 1,
-    title: "Reframe",
+    title: "Scan",
     description:
-      "Your prompt is rephrased into a neutral, multi-sided inquiry before any analysis begins.",
+      "Every tick, the pipeline fetches live markets, normalizes odds across venues, and flags contracts where our models see edge.",
   },
   {
     number: 2,
-    title: "Synthesize",
+    title: "Evaluate",
     description:
-      "Evidence is gathered across perspectives and structured with equal weight — no side is favored.",
+      "Candidates are scored on edge magnitude, time-to-resolution, ROI per day, and confidence — then filtered through 12 guard constraints.",
   },
   {
     number: 3,
-    title: "Score",
+    title: "Execute",
     description:
-      "Claims are ranked by source quality and consensus, surfacing what's well-supported and what's not.",
+      "Passing signals are sized by the Kelly criterion, ranked by composite score, and filled through the paper execution engine with slippage simulation.",
   },
 ];
 
@@ -78,7 +82,7 @@ export default function Home() {
               Request access
             </a>
             <a
-              href="#outputs"
+              href="#edge"
               className="btn-pill inline-flex border border-[#1a1d21] px-7 py-3 font-medium transition-colors hover:border-[#c0c5cb]"
             >
               See what it produces
@@ -87,21 +91,27 @@ export default function Home() {
         </header>
       </div>
 
-      {/* ── Outputs ──────────────────────────────────────── */}
-      <section id="outputs" className="border-t border-[#1a1d21] py-24">
+      {/* ── Edge ───────────────────────────────────────────── */}
+      <section id="edge" className="border-t border-[#1a1d21] py-32">
         <div className="mx-auto max-w-5xl px-6">
-          <h2 className="text-center text-3xl font-bold tracking-tight">
-            What Neutralis delivers
+          <h2 className="text-center font-[family-name:var(--font-italiana)] text-3xl font-normal uppercase tracking-[0.08em] sm:text-4xl">
+            The Neutralis Edge
           </h2>
+          <p className="mt-3 text-center text-sm tracking-wide text-[#9ca3af]">
+            Systematic alpha across prediction markets
+          </p>
           <div className="mt-14 grid gap-8 md:grid-cols-2">
-            {outputs.map((o) => (
+            {capabilities.map((c) => (
               <article
-                key={o.title}
-                className="card-panel rounded-xl p-8"
+                key={c.number}
+                className="card-panel card-accent rounded-xl p-8"
               >
-                <h3 className="text-lg font-semibold">{o.title}</h3>
+                <span className="font-[family-name:var(--font-geist-mono)] text-xs tracking-widest text-[#9ca3af]">
+                  {c.number}
+                </span>
+                <h3 className="mt-2 text-lg font-semibold">{c.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-[#9ca3af]">
-                  {o.description}
+                  {c.description}
                 </p>
               </article>
             ))}
@@ -109,22 +119,25 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Method ─────────────────────────────────────────── */}
-      <section id="method" className="metallic-band border-t border-[#1a1d21] py-24">
+      {/* ── Pipeline ──────────────────────────────────────── */}
+      <section id="pipeline" className="border-t border-[#1a1d21] py-32">
         <div className="mx-auto max-w-5xl px-6">
-          <h2 className="text-center text-3xl font-bold tracking-tight">
-            How it works
+          <h2 className="text-center font-[family-name:var(--font-italiana)] text-3xl font-normal uppercase tracking-[0.08em] sm:text-4xl">
+            How the pipeline works
           </h2>
+          <p className="mt-3 text-center text-sm tracking-wide text-[#9ca3af]">
+            From raw odds to optimized positions in under a minute
+          </p>
           <div className="mt-14 grid gap-8 md:grid-cols-3">
-            {methodSteps.map((step) => (
+            {pipelineSteps.map((step) => (
               <article
                 key={step.number}
-                className="card-panel rounded-xl p-8"
+                className="card-panel card-accent rounded-xl p-8"
               >
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#050608] text-lg font-bold text-[#c0c5cb]">
-                  {step.number}
-                </div>
-                <h3 className="text-lg font-semibold">{step.title}</h3>
+                <span className="font-[family-name:var(--font-geist-mono)] text-xs tracking-widest text-[#9ca3af]">
+                  {String(step.number).padStart(2, "0")}
+                </span>
+                <h3 className="mt-2 text-lg font-semibold">{step.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-[#9ca3af]">
                   {step.description}
                 </p>
@@ -135,14 +148,14 @@ export default function Home() {
       </section>
 
       {/* ── Waitlist ────────────────────────────────────────── */}
-      <section id="waitlist" className="border-t border-[#1a1d21] py-24">
+      <section id="waitlist" className="border-t border-[#1a1d21] py-32">
         <div className="mx-auto flex max-w-xl flex-col items-center px-6 text-center">
-          <h2 className="text-3xl font-bold tracking-tight">
+          <h2 className="font-[family-name:var(--font-italiana)] text-3xl font-normal uppercase tracking-[0.08em] sm:text-4xl">
             Get early access
           </h2>
           <p className="mt-4 text-[#9ca3af]">
-            Join the waitlist and we&apos;ll let you know when Neutralis is
-            ready.
+            Join the waitlist to get notified when Neutralis opens its
+            first&nbsp;fund.
           </p>
           <div className="mt-8 w-full">
             <WaitlistForm />
