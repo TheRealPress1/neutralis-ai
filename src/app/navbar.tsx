@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import AuthNav from "./components/AuthNav";
+import Link from "next/link";
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -40,12 +42,12 @@ export default function Navbar() {
         }`}
       />
       <div className="relative z-10 mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-        <a
-          href="#"
+        <Link
+          href="/"
           className="text-lg font-semibold tracking-tight text-white/90"
         >
           Neutralis.ai
-        </a>
+        </Link>
 
         <ul className="hidden gap-6 text-sm font-medium text-white/70 sm:flex">
           <li>
@@ -72,22 +74,12 @@ export default function Navbar() {
               Waitlist
             </a>
           </li>
-          <li>
-            <a
-              href="/dashboard"
-              className="nav-link-glow transition-all duration-250 ease-out hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.25)]"
-            >
-              Dashboard
-            </a>
-          </li>
+          <AuthNav />
         </ul>
 
-        <a
-          href="#waitlist"
-          className="btn-sheen btn-pill bg-[#e8e9ea] px-5 py-2 text-sm font-medium text-[#050608] transition-all duration-250 ease-out hover:-translate-y-[1px] hover:bg-[#c0c5cb] hover:shadow-[0_0_12px_rgba(232,233,234,0.3)]"
-        >
-          Request access
-        </a>
+        <div className="flex items-center gap-4 sm:hidden">
+          <AuthNav />
+        </div>
       </div>
     </nav>
   );
