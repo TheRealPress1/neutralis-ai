@@ -67,7 +67,9 @@ class KalshiExecutor:
 
     def _sign_request(self, method: str, path: str) -> dict[str, str]:
         timestamp_ms = str(int(time.time() * 1000))
-        message = timestamp_ms + method.upper() + path
+        # Kalshi requires the full API path in the signature
+        full_path = "/trade-api/v2" + path
+        message = timestamp_ms + method.upper() + full_path
         signature = self._private_key.sign(
             message.encode(),
             padding.PSS(
