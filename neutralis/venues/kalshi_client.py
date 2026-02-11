@@ -25,7 +25,7 @@ class KalshiClient:
         self._cfg = config or KalshiConfig()
         self._http = httpx.Client(
             base_url=self._cfg.base_url,
-            timeout=httpx.Timeout(connect=5.0, read=30.0, write=5.0, pool=5.0),
+            timeout=httpx.Timeout(connect=10.0, read=120.0, write=5.0, pool=10.0),
             headers={"Accept": "application/json"},
         )
         self._last_request_ts: float = 0.0
@@ -40,7 +40,17 @@ class KalshiClient:
         self, path: str, params: dict[str, Any] | None = None, *, _retries: int = 0
     ) -> dict[str, Any]:
         self._throttle()
-        resp = self._http.get(path, params=params)
+        try:
+            resp = self._http.get(path, params=params)
+        except httpx.TimeoutException:
+            if _retries < 3:
+                wait = 5.0 * (2**_retries)
+                logger.warning(
+                    "Timeout on %s, retry %d/3 in %.1fs", path, _retries + 1, wait,
+                )
+                time.sleep(wait)
+                return self._get(path, params, _retries=_retries + 1)
+            raise
 
         if resp.status_code == 429:
             retry_after = float(resp.headers.get("Retry-After", "2"))
