@@ -159,6 +159,12 @@ def main() -> None:
 
     # Lazy import — avoid loading pipeline modules until we enter the loop
     from scripts.run_once import run_once
+    import scripts.run_once as _pipeline
+
+    # Initialize market cache for category-filtered fetching
+    from neutralis.venues.market_cache import MarketCache
+    _pipeline._market_cache = MarketCache()
+    logger.info("Market cache initialized (filter=%s)", settings.market_filter.enabled)
 
     notifier = DiscordNotifier(settings.alerts)
     stats = _Stats()

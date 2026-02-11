@@ -32,10 +32,14 @@ from neutralis.settlement.settler import run_settlement
 from neutralis.storage.postgres import PostgresStorage
 from neutralis.venues.kalshi_client import KalshiClient
 from neutralis.venues.kalshi_normalize import normalize_market as kalshi_normalize
+from neutralis.venues.market_cache import MarketCache
 from neutralis.venues.polymarket_client import PolymarketClient
 from neutralis.venues.polymarket_normalize import normalize_market as poly_normalize
 
 logger = get_logger("pipeline")
+
+# Module-level state that persists across run_once() calls in daemon mode
+_market_cache: MarketCache | None = None
 
 
 @dataclass(frozen=True)
@@ -82,6 +86,45 @@ def _score_signal(
         net_edge=result["net_edge"],
         features_json=result,
     )
+
+
+def _fetch_cached_kalshi(settings) -> list[dict]:
+    """Fetch Kalshi markets with caching and incremental updates.
+
+    Strategy:
+    - First run: Full bulk fetch of all active markets (~50s), cache them.
+    - Subsequent runs: Incremental via min_updated_ts (0-5 pages, <5s).
+    - Every 5 min: Full re-fetch to catch any gaps.
+    """
+    filter_cfg = settings.market_filter
+
+    with KalshiClient(settings.kalshi) as client:
+        if _market_cache.is_empty or _market_cache.needs_full_refresh(
+            filter_cfg.full_refresh_interval_sec
+        ):
+            # Full fetch — same as unfiltered, but cached for incremental later
+            all_raw = client.get_all_active_markets()
+            _market_cache.update_bulk(all_raw)
+            _market_cache.mark_full_refresh()
+            logger.info(
+                "Full cache load: %d markets cached",
+                _market_cache.size,
+            )
+        elif filter_cfg.incremental_updates and _market_cache.last_update_epoch > 0:
+            # Incremental: only recently changed markets
+            updated = client.get_markets_updated_since(_market_cache.last_update_epoch)
+            # Add active markets, remove settled/closed from cache
+            active = [m for m in updated if m.get("status") == "active"]
+            for m in updated:
+                if m.get("status") != "active" and m.get("ticker"):
+                    _market_cache.remove(m["ticker"])
+            changed = _market_cache.update_bulk(active)
+            logger.info(
+                "Incremental update: %d changed (%d fetched, %d active) | cache=%d",
+                changed, len(updated), len(active), _market_cache.size,
+            )
+
+    return _market_cache.get_all()
 
 
 def run_once(run_number: int = 0) -> RunStats:
@@ -133,10 +176,13 @@ def run_once(run_number: int = 0) -> RunStats:
             if exit_count > 0:
                 logger.info("Exits: %d positions closed, P&L=$%.2f", exit_count, exit_pnl)
 
-    # Step 1a: Fetch active markets from Kalshi
+    # Step 1a: Fetch active markets from Kalshi (filtered if cache available)
     logger.info("Step 1a: Fetching active markets from Kalshi")
-    with KalshiClient(settings.kalshi) as kalshi_client:
-        raw_kalshi = kalshi_client.get_all_active_markets()
+    if settings.market_filter.enabled and _market_cache is not None:
+        raw_kalshi = _fetch_cached_kalshi(settings)
+    else:
+        with KalshiClient(settings.kalshi) as kalshi_client:
+            raw_kalshi = kalshi_client.get_all_active_markets()
 
     # Step 1b: Fetch active markets from Polymarket
     logger.info("Step 1b: Fetching active markets from Polymarket")

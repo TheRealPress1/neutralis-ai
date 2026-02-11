@@ -31,6 +31,8 @@ _load_dotenv()
 class KalshiConfig:
     base_url: str = "https://api.elections.kalshi.com/trade-api/v2"
     markets_path: str = "/markets"
+    series_path: str = "/series"
+    events_path: str = "/events"
     orderbook_path: str = "/markets/{ticker}/orderbook"
     max_reads_per_sec: int = 20
     default_market_limit: int = 1000
@@ -116,6 +118,14 @@ class ExecutionConfig:
 
 
 @dataclass(frozen=True)
+class MarketFilterConfig:
+    enabled: bool = True
+    category_whitelist: tuple[str, ...] = ("politics", "economics", "crypto")
+    incremental_updates: bool = True
+    full_refresh_interval_sec: float = 300.0
+
+
+@dataclass(frozen=True)
 class SchedulerConfig:
     scan_interval_sec: float = 30.0
     max_consecutive_errors: int = 5
@@ -152,6 +162,7 @@ class Settings:
     alerts: AlertsConfig = field(default_factory=AlertsConfig)
     exits: ExitConfig = field(default_factory=ExitConfig)
     execution: ExecutionConfig = field(default_factory=ExecutionConfig)
+    market_filter: MarketFilterConfig = field(default_factory=MarketFilterConfig)
 
 
 def load_settings() -> Settings:
