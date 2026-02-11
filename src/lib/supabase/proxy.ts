@@ -39,7 +39,8 @@ export async function updateSession(request: NextRequest) {
   // Protect dashboard and onboarding routes - redirect to login if not authenticated
   if (
     request.nextUrl.pathname.startsWith("/dashboard") ||
-    request.nextUrl.pathname.startsWith("/onboarding")
+    request.nextUrl.pathname.startsWith("/onboarding") ||
+    request.nextUrl.pathname.startsWith("/profile")
   ) {
     if (!user) {
       const url = request.nextUrl.clone();

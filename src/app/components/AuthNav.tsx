@@ -79,6 +79,14 @@ export default function AuthNav() {
             >
               My Portfolio
             </Link>
+            <Link
+              href="/profile"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-[#eceef0] transition-colors hover:bg-[#1a1d21]"
+            >
+              My Profile
+            </Link>
+            <div className="my-1 h-px bg-[#22262d]" />
             <button
               onClick={handleSignOut}
               className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-[#a1a8b3] transition-colors hover:bg-[#1a1d21] hover:text-[#eceef0]"
