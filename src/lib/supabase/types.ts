@@ -15,6 +15,25 @@ export type Database = {
         };
         Relationships: [];
       };
+      profiles: {
+        Row: {
+          id: string;
+          email: string;
+          full_name: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          email: string;
+          full_name?: string;
+        };
+        Update: {
+          full_name?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       user_api_keys: {
         Row: {
           id: number;
