@@ -166,6 +166,8 @@ class Trade:
     size_dollars: float = 0.0
     quantity: float = 0.0
     is_paper: bool = True
+    order_id: Optional[str] = None
+    fill_price: Optional[float] = None
     created_at: datetime = field(default_factory=datetime.now)
 
 

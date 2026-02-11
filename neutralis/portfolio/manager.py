@@ -45,10 +45,14 @@ class PortfolioManager:
         signal: Signal,
         decision: Decision,
         decision_id: int,
+        *,
+        is_paper: bool = True,
+        execution_results: list[dict] | None = None,
     ) -> list[Trade]:
-        """Record paper trades from a PASS decision and update positions.
+        """Record trades from a PASS decision and update positions.
 
         For each leg in the signal, create a Trade and upsert the Position.
+        When execution_results is provided, uses actual fill data from the exchange.
         Returns the list of created Trade objects.
         """
         if decision.verdict != DecisionVerdict.PASS:
@@ -59,7 +63,7 @@ class PortfolioManager:
         if signal.market_snapshot is not None:
             venue = signal.market_snapshot.venue
 
-        for leg in signal.legs:
+        for i, leg in enumerate(signal.legs):
             side = TradeSide.BUY_YES if leg.side == "yes" else TradeSide.BUY_NO
             leg_venue = leg.venue or venue  # per-leg venue if set, else signal-level
 
@@ -75,6 +79,24 @@ class PortfolioManager:
 
             quantity = leg_size / leg.price_dollars if leg.price_dollars > 0 else 0.0
 
+            # Use actual execution data if available
+            order_id = None
+            fill_price = None
+            if execution_results and i < len(execution_results):
+                ex = execution_results[i]
+                order_id = ex.get("order_id")
+                # Kalshi returns prices in cents; convert to dollars
+                if leg.side == "yes" and ex.get("yes_price"):
+                    fill_price = ex["yes_price"] / 100.0
+                elif leg.side == "no" and ex.get("no_price"):
+                    fill_price = ex["no_price"] / 100.0
+                # Use actual fill count if available
+                actual_count = ex.get("fill_count")
+                if actual_count and actual_count > 0:
+                    quantity = float(actual_count)
+                    if fill_price and fill_price > 0:
+                        leg_size = round(quantity * fill_price, 2)
+
             trade = Trade(
                 signal_id=signal.id,
                 decision_id=decision_id,
@@ -82,20 +104,24 @@ class PortfolioManager:
                 event_ticker=signal.event_ticker,
                 venue=leg_venue,
                 side=side,
-                price=leg.price_dollars,
+                price=fill_price or leg.price_dollars,
                 size_dollars=leg_size,
                 quantity=round(quantity, 4),
-                is_paper=True,
+                is_paper=is_paper,
+                order_id=order_id,
+                fill_price=fill_price,
             )
 
             self._storage.save_trade(trade)
             self._upsert_position(trade)
             trades.append(trade)
 
+            mode = "PAPER" if is_paper else "LIVE"
             logger.info(
-                "Trade: %s %s %s $%.2f @ %.4f (%d contracts)",
-                trade.venue, trade.side.value, trade.ticker,
+                "%s Trade: %s %s %s $%.2f @ %.4f (%d contracts)%s",
+                mode, trade.venue, trade.side.value, trade.ticker,
                 trade.size_dollars, trade.price, trade.quantity,
+                f" order_id={order_id}" if order_id else "",
             )
 
         return trades

@@ -62,3 +62,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_fills_order_number
 CREATE INDEX IF NOT EXISTS idx_fills_order_id ON fills (order_id);
 CREATE INDEX IF NOT EXISTS idx_fills_trade_id ON fills (trade_id);
 CREATE INDEX IF NOT EXISTS idx_fills_created_at ON fills (created_at DESC);
+
+-- Live execution tracking columns on trades
+ALTER TABLE trades ADD COLUMN IF NOT EXISTS order_id TEXT;
+ALTER TABLE trades ADD COLUMN IF NOT EXISTS fill_price DOUBLE PRECISION;
+CREATE INDEX IF NOT EXISTS idx_trades_order_id ON trades (order_id) WHERE order_id IS NOT NULL;

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import math
 import sys
 import time
 from dataclasses import dataclass, replace
@@ -226,6 +227,26 @@ def run_once(run_number: int = 0) -> RunStats:
             portfolio_snapshot.total_exposure_dollars,
         )
 
+        # Set up live executor if enabled
+        live_executor = None
+        if settings.execution.live_trading_enabled and settings.execution.kalshi_api_key_id:
+            try:
+                from neutralis.execution.kalshi import KalshiExecutor
+                live_executor = KalshiExecutor(settings.kalshi, settings.execution)
+                balance = live_executor.get_balance()
+                if balance < settings.execution.balance_floor_dollars:
+                    logger.warning(
+                        "Kalshi balance $%.2f below floor $%.2f, falling back to paper",
+                        balance, settings.execution.balance_floor_dollars,
+                    )
+                    live_executor.close()
+                    live_executor = None
+                else:
+                    logger.info("Live execution enabled: Kalshi balance $%.2f", balance)
+            except Exception:
+                logger.warning("Failed to initialize Kalshi executor, falling back to paper", exc_info=True)
+                live_executor = None
+
         # Build unified list of (scored_signal, market) pairs
         signal_market_pairs: list[tuple[Signal, NormalizedMarket]] = []
 
@@ -293,7 +314,7 @@ def run_once(run_number: int = 0) -> RunStats:
         )
 
         # 4e: Save decisions and fill only selected (via PaperExecutor)
-        executor = PaperExecutor(storage, portfolio)
+        paper_executor = PaperExecutor(storage, portfolio)
         selected_count = 0
         total_orders = 0
         total_fills = 0
@@ -302,12 +323,63 @@ def run_once(run_number: int = 0) -> RunStats:
 
             if decision.verdict == DecisionVerdict.PASS and decision.selected:
                 selected_count += 1
-                market = enriched_markets.get(signal.ticker, signal.market_snapshot)
-                exec_result = executor.execute(
-                    signal, decision, decision_id, tick_ctx, market=market,
-                )
-                total_orders += len(exec_result.orders)
-                total_fills += len(exec_result.fills)
+
+                # Attempt live Kalshi execution if enabled
+                live_results = None
+                if live_executor is not None:
+                    kalshi_only = all(
+                        (leg.venue or "kalshi") == "kalshi" for leg in signal.legs
+                    )
+                    if kalshi_only:
+                        results = []
+                        all_filled = True
+                        for leg in signal.legs:
+                            price_cents = max(1, min(99, round(leg.price_dollars * 100)))
+                            if signal.combined_cost > 0:
+                                leg_frac = leg.price_dollars / signal.combined_cost
+                            else:
+                                leg_frac = 1.0 / max(len(signal.legs), 1)
+                            leg_dollars = decision.suggested_size_dollars * leg_frac
+                            leg_dollars = min(leg_dollars, settings.execution.max_order_dollars)
+                            count = max(1, math.floor(leg_dollars / leg.price_dollars))
+                            try:
+                                resp = live_executor.place_order(
+                                    leg.ticker, leg.side, price_cents, count,
+                                )
+                                order = resp.get("order", {})
+                                if order.get("status") == "executed":
+                                    results.append(order)
+                                else:
+                                    logger.warning(
+                                        "Order not filled: %s status=%s",
+                                        leg.ticker, order.get("status"),
+                                    )
+                                    all_filled = False
+                                    break
+                            except Exception:
+                                logger.warning(
+                                    "Live order failed for %s, falling back to paper",
+                                    leg.ticker, exc_info=True,
+                                )
+                                all_filled = False
+                                break
+                        if all_filled and results:
+                            live_results = results
+
+                if live_results is not None:
+                    # Live execution succeeded — record via portfolio directly
+                    portfolio.record_fill(
+                        signal, decision, decision_id,
+                        is_paper=False, execution_results=live_results,
+                    )
+                else:
+                    # Paper execution — use PaperExecutor with slippage simulation
+                    market = enriched_markets.get(signal.ticker, signal.market_snapshot)
+                    exec_result = paper_executor.execute(
+                        signal, decision, decision_id, tick_ctx, market=market,
+                    )
+                    total_orders += len(exec_result.orders)
+                    total_fills += len(exec_result.fills)
                 portfolio_snapshot = portfolio.get_snapshot()
                 for leg in signal.legs:
                     notifier.notify_fill(
@@ -325,6 +397,9 @@ def run_once(run_number: int = 0) -> RunStats:
             snapshot.open_position_count,
             snapshot.total_exposure_dollars,
         )
+
+    if live_executor is not None:
+        live_executor.close()
 
     elapsed = (time.monotonic() - start) * 1000
     logger.info(

@@ -100,6 +100,22 @@ class ExitConfig:
 
 
 @dataclass(frozen=True)
+class ExecutionConfig:
+    live_trading_enabled: bool = field(
+        default_factory=lambda: os.environ.get("LIVE_TRADING_ENABLED", "").lower()
+        in ("true", "1", "yes")
+    )
+    kalshi_api_key_id: str = field(
+        default_factory=lambda: os.environ.get("KALSHI_API_KEY_ID", "")
+    )
+    kalshi_private_key_path: str = field(
+        default_factory=lambda: os.environ.get("KALSHI_PRIVATE_KEY_PATH", "")
+    )
+    max_order_dollars: float = 50.0
+    balance_floor_dollars: float = 25.0
+
+
+@dataclass(frozen=True)
 class SchedulerConfig:
     scan_interval_sec: float = 30.0
     max_consecutive_errors: int = 5
@@ -135,6 +151,7 @@ class Settings:
     api: APIConfig = field(default_factory=APIConfig)
     alerts: AlertsConfig = field(default_factory=AlertsConfig)
     exits: ExitConfig = field(default_factory=ExitConfig)
+    execution: ExecutionConfig = field(default_factory=ExecutionConfig)
 
 
 def load_settings() -> Settings:
@@ -175,4 +192,5 @@ def load_settings_with_profile(storage: object) -> Settings:
         api=base.api,
         alerts=base.alerts,
         exits=base.exits,
+        execution=base.execution,
     )

@@ -352,11 +352,11 @@ class PostgresStorage:
                 INSERT INTO trades (
                     id, signal_id, decision_id, ticker, event_ticker,
                     venue, side, price, size_dollars, quantity,
-                    is_paper, created_at
+                    is_paper, order_id, fill_price, created_at
                 ) VALUES (
                     %(id)s, %(signal_id)s, %(decision_id)s, %(ticker)s, %(event_ticker)s,
                     %(venue)s, %(side)s, %(price)s, %(size_dollars)s, %(quantity)s,
-                    %(is_paper)s, %(created_at)s
+                    %(is_paper)s, %(order_id)s, %(fill_price)s, %(created_at)s
                 )
                 """,
                 {
@@ -371,6 +371,8 @@ class PostgresStorage:
                     "size_dollars": trade.size_dollars,
                     "quantity": trade.quantity,
                     "is_paper": trade.is_paper,
+                    "order_id": trade.order_id,
+                    "fill_price": trade.fill_price,
                     "created_at": trade.created_at,
                 },
             )
