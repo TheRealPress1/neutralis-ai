@@ -30,14 +30,14 @@ export default function Navbar() {
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
       onMouseMove={handleMouseMove}
-      className={`fixed top-0 z-50 w-full border-b transition-all duration-300 relative overflow-hidden ${
+      className={`fixed top-0 z-50 w-full border-b transition-all duration-300 relative ${
         scrolled
           ? "border-white/10 bg-black/30 backdrop-blur-xl"
           : "border-white/[0.06] bg-black/15 backdrop-blur-[10px]"
       }`}
     >
       <div
-        className={`nav-spotlight pointer-events-none absolute -inset-4 z-0 transition-opacity duration-300 ${
+        className={`nav-spotlight pointer-events-none absolute inset-0 z-0 overflow-hidden transition-opacity duration-300 ${
           hovering ? "opacity-100" : "opacity-0"
         }`}
       />
