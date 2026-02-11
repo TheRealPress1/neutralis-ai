@@ -126,6 +126,26 @@ class MarketFilterConfig:
 
 
 @dataclass(frozen=True)
+class WebSocketConfig:
+    enabled: bool = field(
+        default_factory=lambda: os.environ.get("WEBSOCKET_ENABLED", "").lower()
+        in ("true", "1", "yes")
+    )
+    ws_url: str = "wss://api.elections.kalshi.com/trade-api/ws/v2"
+    reconnect_delay_sec: float = 1.0
+    max_reconnect_delay_sec: float = 60.0
+    health_port: int = 9091
+    # Focus on high-crossover categories for real-time arb detection
+    focus_categories: tuple[str, ...] = ("Sports", "Crypto", "Politics")
+    # How often to run periodic tasks (settlement, MTM, full REST refresh)
+    settlement_interval_sec: float = 60.0
+    mtm_interval_sec: float = 30.0
+    rest_refresh_interval_sec: float = 300.0
+    # Max markets to subscribe to on WS (performance guard)
+    max_ws_subscriptions: int = 2000
+
+
+@dataclass(frozen=True)
 class SchedulerConfig:
     scan_interval_sec: float = 30.0
     max_consecutive_errors: int = 5
@@ -163,6 +183,7 @@ class Settings:
     exits: ExitConfig = field(default_factory=ExitConfig)
     execution: ExecutionConfig = field(default_factory=ExecutionConfig)
     market_filter: MarketFilterConfig = field(default_factory=MarketFilterConfig)
+    websocket: WebSocketConfig = field(default_factory=WebSocketConfig)
 
 
 def load_settings() -> Settings:

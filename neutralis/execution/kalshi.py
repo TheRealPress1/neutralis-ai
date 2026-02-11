@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import base64
 import time
-from pathlib import Path
 from typing import Any, Optional
 from uuid import uuid4
 
 import httpx
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 from neutralis.config import ExecutionConfig, KalshiConfig
+from neutralis.execution.auth import load_private_key, sign_request
 from neutralis.logging import get_logger
 
 logger = get_logger(__name__)
@@ -43,7 +40,7 @@ class KalshiExecutor:
             raise ValueError("KALSHI_PRIVATE_KEY_PATH not set")
 
         self._api_key = self._exec.kalshi_api_key_id
-        self._private_key = self._load_private_key(self._exec.kalshi_private_key_path)
+        self._private_key = load_private_key(self._exec.kalshi_private_key_path)
 
         self._http = httpx.Client(
             base_url=self._cfg.base_url,
@@ -52,37 +49,9 @@ class KalshiExecutor:
         )
         self._last_request_ts: float = 0.0
 
-    @staticmethod
-    def _load_private_key(path_str: str) -> rsa.RSAPrivateKey:
-        pem_path = Path(path_str)
-        if not pem_path.is_absolute():
-            pem_path = Path(__file__).resolve().parent.parent.parent / pem_path
-        if not pem_path.exists():
-            raise FileNotFoundError(f"Private key not found: {pem_path}")
-        pem_data = pem_path.read_bytes()
-        key = serialization.load_pem_private_key(pem_data, password=None)
-        if not isinstance(key, rsa.RSAPrivateKey):
-            raise TypeError("Expected RSA private key")
-        return key
-
     def _sign_request(self, method: str, path: str) -> dict[str, str]:
-        timestamp_ms = str(int(time.time() * 1000))
-        # Kalshi requires the full API path in the signature
         full_path = "/trade-api/v2" + path
-        message = timestamp_ms + method.upper() + full_path
-        signature = self._private_key.sign(
-            message.encode(),
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH,
-            ),
-            hashes.SHA256(),
-        )
-        return {
-            "KALSHI-ACCESS-KEY": self._api_key,
-            "KALSHI-ACCESS-TIMESTAMP": timestamp_ms,
-            "KALSHI-ACCESS-SIGNATURE": base64.b64encode(signature).decode(),
-        }
+        return sign_request(self._private_key, self._api_key, method, full_path)
 
     def _throttle(self) -> None:
         elapsed = time.monotonic() - self._last_request_ts
