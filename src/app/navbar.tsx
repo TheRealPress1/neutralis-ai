@@ -49,7 +49,7 @@ export default function Navbar() {
           Neutralis.ai
         </Link>
 
-        <ul className="hidden gap-6 text-sm font-medium text-white/70 sm:flex">
+        <ul className="hidden items-center gap-6 text-sm font-medium text-white/70 sm:flex">
           <li>
             <a
               href="#edge"
@@ -77,7 +77,7 @@ export default function Navbar() {
           <AuthNav />
         </ul>
 
-        <div className="flex items-center gap-4 sm:hidden">
+        <div className="flex items-center gap-4 text-sm font-medium text-white/70 sm:hidden">
           <AuthNav />
         </div>
       </div>

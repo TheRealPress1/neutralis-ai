@@ -4,9 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import DashboardShell from "./components/DashboardShell";
 
 export const metadata: Metadata = {
-  title: "Dashboard | Neutralis.ai",
+  title: "My Portfolio | Neutralis.ai",
   description:
-    "Portfolio monitoring dashboard for Neutralis.ai event hedge fund",
+    "Your portfolio dashboard for Neutralis.ai prediction market trading",
 };
 
 export default async function DashboardPage() {

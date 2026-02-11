@@ -60,6 +60,10 @@ export default function DashboardShell() {
             <a href="/" className="text-lg font-semibold tracking-tight">
               Neutralis.ai
             </a>
+            <span className="text-xs text-[#a1a8b3]">/</span>
+            <span className="text-sm font-medium text-[#eceef0]">
+              My Portfolio
+            </span>
             <div className="flex items-center gap-1 rounded-lg border border-[#22262d] p-0.5">
               {NAV_ITEMS.map((item) => (
                 <button
