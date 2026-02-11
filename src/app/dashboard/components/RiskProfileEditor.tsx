@@ -230,6 +230,7 @@ export default function RiskProfileEditor() {
   const [form, setForm] = useState<Record<string, number>>({});
   const [catForm, setCatForm] = useState<Record<string, CategoryOverride>>({});
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     "Category Overrides": false,
@@ -253,7 +254,7 @@ export default function RiskProfileEditor() {
         populateCatForm(current, catData);
       }
     } catch {
-      /* tables may not exist yet */
+      setLoadError(true);
     }
   }, []);
 
@@ -373,7 +374,9 @@ export default function RiskProfileEditor() {
     return (
       <div className="mx-auto max-w-5xl">
         <div className="card-panel rounded-xl p-8 text-center text-[#a1a8b3]">
-          Loading risk profiles...
+          {loadError
+            ? "Unable to load risk profiles. The pipeline API is not running."
+            : "Loading risk profiles..."}
         </div>
       </div>
     );
@@ -386,7 +389,7 @@ export default function RiskProfileEditor() {
   return (
     <div className="mx-auto max-w-5xl">
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <h2 className="text-2xl font-bold tracking-tight">Settings</h2>
+      <h2 className="text-2xl font-bold tracking-tight">Portfolio Settings</h2>
       <p className="mt-1 text-sm text-[#a1a8b3]">
         Choose a risk profile to set your target return and exposure limits.
         The bot allocates freely across categories to meet your target.

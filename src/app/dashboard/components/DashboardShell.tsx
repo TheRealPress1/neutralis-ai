@@ -13,7 +13,7 @@ import ExecutionPanel from "./ExecutionPanel";
 import ApiKeyManager from "./ApiKeyManager";
 import AuthNav from "@/app/components/AuthNav";
 
-type View = "dashboard" | "execution" | "analytics" | "backtest" | "settings";
+type View = "dashboard" | "execution" | "analytics" | "backtest" | "connections" | "settings";
 
 function secondsAgo(date: Date) {
   return Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
@@ -52,7 +52,8 @@ export default function DashboardShell() {
     { key: "execution", label: "Execution" },
     { key: "analytics", label: "Analytics" },
     { key: "backtest", label: "Backtest" },
-    { key: "settings", label: "Settings" },
+    { key: "connections", label: "Connections" },
+    { key: "settings", label: "Portfolio Settings" },
   ];
 
   return (
@@ -107,9 +108,14 @@ export default function DashboardShell() {
 
       {/* Content */}
       <main className="mx-auto max-w-6xl px-6 pt-24 pb-16">
-        {view === "settings" && (
-          <section className="mt-2 space-y-8">
+        {view === "connections" && (
+          <section className="mt-2">
             <ApiKeyManager />
+          </section>
+        )}
+
+        {view === "settings" && (
+          <section className="mt-2">
             <RiskProfileEditor />
           </section>
         )}
