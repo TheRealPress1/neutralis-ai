@@ -67,7 +67,7 @@ class PolymarketConfig:
     gamma_base_url: str = "https://gamma-api.polymarket.com"
     clob_base_url: str = "https://clob.polymarket.com"
     default_market_limit: int = 100
-    max_pages: int = 10
+    max_pages: int = 30
 
 
 @dataclass(frozen=True)

@@ -208,7 +208,7 @@ class EventEngine:
         """Synchronous: fetch all markets, normalize, match. Runs in thread pool."""
         settings = load_settings()
 
-        # Fetch Kalshi
+        # Fetch Kalshi — full paginated fetch, normalizer filters out parlays
         with KalshiClient(settings.kalshi) as client:
             all_raw = client.get_all_active_markets()
         self._market_cache.update_bulk(all_raw)

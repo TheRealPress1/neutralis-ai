@@ -234,11 +234,11 @@ def match_markets(
     cfg = config or MatchingConfig()
 
     # Pre-compute normalised text and tokens
-    # Filter out Kalshi multi-leg parlays (commas in title = combo bet)
+    # Parlays are now filtered during normalization (mve_selected_legs / "yes "/"no " prefix)
     kalshi_prepared = [
         (m, _normalize_text(m.title), _significant_tokens(m.title))
         for m in kalshi_markets
-        if m.title and "," not in m.title
+        if m.title
     ]
     poly_prepared = [
         (m, _normalize_text(m.title), _significant_tokens(m.title))
