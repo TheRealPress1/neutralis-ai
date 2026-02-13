@@ -208,9 +208,14 @@ class EventEngine:
         """Synchronous: fetch all markets, normalize, match. Runs in thread pool."""
         settings = load_settings()
 
-        # Fetch Kalshi — full paginated fetch, normalizer filters out parlays
+        # Fetch Kalshi via targeted series fetch — much faster than paginating 50k+ markets.
+        # The general get_all_active_markets() caps at 50 pages (50k) but Kalshi has >50k
+        # active markets. Tournament winner markets (soccer, politics) that overlap with
+        # Polymarket are buried beyond page 50, so targeted series fetch is the only
+        # reliable way to include them.
+        filter_cfg = settings.market_filter
         with KalshiClient(settings.kalshi) as client:
-            all_raw = client.get_all_active_markets()
+            all_raw = client.fetch_priority_series(filter_cfg.priority_series)
         self._market_cache.update_bulk(all_raw)
         self._market_cache.mark_full_refresh()
 
@@ -740,15 +745,16 @@ class EventEngine:
                 logger.exception("REST refresh failed")
 
     def _refresh_kalshi(self) -> _LiveState | None:
-        """Full Kalshi refresh — incremental if cache supports it."""
+        """Kalshi refresh — re-fetch priority series on full refresh, incremental otherwise."""
         state = self._state
         if state is None:
             return None
         settings = state.settings
+        filter_cfg = settings.market_filter
 
         with KalshiClient(settings.kalshi) as client:
             if self._market_cache.needs_full_refresh(self._ws_cfg.rest_refresh_interval_sec):
-                all_raw = client.get_all_active_markets()
+                all_raw = client.fetch_priority_series(filter_cfg.priority_series)
                 self._market_cache.update_bulk(all_raw)
                 self._market_cache.mark_full_refresh()
             elif self._market_cache.last_update_epoch > 0:

@@ -92,9 +92,14 @@ def _fetch_cached_kalshi(settings) -> list[dict]:
     """Fetch Kalshi markets with caching and incremental updates.
 
     Strategy:
-    - First run: Full bulk fetch of all active markets (~50s), cache them.
+    - First run: Fetch from priority series (~200-500 markets, ~10s), cache them.
     - Subsequent runs: Incremental via min_updated_ts (0-5 pages, <5s).
-    - Every 5 min: Full re-fetch to catch any gaps.
+    - Every 5 min: Full series re-fetch to catch any gaps.
+
+    NOTE: The general get_all_active_markets() is unreliable for cross-platform
+    matching — Kalshi has >50k active markets and the 50-page cap (50k) misses
+    tournament winner markets (soccer, politics) that are the main overlap with
+    Polymarket.
     """
     filter_cfg = settings.market_filter
 
@@ -102,12 +107,12 @@ def _fetch_cached_kalshi(settings) -> list[dict]:
         if _market_cache.is_empty or _market_cache.needs_full_refresh(
             filter_cfg.full_refresh_interval_sec
         ):
-            # Full fetch — same as unfiltered, but cached for incremental later
-            all_raw = client.get_all_active_markets()
+            # Targeted series fetch — fast and reliable
+            all_raw = client.fetch_priority_series(filter_cfg.priority_series)
             _market_cache.update_bulk(all_raw)
             _market_cache.mark_full_refresh()
             logger.info(
-                "Full cache load: %d markets cached",
+                "Priority series cache load: %d markets cached",
                 _market_cache.size,
             )
         elif filter_cfg.incremental_updates and _market_cache.last_update_epoch > 0:

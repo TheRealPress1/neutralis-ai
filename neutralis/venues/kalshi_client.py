@@ -169,6 +169,32 @@ class KalshiClient:
                 break
         return all_markets
 
+    def fetch_priority_series(
+        self, series_tickers: tuple[str, ...] | list[str],
+    ) -> list[dict[str, Any]]:
+        """Fetch all active markets from a list of series tickers.
+
+        Much faster than get_all_active_markets() — typically ~200-500 markets
+        in 8-10 requests vs 50k markets in 50 requests.
+        """
+        all_markets: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for st in series_tickers:
+            try:
+                batch = self.get_markets_by_series(st)
+                for m in batch:
+                    ticker = m.get("ticker")
+                    if ticker and ticker not in seen:
+                        seen.add(ticker)
+                        all_markets.append(m)
+            except Exception:
+                logger.warning("Failed to fetch series %s, skipping", st, exc_info=True)
+        logger.info(
+            "Priority series fetch: %d markets from %d series",
+            len(all_markets), len(series_tickers),
+        )
+        return all_markets
+
     def get_markets_updated_since(
         self, min_updated_ts: int, *, max_pages: int = 20,
     ) -> list[dict[str, Any]]:

@@ -123,6 +123,14 @@ class MarketFilterConfig:
     category_whitelist: tuple[str, ...] = ("politics", "economics", "crypto")
     incremental_updates: bool = True
     full_refresh_interval_sec: float = 300.0
+    # Series with known cross-platform overlap (Polymarket counterparts exist)
+    priority_series: tuple[str, ...] = (
+        # Soccer leagues
+        "KXPREMIERLEAGUE", "KXUCL", "KXFACUP", "KXLALIGA",
+        "KXBUNDESLIGA", "KXSERIEA", "KXLIGUE1",
+        # Political
+        "KXFEDCHAIRNOM",
+    )
 
 
 @dataclass(frozen=True)
@@ -225,4 +233,6 @@ def load_settings_with_profile(storage: object) -> Settings:
         alerts=base.alerts,
         exits=base.exits,
         execution=base.execution,
+        market_filter=base.market_filter,
+        websocket=base.websocket,
     )
