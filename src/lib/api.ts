@@ -2,6 +2,7 @@
 
 import type {
   AnalyticsSummary,
+  ArbSignal,
   BacktestDataRange,
   BacktestRequest,
   BacktestResult,
@@ -17,6 +18,7 @@ import type {
   OptimizerRun,
   Order,
   PnLBucket,
+  PolymarketConnectionStatus,
   PortfolioStats,
   Position,
   RegimeState,
@@ -218,4 +220,58 @@ export async function runOptimization(
 
 export function fetchOptimizerProgress(runId: number) {
   return apiFetch<OptimizerRun>(`/api/backtest/optimize/${runId}/progress`);
+}
+
+// --- Polymarket ---
+
+export async function connectPolymarket(
+  walletAddress: string,
+  signature: string,
+  message: string,
+): Promise<{ connected: boolean; wallet_address: string }> {
+  const url = new URL("/api/polymarket/connect", API_BASE);
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      wallet_address: walletAddress,
+      signature,
+      message,
+    }),
+  });
+  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+  return res.json() as Promise<{ connected: boolean; wallet_address: string }>;
+}
+
+export function fetchPolymarketStatus() {
+  return apiFetch<PolymarketConnectionStatus>("/api/polymarket/status");
+}
+
+export async function storePolymarketCreds(
+  walletAddress: string,
+  apiKey: string,
+  apiSecret: string,
+  passphrase: string,
+): Promise<{ stored: boolean }> {
+  const url = new URL("/api/polymarket/credentials", API_BASE);
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      wallet_address: walletAddress,
+      api_key: apiKey,
+      api_secret: apiSecret,
+      passphrase: passphrase,
+    }),
+  });
+  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+  return res.json() as Promise<{ stored: boolean }>;
+}
+
+// --- Arb Signals ---
+
+export function fetchArbSignals(limit = 50, minEdge = 0) {
+  const params: Record<string, string> = { limit: String(limit) };
+  if (minEdge > 0) params.min_edge = String(minEdge);
+  return apiFetch<ArbSignal[]>("/api/arb/signals", params);
 }

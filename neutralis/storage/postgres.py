@@ -1264,6 +1264,182 @@ class PostgresStorage:
             "total_fees": round(float(row[5]), 4),
         }
 
+    # -- Polymarket credentials --
+
+    def upsert_polymarket_connection(self, wallet_address: str) -> int:
+        """Insert or update a polymarket wallet connection. Returns row id."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO polymarket_credentials (wallet_address)
+                VALUES (%(wallet_address)s)
+                ON CONFLICT (wallet_address) DO UPDATE
+                    SET updated_at = now()
+                RETURNING id
+                """,
+                {"wallet_address": wallet_address},
+            )
+            row = cur.fetchone()
+            assert row is not None
+            row_id: int = row[0]
+        conn.commit()
+        return row_id
+
+    def get_polymarket_connection(self) -> dict | None:
+        """Return the most recent polymarket connection, or None."""
+        rows = self._fetch_dicts(
+            "SELECT * FROM polymarket_credentials "
+            "ORDER BY updated_at DESC LIMIT 1"
+        )
+        return rows[0] if rows else None
+
+    def update_polymarket_l2_creds(
+        self,
+        wallet_address: str,
+        api_key_enc: str,
+        api_secret_enc: str,
+        passphrase_enc: str,
+    ) -> None:
+        """Store encrypted L2 credentials for a connected wallet."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE polymarket_credentials
+                SET api_key_enc = %(api_key_enc)s,
+                    api_secret_enc = %(api_secret_enc)s,
+                    passphrase_enc = %(passphrase_enc)s,
+                    updated_at = now()
+                WHERE wallet_address = %(wallet_address)s
+                """,
+                {
+                    "wallet_address": wallet_address,
+                    "api_key_enc": api_key_enc,
+                    "api_secret_enc": api_secret_enc,
+                    "passphrase_enc": passphrase_enc,
+                },
+            )
+        conn.commit()
+
+    # -- Market mappings --
+
+    def upsert_market_mapping(
+        self,
+        kalshi_ticker: str,
+        polymarket_token_id_yes: str,
+        title: str,
+        match_confidence: float,
+    ) -> int:
+        """Create or update a market mapping. Returns the mapping id."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO market_mappings (
+                    kalshi_ticker, polymarket_token_id_yes, title, match_confidence
+                ) VALUES (
+                    %(kalshi_ticker)s, %(polymarket_token_id_yes)s,
+                    %(title)s, %(match_confidence)s
+                )
+                ON CONFLICT (kalshi_ticker, polymarket_token_id_yes) DO UPDATE
+                    SET title = EXCLUDED.title,
+                        match_confidence = EXCLUDED.match_confidence,
+                        updated_at = now()
+                RETURNING id
+                """,
+                {
+                    "kalshi_ticker": kalshi_ticker,
+                    "polymarket_token_id_yes": polymarket_token_id_yes,
+                    "title": title,
+                    "match_confidence": match_confidence,
+                },
+            )
+            row = cur.fetchone()
+            assert row is not None
+            mapping_id: int = row[0]
+        conn.commit()
+        return mapping_id
+
+    def get_active_mappings(self, limit: int = 100) -> list[dict]:
+        """Return all active market mappings."""
+        return self._fetch_dicts(
+            "SELECT * FROM market_mappings WHERE active = TRUE "
+            "ORDER BY updated_at DESC LIMIT %(limit)s",
+            {"limit": limit},
+        )
+
+    # -- Arb signals --
+
+    def save_arb_signal(
+        self,
+        mapping_id: int,
+        kalshi_bid: float,
+        kalshi_ask: float,
+        poly_bid: float,
+        poly_ask: float,
+        edge_kp: float,
+        edge_pk: float,
+        liquidity_notes: str | None = None,
+    ) -> int:
+        """Insert an arb signal row. Returns the generated id."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO arb_signals (
+                    mapping_id, kalshi_bid, kalshi_ask,
+                    poly_bid, poly_ask,
+                    edge_kalshi_to_poly, edge_poly_to_kalshi,
+                    liquidity_notes
+                ) VALUES (
+                    %(mapping_id)s, %(kalshi_bid)s, %(kalshi_ask)s,
+                    %(poly_bid)s, %(poly_ask)s,
+                    %(edge_kp)s, %(edge_pk)s,
+                    %(liquidity_notes)s
+                )
+                RETURNING id
+                """,
+                {
+                    "mapping_id": mapping_id,
+                    "kalshi_bid": kalshi_bid,
+                    "kalshi_ask": kalshi_ask,
+                    "poly_bid": poly_bid,
+                    "poly_ask": poly_ask,
+                    "edge_kp": edge_kp,
+                    "edge_pk": edge_pk,
+                    "liquidity_notes": liquidity_notes,
+                },
+            )
+            row = cur.fetchone()
+            assert row is not None
+            signal_id: int = row[0]
+        conn.commit()
+        return signal_id
+
+    def get_recent_arb_signals(
+        self, limit: int = 50, min_edge: float = 0.0,
+    ) -> list[dict]:
+        """Return recent arb signals joined with market mapping titles."""
+        return self._fetch_dicts(
+            """
+            SELECT
+                a.id, a.mapping_id, a.ts,
+                a.kalshi_bid, a.kalshi_ask,
+                a.poly_bid, a.poly_ask,
+                a.edge_kalshi_to_poly, a.edge_poly_to_kalshi,
+                a.liquidity_notes,
+                m.kalshi_ticker, m.polymarket_token_id_yes,
+                m.title, m.match_confidence
+            FROM arb_signals a
+            JOIN market_mappings m ON a.mapping_id = m.id
+            WHERE GREATEST(a.edge_kalshi_to_poly, a.edge_poly_to_kalshi) >= %(min_edge)s
+            ORDER BY a.ts DESC
+            LIMIT %(limit)s
+            """,
+            {"limit": limit, "min_edge": min_edge},
+        )
+
     def get_recent_snapshots_for_ticker(
         self, ticker: str, limit: int = 10,
     ) -> list[NormalizedMarket]:

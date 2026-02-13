@@ -290,6 +290,90 @@ def execution_stats():
     return storage.get_execution_stats()
 
 
+# --- Polymarket Connection ---
+
+class PolymarketConnectRequest(BaseModel):
+    wallet_address: str
+    signature: str
+    message: str
+
+
+class PolymarketCredsRequest(BaseModel):
+    wallet_address: str
+    api_key: str
+    api_secret: str
+    passphrase: str
+
+
+@app.post("/api/polymarket/connect")
+def connect_polymarket(req: PolymarketConnectRequest):
+    from eth_account.messages import encode_defunct
+    from eth_account import Account
+
+    try:
+        msg = encode_defunct(text=req.message)
+        recovered = Account.recover_message(msg, signature=req.signature)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    if recovered.lower() != req.wallet_address.lower():
+        raise HTTPException(
+            status_code=400,
+            detail="Signature does not match wallet address",
+        )
+
+    storage = _get_storage()
+    row_id = storage.upsert_polymarket_connection(req.wallet_address.lower())
+    return {"connected": True, "wallet_address": req.wallet_address.lower(), "id": row_id}
+
+
+@app.get("/api/polymarket/status")
+def polymarket_status():
+    storage = _get_storage()
+    conn = storage.get_polymarket_connection()
+    if conn is None:
+        return {"connected": False, "wallet_address": None, "has_l2_creds": False}
+    return {
+        "connected": True,
+        "wallet_address": conn["wallet_address"],
+        "has_l2_creds": conn.get("api_key_enc") is not None,
+    }
+
+
+@app.post("/api/polymarket/credentials")
+def store_polymarket_credentials(req: PolymarketCredsRequest):
+    from neutralis.services.credential_store import encrypt
+
+    storage = _get_storage()
+    conn = storage.get_polymarket_connection()
+    if conn is None or conn["wallet_address"] != req.wallet_address.lower():
+        raise HTTPException(
+            status_code=400,
+            detail="Wallet not connected. Connect wallet first.",
+        )
+
+    storage.update_polymarket_l2_creds(
+        wallet_address=req.wallet_address.lower(),
+        api_key_enc=encrypt(req.api_key),
+        api_secret_enc=encrypt(req.api_secret),
+        passphrase_enc=encrypt(req.passphrase),
+    )
+    return {"stored": True, "wallet_address": req.wallet_address.lower()}
+
+
+# --- Arb Signals ---
+
+@app.get("/api/arb/signals")
+def list_arb_signals(
+    limit: int = Query(50, ge=1, le=500),
+    min_edge: float = Query(0.0, ge=0.0),
+):
+    storage = _get_storage()
+    return JSONResponse(
+        content=_serialize(storage.get_recent_arb_signals(limit=limit, min_edge=min_edge)),
+    )
+
+
 # --- Analytics ---
 
 @app.get("/api/analytics/summary")

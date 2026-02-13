@@ -354,6 +354,44 @@ export interface BacktestResult {
   config_snapshot: Record<string, Record<string, number>>;
 }
 
+// --- Polymarket / Arb ---
+
+export interface PolymarketConnectionStatus {
+  connected: boolean;
+  wallet_address: string | null;
+  has_l2_creds: boolean;
+}
+
+export interface MarketMapping {
+  id: number;
+  kalshi_ticker: string;
+  polymarket_token_id_yes: string;
+  title: string;
+  resolution_notes: string | null;
+  match_confidence: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ArbSignal {
+  id: number;
+  mapping_id: number;
+  ts: string;
+  kalshi_bid: number;
+  kalshi_ask: number;
+  poly_bid: number;
+  poly_ask: number;
+  edge_kalshi_to_poly: number;
+  edge_poly_to_kalshi: number;
+  liquidity_notes: string | null;
+  // Joined from market_mappings
+  kalshi_ticker: string;
+  polymarket_token_id_yes: string;
+  title: string;
+  match_confidence: number;
+}
+
 export interface BacktestDataRange {
   earliest: string | null;
   latest: string | null;

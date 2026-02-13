@@ -6,14 +6,15 @@ import StatsBar from "./StatsBar";
 import PositionsTable from "./PositionsTable";
 import SignalFeed from "./SignalFeed";
 import MatchesTable from "./MatchesTable";
-import RiskProfileEditor from "./RiskProfileEditor";
+import SettingsPage from "./SettingsPage";
 import PerformanceAnalytics from "./PerformanceAnalytics";
 import BacktestPanel from "./BacktestPanel";
 import ExecutionPanel from "./ExecutionPanel";
 import ApiKeyManager from "./ApiKeyManager";
+import ArbDashboard from "./ArbDashboard";
 import AuthNav from "@/app/components/AuthNav";
 
-type View = "dashboard" | "execution" | "analytics" | "backtest" | "connections" | "settings";
+type View = "dashboard" | "execution" | "analytics" | "compare" | "backtest" | "connections" | "settings";
 
 function secondsAgo(date: Date) {
   return Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
@@ -51,6 +52,7 @@ export default function DashboardShell() {
     { key: "dashboard", label: "Dashboard" },
     { key: "execution", label: "Execution" },
     { key: "analytics", label: "Analytics" },
+    { key: "compare", label: "Compare" },
     { key: "backtest", label: "Backtest" },
     { key: "connections", label: "Connections" },
     { key: "settings", label: "Fund Strategy" },
@@ -86,7 +88,7 @@ export default function DashboardShell() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {view === "dashboard" && (
+            {(view === "dashboard" || view === "compare") && (
               <>
                 <span className="text-xs text-[#a1a8b3]">
                   Updated {elapsed}s ago
@@ -116,7 +118,13 @@ export default function DashboardShell() {
 
         {view === "settings" && (
           <section className="mt-2">
-            <RiskProfileEditor />
+            <SettingsPage />
+          </section>
+        )}
+
+        {view === "compare" && (
+          <section className="mt-2">
+            <ArbDashboard refreshKey={refreshKey} />
           </section>
         )}
 
