@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import ssl
 from typing import Any, Callable, Coroutine
 
+import certifi
 import websockets
 from websockets.asyncio.client import ClientConnection
 
@@ -53,8 +55,10 @@ class PolymarketWebSocket:
 
     async def connect(self) -> None:
         """Connect to Polymarket CLOB WebSocket (no auth needed)."""
+        ssl_ctx = ssl.create_default_context(cafile=certifi.where())
         self._ws = await websockets.connect(
             self._ws_url,
+            ssl=ssl_ctx,
             ping_interval=30,
             ping_timeout=15,
             close_timeout=5,
@@ -105,23 +109,36 @@ class PolymarketWebSocket:
         await self._ws.send(json.dumps(msg))
 
     async def _dispatch(self, raw: str) -> None:
-        """Parse and dispatch a WebSocket message to registered handlers."""
+        """Parse and dispatch a WebSocket message to registered handlers.
+
+        Polymarket sends JSON arrays of events, not single objects.
+        Each element in the array is an event dict with an event_type field.
+        """
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:
             logger.warning("Invalid JSON from Polymarket WS: %s", raw[:200])
             return
 
-        event_type = data.get("event_type", "")
-        if not event_type:
+        # Polymarket sends arrays of events — normalize to list
+        events: list[dict[str, Any]] = []
+        if isinstance(data, list):
+            events = [e for e in data if isinstance(e, dict)]
+        elif isinstance(data, dict):
+            events = [data]
+        else:
             return
 
-        handlers = self._handlers.get(event_type, [])
-        for handler in handlers:
-            try:
-                await handler(data)
-            except Exception:
-                logger.exception("Polymarket WS handler error for %s", event_type)
+        for event in events:
+            event_type = event.get("event_type", "")
+            if not event_type:
+                continue
+            handlers = self._handlers.get(event_type, [])
+            for handler in handlers:
+                try:
+                    await handler(event)
+                except Exception:
+                    logger.exception("Polymarket WS handler error for %s", event_type)
 
     async def listen(self) -> None:
         """Main message loop — reads and dispatches messages until closed."""

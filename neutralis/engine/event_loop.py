@@ -60,6 +60,7 @@ from neutralis.venues.polymarket_ws import PolymarketWebSocket
 logger = get_logger("event_engine")
 
 _TRADE_FLOW_WINDOW_SEC = 300.0  # 5-minute sliding window
+_SIGNAL_COOLDOWN_SEC = 30.0  # Don't re-fire the same signal within this window
 
 
 @dataclass
@@ -90,6 +91,8 @@ class _LiveState:
     settings: Settings
     # Trade flow tracking
     trade_flow: dict[str, TradeFlowStats] = field(default_factory=dict)
+    # Signal cooldown: ticker -> monotonic timestamp of last signal dispatch
+    signal_cooldown: dict[str, float] = field(default_factory=dict)
     # Counters
     ticker_updates: int = 0
     arb_checks: int = 0
@@ -582,6 +585,19 @@ class EventEngine:
 
     # ── Fast arb detection ─────────────────────────────────────────────
 
+    def _signal_on_cooldown(self, state: _LiveState, ticker: str, signal_type: str) -> bool:
+        """Check if a signal for this ticker was recently dispatched.
+
+        Returns True if the signal should be suppressed (still in cooldown).
+        """
+        key = f"{signal_type}:{ticker}"
+        now = time.monotonic()
+        last = state.signal_cooldown.get(key, 0.0)
+        if now - last < _SIGNAL_COOLDOWN_SEC:
+            return True
+        state.signal_cooldown[key] = now
+        return False
+
     async def _fast_arb_check(self, ticker: str, market: NormalizedMarket) -> None:
         """Ultra-fast arb check triggered by every ticker update.
 
@@ -590,6 +606,7 @@ class EventEngine:
         2. Cross-platform: compare vs stored Polymarket price
 
         If either triggers, dispatch to the execution pipeline (runs in thread pool).
+        Signals are deduplicated per ticker with a 30s cooldown.
         """
         state = self._state
         if state is None:
@@ -606,18 +623,18 @@ class EventEngine:
                 if net_edge > 0:
                     edge_pct = (net_edge / combined) * 100.0
                     if edge_pct >= cfg.min_edge_pct:
-                        logger.info(
-                            "RT complement arb: %s yes=%.4f no=%.4f edge=%.2f%%",
-                            ticker, market.yes_ask, market.no_ask, edge_pct,
-                        )
-                        state.signals_detected += 1
-                        # Dispatch to thread pool for scoring + execution
-                        loop = asyncio.get_event_loop()
-                        loop.run_in_executor(
-                            self._executor_pool,
-                            self._execute_complement_arb,
-                            ticker, market, net_edge, edge_pct,
-                        )
+                        if not self._signal_on_cooldown(state, ticker, "complement"):
+                            logger.info(
+                                "RT complement arb: %s yes=%.4f no=%.4f edge=%.2f%%",
+                                ticker, market.yes_ask, market.no_ask, edge_pct,
+                            )
+                            state.signals_detected += 1
+                            loop = asyncio.get_event_loop()
+                            loop.run_in_executor(
+                                self._executor_pool,
+                                self._execute_complement_arb,
+                                ticker, market, net_edge, edge_pct,
+                            )
 
         # ── Check 2: Cross-platform arb ──
         pair_info = state.xp_pairs.get(ticker)
@@ -651,19 +668,20 @@ class EventEngine:
                             if net_edge > 0:
                                 edge_pct = (net_edge / combined) * 100.0
                                 if edge_pct >= cfg.min_edge_pct:
-                                    logger.info(
-                                        "RT cross-platform arb: %s K=%.4f P=%.4f edge=%.2f%% (buy YES on %s)",
-                                        ticker, k_yes, p_yes, edge_pct, yes_venue,
-                                    )
-                                    state.signals_detected += 1
-                                    loop = asyncio.get_event_loop()
-                                    loop.run_in_executor(
-                                        self._executor_pool,
-                                        self._execute_xp_arb,
-                                        ticker, market, poly_market,
-                                        pair.similarity, net_edge, edge_pct,
-                                        yes_venue, no_venue,
-                                    )
+                                    if not self._signal_on_cooldown(state, ticker, "xp"):
+                                        logger.info(
+                                            "RT cross-platform arb: %s K=%.4f P=%.4f edge=%.2f%% (buy YES on %s)",
+                                            ticker, k_yes, p_yes, edge_pct, yes_venue,
+                                        )
+                                        state.signals_detected += 1
+                                        loop = asyncio.get_event_loop()
+                                        loop.run_in_executor(
+                                            self._executor_pool,
+                                            self._execute_xp_arb,
+                                            ticker, market, poly_market,
+                                            pair.similarity, net_edge, edge_pct,
+                                            yes_venue, no_venue,
+                                        )
 
     # ── Execution (runs in thread pool) ────────────────────────────────
 
