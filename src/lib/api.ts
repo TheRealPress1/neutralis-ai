@@ -228,6 +228,7 @@ export async function connectPolymarket(
   walletAddress: string,
   signature: string,
   message: string,
+  userId: string,
 ): Promise<{ connected: boolean; wallet_address: string }> {
   const url = new URL("/api/polymarket/connect", API_BASE);
   const res = await fetch(url.toString(), {
@@ -237,14 +238,17 @@ export async function connectPolymarket(
       wallet_address: walletAddress,
       signature,
       message,
+      user_id: userId,
     }),
   });
   if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
   return res.json() as Promise<{ connected: boolean; wallet_address: string }>;
 }
 
-export function fetchPolymarketStatus() {
-  return apiFetch<PolymarketConnectionStatus>("/api/polymarket/status");
+export function fetchPolymarketStatus(userId: string) {
+  return apiFetch<PolymarketConnectionStatus>("/api/polymarket/status", {
+    user_id: userId,
+  });
 }
 
 export async function storePolymarketCreds(
@@ -252,6 +256,7 @@ export async function storePolymarketCreds(
   apiKey: string,
   apiSecret: string,
   passphrase: string,
+  userId: string,
 ): Promise<{ stored: boolean }> {
   const url = new URL("/api/polymarket/credentials", API_BASE);
   const res = await fetch(url.toString(), {
@@ -262,6 +267,7 @@ export async function storePolymarketCreds(
       api_key: apiKey,
       api_secret: apiSecret,
       passphrase: passphrase,
+      user_id: userId,
     }),
   });
   if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);

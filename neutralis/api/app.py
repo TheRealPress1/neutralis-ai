@@ -296,6 +296,7 @@ class PolymarketConnectRequest(BaseModel):
     wallet_address: str
     signature: str
     message: str
+    user_id: str
 
 
 class PolymarketCredsRequest(BaseModel):
@@ -303,12 +304,16 @@ class PolymarketCredsRequest(BaseModel):
     api_key: str
     api_secret: str
     passphrase: str
+    user_id: str
 
 
 @app.post("/api/polymarket/connect")
 def connect_polymarket(req: PolymarketConnectRequest):
     from eth_account.messages import encode_defunct
     from eth_account import Account
+
+    if not req.user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
 
     try:
         msg = encode_defunct(text=req.message)
@@ -323,14 +328,16 @@ def connect_polymarket(req: PolymarketConnectRequest):
         )
 
     storage = _get_storage()
-    row_id = storage.upsert_polymarket_connection(req.wallet_address.lower())
+    row_id = storage.upsert_polymarket_connection(
+        req.wallet_address.lower(), req.user_id,
+    )
     return {"connected": True, "wallet_address": req.wallet_address.lower(), "id": row_id}
 
 
 @app.get("/api/polymarket/status")
-def polymarket_status():
+def polymarket_status(user_id: str = Query(...)):
     storage = _get_storage()
-    conn = storage.get_polymarket_connection()
+    conn = storage.get_polymarket_connection(user_id)
     if conn is None:
         return {"connected": False, "wallet_address": None, "has_l2_creds": False}
     return {
@@ -344,8 +351,11 @@ def polymarket_status():
 def store_polymarket_credentials(req: PolymarketCredsRequest):
     from neutralis.services.credential_store import encrypt
 
+    if not req.user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+
     storage = _get_storage()
-    conn = storage.get_polymarket_connection()
+    conn = storage.get_polymarket_connection(req.user_id)
     if conn is None or conn["wallet_address"] != req.wallet_address.lower():
         raise HTTPException(
             status_code=400,
@@ -354,6 +364,7 @@ def store_polymarket_credentials(req: PolymarketCredsRequest):
 
     storage.update_polymarket_l2_creds(
         wallet_address=req.wallet_address.lower(),
+        user_id=req.user_id,
         api_key_enc=encrypt(req.api_key),
         api_secret_enc=encrypt(req.api_secret),
         passphrase_enc=encrypt(req.passphrase),

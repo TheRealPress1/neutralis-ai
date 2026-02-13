@@ -8,6 +8,7 @@ import {
   fetchPolymarketStatus,
   storePolymarketCreds,
 } from "@/lib/api";
+import { createClient } from "@/lib/supabase/client";
 
 const SIGN_MESSAGE =
   "Authorize Neutralis to connect to Polymarket CLOB (no gas, no transaction)";
@@ -18,6 +19,7 @@ export default function ConnectionsPanel() {
   const { disconnect } = useDisconnect();
   const { signMessageAsync } = useSignMessage();
 
+  const [userId, setUserId] = useState<string | null>(null);
   const [status, setStatus] = useState<PolymarketConnectionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
@@ -31,28 +33,36 @@ export default function ConnectionsPanel() {
   const [savingCreds, setSavingCreds] = useState(false);
   const [credsSaved, setCredsSaved] = useState(false);
 
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? null);
+    });
+  }, []);
+
   const loadStatus = useCallback(async () => {
+    if (!userId) return;
     try {
-      const s = await fetchPolymarketStatus();
+      const s = await fetchPolymarketStatus(userId);
       setStatus(s);
     } catch {
       // Backend might not be running; that's OK
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
-    loadStatus();
-  }, [loadStatus]);
+    if (userId) loadStatus();
+  }, [userId, loadStatus]);
 
   async function handleConnect() {
-    if (!walletConnected || !address) return;
+    if (!walletConnected || !address || !userId) return;
     setConnecting(true);
     setError(null);
     try {
       const signature = await signMessageAsync({ message: SIGN_MESSAGE });
-      await connectPolymarket(address, signature, SIGN_MESSAGE);
+      await connectPolymarket(address, signature, SIGN_MESSAGE, userId);
       await loadStatus();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Connection failed");
@@ -62,7 +72,7 @@ export default function ConnectionsPanel() {
   }
 
   async function handleSaveCreds() {
-    if (!status?.wallet_address) return;
+    if (!status?.wallet_address || !userId) return;
     setSavingCreds(true);
     setError(null);
     try {
@@ -71,6 +81,7 @@ export default function ConnectionsPanel() {
         apiKey,
         apiSecret,
         passphrase,
+        userId,
       );
       setCredsSaved(true);
       setApiKey("");

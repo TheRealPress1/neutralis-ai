@@ -1266,19 +1266,19 @@ class PostgresStorage:
 
     # -- Polymarket credentials --
 
-    def upsert_polymarket_connection(self, wallet_address: str) -> int:
+    def upsert_polymarket_connection(self, wallet_address: str, user_id: str) -> int:
         """Insert or update a polymarket wallet connection. Returns row id."""
         conn = self._ensure_connected()
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO polymarket_credentials (wallet_address)
-                VALUES (%(wallet_address)s)
-                ON CONFLICT (wallet_address) DO UPDATE
+                INSERT INTO polymarket_credentials (wallet_address, user_id)
+                VALUES (%(wallet_address)s, %(user_id)s)
+                ON CONFLICT (user_id, wallet_address) DO UPDATE
                     SET updated_at = now()
                 RETURNING id
                 """,
-                {"wallet_address": wallet_address},
+                {"wallet_address": wallet_address, "user_id": user_id},
             )
             row = cur.fetchone()
             assert row is not None
@@ -1286,17 +1286,20 @@ class PostgresStorage:
         conn.commit()
         return row_id
 
-    def get_polymarket_connection(self) -> dict | None:
-        """Return the most recent polymarket connection, or None."""
+    def get_polymarket_connection(self, user_id: str) -> dict | None:
+        """Return the polymarket connection for a user, or None."""
         rows = self._fetch_dicts(
             "SELECT * FROM polymarket_credentials "
-            "ORDER BY updated_at DESC LIMIT 1"
+            "WHERE user_id = %(user_id)s "
+            "ORDER BY updated_at DESC LIMIT 1",
+            {"user_id": user_id},
         )
         return rows[0] if rows else None
 
     def update_polymarket_l2_creds(
         self,
         wallet_address: str,
+        user_id: str,
         api_key_enc: str,
         api_secret_enc: str,
         passphrase_enc: str,
@@ -1312,9 +1315,11 @@ class PostgresStorage:
                     passphrase_enc = %(passphrase_enc)s,
                     updated_at = now()
                 WHERE wallet_address = %(wallet_address)s
+                  AND user_id = %(user_id)s
                 """,
                 {
                     "wallet_address": wallet_address,
+                    "user_id": user_id,
                     "api_key_enc": api_key_enc,
                     "api_secret_enc": api_secret_enc,
                     "passphrase_enc": passphrase_enc,

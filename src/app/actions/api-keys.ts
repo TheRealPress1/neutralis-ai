@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { encrypt, decrypt } from "@/lib/encryption";
 
 export interface ApiKeyData {
   platform: "kalshi" | "polymarket";
@@ -22,8 +23,10 @@ export async function saveApiKeys(keys: ApiKeyData[]) {
         user_id: user.id,
         platform: key.platform,
         api_key_id: key.api_key_id,
-        api_secret: key.api_secret,
-        private_key_pem: key.private_key_pem,
+        api_secret: key.api_secret ? encrypt(key.api_secret) : "",
+        private_key_pem: key.private_key_pem
+          ? encrypt(key.private_key_pem)
+          : "",
         is_valid: true,
       },
       { onConflict: "user_id,platform" },
@@ -32,6 +35,16 @@ export async function saveApiKeys(keys: ApiKeyData[]) {
   }
 
   return { success: true };
+}
+
+function tryDecrypt(value: string): string {
+  if (!value) return value;
+  try {
+    return decrypt(value);
+  } catch {
+    // Value may be legacy plaintext — return as-is
+    return value;
+  }
 }
 
 export async function getApiKeys() {
@@ -49,7 +62,14 @@ export async function getApiKeys() {
     .eq("user_id", user.id);
 
   if (error) return { error: error.message, keys: [] };
-  return { keys: data ?? [] };
+
+  const decrypted = (data ?? []).map((row) => ({
+    ...row,
+    api_secret: tryDecrypt(row.api_secret),
+    private_key_pem: tryDecrypt(row.private_key_pem),
+  }));
+
+  return { keys: decrypted };
 }
 
 export async function deleteApiKey(platform: string) {
