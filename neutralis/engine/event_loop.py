@@ -19,8 +19,9 @@ from __future__ import annotations
 import asyncio
 import math
 import time
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Any
 
@@ -54,8 +55,23 @@ from neutralis.venues.kalshi_ws import KalshiWebSocket
 from neutralis.venues.market_cache import MarketCache
 from neutralis.venues.polymarket_client import PolymarketClient
 from neutralis.venues.polymarket_normalize import normalize_market as poly_normalize
+from neutralis.venues.polymarket_ws import PolymarketWebSocket
 
 logger = get_logger("event_engine")
+
+_TRADE_FLOW_WINDOW_SEC = 300.0  # 5-minute sliding window
+
+
+@dataclass
+class TradeFlowStats:
+    """Sliding-window trade flow stats for a single ticker."""
+    ticker: str
+    # (monotonic_ts, price_cents, count, taker_side)
+    recent_trades: deque = field(default_factory=deque)
+    total_volume_5m: int = 0
+    buy_volume_5m: int = 0
+    sell_volume_5m: int = 0
+    last_trade_ts: float = 0.0
 
 
 @dataclass
@@ -72,6 +88,8 @@ class _LiveState:
     poly_to_kalshi: dict[str, str]
     # Settings
     settings: Settings
+    # Trade flow tracking
+    trade_flow: dict[str, TradeFlowStats] = field(default_factory=dict)
     # Counters
     ticker_updates: int = 0
     arb_checks: int = 0
@@ -100,12 +118,18 @@ class EventEngine:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._ws_cfg = settings.websocket
+        self._poly_ws_cfg = settings.polymarket_ws
         self._ws: KalshiWebSocket | None = None
+        self._poly_ws: PolymarketWebSocket | None = None
         self._state: _LiveState | None = None
         self._executor_pool = ThreadPoolExecutor(max_workers=4)
         self._market_cache = MarketCache()
         self._running = False
         self._tasks: list[asyncio.Task] = []
+        # Polymarket asset_id -> NormalizedMarket mapping (for WS price updates)
+        self._asset_id_to_poly: dict[str, NormalizedMarket] = {}
+        # poly_ticker -> list of asset_ids (for subscription management)
+        self._poly_ticker_to_assets: dict[str, list[str]] = {}
 
     async def start(self) -> None:
         """Initialize state, connect WS, and start all tasks."""
@@ -130,6 +154,7 @@ class EventEngine:
         self._ws.on("ticker", self._on_ticker)
         self._ws.on("fill", self._on_fill)
         self._ws.on("trade", self._on_trade)
+        self._ws.on("market_lifecycle_v2", self._on_lifecycle)
 
         await self._ws.connect()
 
@@ -146,9 +171,34 @@ class EventEngine:
                 await self._ws.subscribe_ticker(batch)
 
         await self._ws.subscribe_fills()
+        await self._ws.subscribe_trades()
         await self._ws.subscribe_lifecycle()
 
-        # Step 4: Start periodic tasks
+        # Step 4: Connect Polymarket WebSocket for real-time cross-platform prices
+        self._build_poly_asset_mappings(state)
+        if self._poly_ws_cfg.enabled and self._asset_id_to_poly:
+            asset_ids = list(self._asset_id_to_poly.keys())
+            # Cap subscriptions
+            if len(asset_ids) > self._poly_ws_cfg.max_subscriptions:
+                asset_ids = asset_ids[: self._poly_ws_cfg.max_subscriptions]
+            self._poly_ws = PolymarketWebSocket(
+                ws_url=self._poly_ws_cfg.ws_url,
+                reconnect_delay_sec=self._poly_ws_cfg.reconnect_delay_sec,
+                max_reconnect_delay_sec=self._poly_ws_cfg.max_reconnect_delay_sec,
+            )
+            self._poly_ws.on("price_change", self._on_poly_price_change)
+            try:
+                await self._poly_ws.connect()
+                await self._poly_ws.subscribe_markets(asset_ids)
+                logger.info(
+                    "Polymarket WS connected: %d assets subscribed for %d XP pairs",
+                    len(asset_ids), len(state.xp_pairs),
+                )
+            except Exception:
+                logger.warning("Failed to connect Polymarket WS, falling back to REST polling", exc_info=True)
+                self._poly_ws = None
+
+        # Step 5: Start periodic tasks
         self._running = True
         self._tasks = [
             asyncio.create_task(self._ws.listen(), name="ws_listen"),
@@ -157,10 +207,16 @@ class EventEngine:
             asyncio.create_task(self._periodic_refresh(), name="refresh"),
             asyncio.create_task(self._periodic_poly_refresh(), name="poly_refresh"),
         ]
+        if self._poly_ws:
+            self._tasks.append(
+                asyncio.create_task(self._poly_ws.listen(), name="poly_ws_listen")
+            )
 
         logger.info(
-            "EventEngine running — %d WS subscriptions, %d periodic tasks",
-            len(focus_tickers), len(self._tasks) - 1,
+            "EventEngine running — %d Kalshi WS subs, %s Poly WS, %d periodic tasks",
+            len(focus_tickers),
+            f"{self._poly_ws.subscribed_count} assets" if self._poly_ws else "REST-only",
+            len(self._tasks) - (2 if self._poly_ws else 1),
         )
 
     async def run_until_stopped(self) -> None:
@@ -172,17 +228,28 @@ class EventEngine:
             for task in done:
                 if task.exception():
                     logger.error("Task %s failed: %s", task.get_name(), task.exception())
-            # If WS listener dies, restart it
+            # If WS listeners die, restart them
+            restarted = False
             for task in done:
                 if task.get_name() == "ws_listen" and self._running:
-                    logger.warning("WS listener died, restarting")
+                    logger.warning("Kalshi WS listener died, restarting")
                     self._tasks.remove(task)
                     ws_task = asyncio.create_task(
                         self._ws.run_forever(), name="ws_listen",
                     )
                     self._tasks.append(ws_task)
-                    await self.run_until_stopped()
-                    return
+                    restarted = True
+                elif task.get_name() == "poly_ws_listen" and self._running and self._poly_ws:
+                    logger.warning("Polymarket WS listener died, restarting")
+                    self._tasks.remove(task)
+                    poly_ws_task = asyncio.create_task(
+                        self._poly_ws.run_forever(), name="poly_ws_listen",
+                    )
+                    self._tasks.append(poly_ws_task)
+                    restarted = True
+            if restarted:
+                await self.run_until_stopped()
+                return
         except asyncio.CancelledError:
             pass
 
@@ -193,6 +260,8 @@ class EventEngine:
             task.cancel()
         if self._ws:
             await self._ws.close()
+        if self._poly_ws:
+            await self._poly_ws.close()
         self._executor_pool.shutdown(wait=False)
         logger.info(
             "EventEngine stopped — %d ticker updates, %d arb checks, %d signals, %d orders",
@@ -296,6 +365,27 @@ class EventEngine:
 
         return focus
 
+    def _build_poly_asset_mappings(self, state: _LiveState) -> None:
+        """Build asset_id -> NormalizedMarket mappings for Polymarket WS.
+
+        Only maps assets for markets that have cross-platform Kalshi counterparts.
+        """
+        self._asset_id_to_poly.clear()
+        self._poly_ticker_to_assets.clear()
+
+        for kalshi_ticker, (pair, poly_ticker) in state.xp_pairs.items():
+            pm = pair.polymarket_market
+            if pm.clob_token_ids:
+                asset_list = list(pm.clob_token_ids)
+                self._poly_ticker_to_assets[pm.ticker] = asset_list
+                for asset_id in asset_list:
+                    self._asset_id_to_poly[asset_id] = pm
+
+        logger.info(
+            "Polymarket asset mappings: %d assets across %d paired markets",
+            len(self._asset_id_to_poly), len(self._poly_ticker_to_assets),
+        )
+
     # ── WebSocket message handlers ─────────────────────────────────────
 
     async def _on_ticker(self, msg: dict[str, Any]) -> None:
@@ -354,8 +444,141 @@ class EventEngine:
         )
 
     async def _on_trade(self, msg: dict[str, Any]) -> None:
-        """Handle public trade notification — useful for volume tracking."""
-        pass  # Future: update volume metrics
+        """Handle public trade notification — track per-ticker volume and flow."""
+        state = self._state
+        if state is None:
+            return
+
+        ticker = msg.get("market_ticker", "")
+        if not ticker:
+            return
+
+        count = msg.get("count", 0)
+        if not count:
+            return
+
+        side = msg.get("taker_side", "")
+        price = msg.get("yes_price", 0)
+        ts = time.monotonic()
+
+        stats = state.trade_flow.get(ticker)
+        if stats is None:
+            stats = TradeFlowStats(ticker=ticker)
+            state.trade_flow[ticker] = stats
+
+        stats.recent_trades.append((ts, price, count, side))
+        stats.total_volume_5m += count
+        if side == "yes":
+            stats.buy_volume_5m += count
+        elif side == "no":
+            stats.sell_volume_5m += count
+        stats.last_trade_ts = ts
+
+        # Prune trades older than 5 minutes
+        cutoff = ts - _TRADE_FLOW_WINDOW_SEC
+        while stats.recent_trades and stats.recent_trades[0][0] < cutoff:
+            old_ts, _old_p, old_count, old_side = stats.recent_trades.popleft()
+            stats.total_volume_5m -= old_count
+            if old_side == "yes":
+                stats.buy_volume_5m -= old_count
+            elif old_side == "no":
+                stats.sell_volume_5m -= old_count
+
+    async def _on_lifecycle(self, msg: dict[str, Any]) -> None:
+        """Handle market lifecycle events — remove settled/closed markets from state."""
+        state = self._state
+        if state is None:
+            return
+
+        ticker = msg.get("market_ticker", "")
+        new_status = msg.get("status", "")
+        if not ticker:
+            return
+
+        if new_status in ("closed", "determined", "finalized"):
+            # Remove from live state
+            removed_market = state.kalshi_markets.pop(ticker, None)
+            state.kalshi_raw.pop(ticker, None)
+            state.trade_flow.pop(ticker, None)
+
+            # Remove from cross-platform pairs
+            pair_info = state.xp_pairs.pop(ticker, None)
+            if pair_info:
+                _, poly_ticker = pair_info
+                state.poly_to_kalshi.pop(poly_ticker, None)
+
+            # Remove from market cache
+            self._market_cache.remove(ticker)
+
+            # Unsubscribe from WS ticker channel to free subscription slot
+            if self._ws and ticker in self._ws._subscribed_tickers:
+                try:
+                    await self._ws.update_subscription("ticker", remove_tickers=[ticker])
+                except Exception:
+                    logger.debug("Failed to unsubscribe settled ticker %s", ticker)
+
+            logger.info(
+                "Lifecycle: %s -> %s (removed from state%s)",
+                ticker, new_status,
+                ", was XP-paired" if pair_info else "",
+            )
+
+    # ── Polymarket WebSocket handlers ──────────────────────────────────
+
+    async def _on_poly_price_change(self, msg: dict[str, Any]) -> None:
+        """Handle Polymarket CLOB price update — update cached prices and trigger arb check.
+
+        Message format:
+            {"event_type": "price_change", "market": "0x...",
+             "price_changes": [{"asset_id": "...", "best_bid": "0.55", "best_ask": "0.57", ...}],
+             "timestamp": ...}
+        """
+        state = self._state
+        if state is None:
+            return
+
+        price_changes = msg.get("price_changes", [])
+        for pc in price_changes:
+            asset_id = pc.get("asset_id", "")
+            if not asset_id:
+                continue
+
+            nm = self._asset_id_to_poly.get(asset_id)
+            if nm is None:
+                continue
+
+            best_bid_str = pc.get("best_bid")
+            best_ask_str = pc.get("best_ask")
+
+            if not best_bid_str or not best_ask_str:
+                continue
+
+            try:
+                best_bid = float(best_bid_str)
+                best_ask = float(best_ask_str)
+            except (ValueError, TypeError):
+                continue
+
+            if best_bid <= 0 or best_ask <= 0 or best_ask >= 1.0:
+                continue
+
+            # Update the cached Polymarket market with fresh bid/ask
+            updated = replace(
+                nm,
+                yes_bid=best_bid,
+                yes_ask=best_ask,
+                no_bid=round(1.0 - best_ask, 4),
+                no_ask=round(1.0 - best_bid, 4),
+            )
+            state.poly_markets[nm.ticker] = updated
+            self._asset_id_to_poly[asset_id] = updated
+
+            # Trigger cross-platform arb check on the Kalshi side
+            kalshi_ticker = state.poly_to_kalshi.get(nm.ticker)
+            if kalshi_ticker:
+                kalshi_market = state.kalshi_markets.get(kalshi_ticker)
+                if kalshi_market:
+                    await self._fast_arb_check(kalshi_ticker, kalshi_market)
 
     # ── Fast arb detection ─────────────────────────────────────────────
 
@@ -797,12 +1020,27 @@ class EventEngine:
         return state
 
     async def _periodic_poly_refresh(self) -> None:
-        """Refresh Polymarket prices every 2 min for cross-platform arb accuracy."""
+        """Refresh Polymarket markets every 2 min — discover new matches and update WS subs."""
         while self._running:
             await asyncio.sleep(120.0)
             try:
                 loop = asyncio.get_event_loop()
+                old_asset_ids = set(self._asset_id_to_poly.keys())
+
                 await loop.run_in_executor(self._executor_pool, self._refresh_poly)
+
+                # Update Polymarket WS subscriptions if pairs changed
+                if self._poly_ws and self._poly_ws.is_connected:
+                    new_asset_ids = set(self._asset_id_to_poly.keys())
+                    to_add = list(new_asset_ids - old_asset_ids)
+                    to_remove = list(old_asset_ids - new_asset_ids)
+                    if to_add:
+                        await self._poly_ws.update_subscription(add_ids=to_add)
+                        logger.info("Poly WS: added %d asset subscriptions", len(to_add))
+                    if to_remove:
+                        await self._poly_ws.update_subscription(remove_ids=to_remove)
+                        logger.info("Poly WS: removed %d asset subscriptions", len(to_remove))
+
             except Exception:
                 logger.exception("Polymarket refresh failed")
 
@@ -837,6 +1075,10 @@ class EventEngine:
 
         state.xp_pairs = xp_pairs
         state.poly_to_kalshi = poly_to_kalshi
+
+        # Rebuild asset mappings for Poly WS
+        self._build_poly_asset_mappings(state)
+
         logger.info(
             "Polymarket refresh: %d markets, %d cross-platform pairs",
             len(poly_markets), len(xp_pairs),
@@ -846,13 +1088,23 @@ class EventEngine:
 
     def health_snapshot(self) -> dict[str, Any]:
         state = self._state
+        active_flow = 0
+        if state:
+            active_flow = sum(
+                1 for s in state.trade_flow.values() if s.total_volume_5m > 0
+            )
+        kalshi_ws_ok = self._ws and self._ws.is_connected
+        poly_ws_ok = self._poly_ws and self._poly_ws.is_connected
         return {
-            "status": "ok" if self._running and self._ws and self._ws.is_connected else "degraded",
-            "ws_connected": self._ws.is_connected if self._ws else False,
-            "ws_subscriptions": self._ws.subscribed_count if self._ws else 0,
+            "status": "ok" if self._running and kalshi_ws_ok else "degraded",
+            "kalshi_ws_connected": bool(kalshi_ws_ok),
+            "kalshi_ws_subscriptions": self._ws.subscribed_count if self._ws else 0,
+            "poly_ws_connected": bool(poly_ws_ok),
+            "poly_ws_subscriptions": self._poly_ws.subscribed_count if self._poly_ws else 0,
             "kalshi_markets": len(state.kalshi_markets) if state else 0,
             "poly_markets": len(state.poly_markets) if state else 0,
             "xp_pairs": len(state.xp_pairs) if state else 0,
+            "active_trade_flow_tickers": active_flow,
             "ticker_updates": state.ticker_updates if state else 0,
             "arb_checks": state.arb_checks if state else 0,
             "signals_detected": state.signals_detected if state else 0,

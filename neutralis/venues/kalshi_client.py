@@ -79,6 +79,7 @@ class KalshiClient:
         event_ticker: str | None = None,
         series_ticker: str | None = None,
         tickers: list[str] | None = None,
+        mve_filter: str | None = None,
     ) -> tuple[list[dict[str, Any]], Optional[str]]:
         """Fetch a page of markets. Returns (markets, next_cursor)."""
         params: dict[str, Any] = {"statuses": statuses}
@@ -91,6 +92,8 @@ class KalshiClient:
             params["series_ticker"] = series_ticker
         if tickers:
             params["tickers"] = ",".join(tickers)
+        if mve_filter:
+            params["mve_filter"] = mve_filter
 
         data = self._get(self._cfg.markets_path, params)
         markets = data.get("markets", [])
@@ -111,7 +114,9 @@ class KalshiClient:
         cursor: Optional[str] = None
         page = 0
         while True:
-            batch, cursor = self.get_markets(statuses="active", cursor=cursor)
+            batch, cursor = self.get_markets(
+                statuses="active", cursor=cursor, mve_filter="exclude",
+            )
             all_markets.extend(batch)
             page += 1
             if cursor is None:
@@ -163,6 +168,7 @@ class KalshiClient:
         while True:
             batch, cursor = self.get_markets(
                 statuses=statuses, series_ticker=series_ticker, cursor=cursor,
+                mve_filter="exclude",
             )
             all_markets.extend(batch)
             if cursor is None:

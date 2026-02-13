@@ -79,6 +79,9 @@ class NormalizedMarket:
 
     venue: str = "kalshi"
 
+    # Polymarket-specific: CLOB token IDs for WebSocket subscription
+    clob_token_ids: tuple[str, ...] = ()
+
     snapshot_ts: datetime = field(default_factory=datetime.now)
 
 

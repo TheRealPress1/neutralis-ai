@@ -103,6 +103,15 @@ def normalize_market(raw: dict[str, Any]) -> Optional[NormalizedMarket]:
     else:
         status = MarketStatus.INACTIVE
 
+    # Extract CLOB token IDs for WebSocket subscription
+    clob_token_ids_raw = raw.get("clobTokenIds")
+    if isinstance(clob_token_ids_raw, str):
+        try:
+            clob_token_ids_raw = json.loads(clob_token_ids_raw)
+        except (json.JSONDecodeError, TypeError):
+            clob_token_ids_raw = None
+    clob_token_ids = tuple(clob_token_ids_raw) if clob_token_ids_raw else ()
+
     return NormalizedMarket(
         ticker=str(ticker),
         event_ticker=raw.get("slug", ""),
@@ -121,4 +130,5 @@ def normalize_market(raw: dict[str, Any]) -> Optional[NormalizedMarket]:
         close_time=_parse_iso_dt(raw.get("endDate")),
         expected_expiration=_parse_iso_dt(raw.get("endDate")),
         venue="polymarket",
+        clob_token_ids=clob_token_ids,
     )

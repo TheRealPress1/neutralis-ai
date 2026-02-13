@@ -128,6 +128,8 @@ class MarketFilterConfig:
         # Soccer leagues
         "KXPREMIERLEAGUE", "KXUCL", "KXFACUP", "KXLALIGA",
         "KXBUNDESLIGA", "KXSERIEA", "KXLIGUE1",
+        # Tennis
+        "KXATPMATCH", "KXWTAMATCH",
         # Political
         "KXFEDCHAIRNOM",
     )
@@ -151,6 +153,18 @@ class WebSocketConfig:
     rest_refresh_interval_sec: float = 300.0
     # Max markets to subscribe to on WS (performance guard)
     max_ws_subscriptions: int = 2000
+
+
+@dataclass(frozen=True)
+class PolymarketWSConfig:
+    enabled: bool = field(
+        default_factory=lambda: os.environ.get("POLYMARKET_WS_ENABLED", "").lower()
+        in ("true", "1", "yes")
+    )
+    ws_url: str = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+    reconnect_delay_sec: float = 1.0
+    max_reconnect_delay_sec: float = 60.0
+    max_subscriptions: int = 500
 
 
 @dataclass(frozen=True)
@@ -192,6 +206,7 @@ class Settings:
     execution: ExecutionConfig = field(default_factory=ExecutionConfig)
     market_filter: MarketFilterConfig = field(default_factory=MarketFilterConfig)
     websocket: WebSocketConfig = field(default_factory=WebSocketConfig)
+    polymarket_ws: PolymarketWSConfig = field(default_factory=PolymarketWSConfig)
 
 
 def load_settings() -> Settings:
@@ -235,4 +250,5 @@ def load_settings_with_profile(storage: object) -> Settings:
         execution=base.execution,
         market_filter=base.market_filter,
         websocket=base.websocket,
+        polymarket_ws=base.polymarket_ws,
     )
