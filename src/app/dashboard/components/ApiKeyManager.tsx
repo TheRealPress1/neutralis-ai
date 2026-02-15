@@ -39,6 +39,7 @@ export default function ApiKeyManager() {
   const [kalshiPem, setKalshiPem] = useState("");
   const [polyKey, setPolyKey] = useState("");
   const [polySecret, setPolySecret] = useState("");
+  const [polyPassphrase, setPolyPassphrase] = useState("");
 
   async function load() {
     const result = await getApiKeys();
@@ -78,15 +79,15 @@ export default function ApiKeyManager() {
         private_key_pem: kalshiPem.trim(),
       });
     } else {
-      if (!polyKey || !polySecret) {
-        setError("Both API Key and API Secret are required.");
+      if (!polyKey || !polySecret || !polyPassphrase) {
+        setError("API Key, API Secret, and Passphrase are all required.");
         return;
       }
       keyData.push({
         platform: "polymarket",
         api_key_id: polyKey.trim(),
         api_secret: polySecret.trim(),
-        private_key_pem: "",
+        private_key_pem: polyPassphrase.trim(),
       });
     }
 
@@ -100,6 +101,7 @@ export default function ApiKeyManager() {
         setKalshiPem("");
         setPolyKey("");
         setPolySecret("");
+        setPolyPassphrase("");
         await load();
       }
     });
@@ -274,6 +276,9 @@ export default function ApiKeyManager() {
             <p className="text-xs text-[#a1a8b3]">
               Secret: <span className="text-[#e8e9ea]">configured</span>
             </p>
+            <p className="text-xs text-[#a1a8b3]">
+              Passphrase: <span className="text-[#e8e9ea]">configured</span>
+            </p>
             <div className="flex gap-2 mt-3">
               <button
                 onClick={() => setEditing("polymarket")}
@@ -293,6 +298,17 @@ export default function ApiKeyManager() {
         ) : (
           (editing === "polymarket" || !polymarketKey) && (
             <div className="mt-4 space-y-3">
+              <p className="text-xs text-[#9ca3af]">
+                Get your CLOB credentials from{" "}
+                <a
+                  href="https://polymarket.com/settings?tab=builder"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#e8e9ea] underline underline-offset-2 hover:text-white"
+                >
+                  polymarket.com &rarr; Profile &rarr; Builders &rarr; Builder Keys &rarr; Create New
+                </a>
+              </p>
               <div>
                 <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
                   API Key
@@ -302,7 +318,7 @@ export default function ApiKeyManager() {
                   value={polyKey}
                   onChange={(e) => setPolyKey(e.target.value)}
                   className={INPUT_CLASS}
-                  placeholder="Your Polymarket API key"
+                  placeholder="Your Polymarket CLOB API key"
                 />
               </div>
               <div>
@@ -314,7 +330,19 @@ export default function ApiKeyManager() {
                   value={polySecret}
                   onChange={(e) => setPolySecret(e.target.value)}
                   className={INPUT_CLASS}
-                  placeholder="Your Polymarket API secret"
+                  placeholder="Your Polymarket CLOB API secret"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+                  Passphrase
+                </label>
+                <input
+                  type="password"
+                  value={polyPassphrase}
+                  onChange={(e) => setPolyPassphrase(e.target.value)}
+                  className={INPUT_CLASS}
+                  placeholder="Your Polymarket CLOB passphrase"
                 />
               </div>
               <div className="flex gap-2 pt-1">
