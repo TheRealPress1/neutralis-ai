@@ -72,7 +72,7 @@ def evaluate_signal(
 
     # Phase 1: Market-level checks
     market_results: list[GuardResult] = [
-        check_min_edge(signal.edge_pct, cfg),
+        check_min_edge(signal.edge_pct, cfg, cross_platform=signal.cross_platform),
         check_liquidity(market, cfg),
         check_time_to_expiry(market, cfg),
         check_orderbook_depth(market),

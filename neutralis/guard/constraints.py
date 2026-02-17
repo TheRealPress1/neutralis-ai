@@ -10,18 +10,25 @@ from neutralis.config import PipelineConfig, PortfolioConfig
 from neutralis.models import GuardResult, NormalizedMarket, PortfolioSnapshot, Signal
 
 
-def check_min_edge(signal_edge_pct: float, config: PipelineConfig) -> GuardResult:
-    passed = signal_edge_pct >= config.min_edge_pct
+def check_min_edge(
+    signal_edge_pct: float,
+    config: PipelineConfig,
+    *,
+    cross_platform: bool = False,
+) -> GuardResult:
+    threshold = config.min_xp_edge_pct if cross_platform else config.min_edge_pct
+    passed = signal_edge_pct >= threshold
+    label = "xp_min" if cross_platform else "min"
     return GuardResult(
         guard_name="min_edge",
         passed=passed,
         reason=(
-            f"edge {signal_edge_pct:.2f}% >= min {config.min_edge_pct:.2f}%"
+            f"edge {signal_edge_pct:.2f}% >= {label} {threshold:.2f}%"
             if passed
-            else f"edge {signal_edge_pct:.2f}% < min {config.min_edge_pct:.2f}%"
+            else f"edge {signal_edge_pct:.2f}% < {label} {threshold:.2f}%"
         ),
         value=signal_edge_pct,
-        threshold=config.min_edge_pct,
+        threshold=threshold,
     )
 
 

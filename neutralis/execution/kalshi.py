@@ -117,8 +117,9 @@ class KalshiExecutor:
         price_cents: int,
         count: int,
         client_order_id: str | None = None,
+        time_in_force: str = "fill_or_kill",
     ) -> dict[str, Any]:
-        """Place a limit order with fill_or_kill.
+        """Place a limit order.
 
         Args:
             ticker: Market ticker (e.g. "KXBTC-25FEB14-T96750")
@@ -126,6 +127,7 @@ class KalshiExecutor:
             price_cents: Price in cents (1-99)
             count: Number of contracts (integer)
             client_order_id: Idempotency key (auto-generated if None)
+            time_in_force: "fill_or_kill" (taker, immediate) or "gtc" (maker, resting)
         """
         if client_order_id is None:
             client_order_id = uuid4().hex[:16]
@@ -139,7 +141,7 @@ class KalshiExecutor:
             "action": "buy",
             "type": "limit",
             "count": count,
-            "time_in_force": "fill_or_kill",
+            "time_in_force": time_in_force,
             "client_order_id": client_order_id,
         }
 

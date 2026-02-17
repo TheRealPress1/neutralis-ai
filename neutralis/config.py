@@ -56,10 +56,11 @@ class PipelineConfig:
     scan_interval_sec: float = 30.0
     min_edge_pct: float = 1.0
     min_liquidity_dollars: float = 50.0
-    max_time_to_expiry_hours: float = 720.0
+    max_time_to_expiry_hours: float = 43800.0  # ~5 years (tournament/political markets)
     min_time_to_expiry_hours: float = 1.0
     fee_rate: float = 0.07
     max_position_dollars: float = 25.0
+    min_xp_edge_pct: float = 0.05  # Cross-platform arb threshold (lower — one side is fee-free)
 
 
 @dataclass(frozen=True)
@@ -67,12 +68,12 @@ class PolymarketConfig:
     gamma_base_url: str = "https://gamma-api.polymarket.com"
     clob_base_url: str = "https://clob.polymarket.com"
     default_market_limit: int = 100
-    max_pages: int = 30
+    max_pages: int = 50
 
 
 @dataclass(frozen=True)
 class MatchingConfig:
-    min_similarity: float = 0.70
+    min_similarity: float = 0.65
     min_discrepancy_pct: float = 3.0
     min_token_overlap: int = 2
     weight_text: float = 0.50
@@ -113,8 +114,22 @@ class ExecutionConfig:
     kalshi_private_key_path: str = field(
         default_factory=lambda: os.environ.get("KALSHI_PRIVATE_KEY_PATH", "")
     )
+    # Polymarket CLOB execution credentials
+    polymarket_private_key: str = field(
+        default_factory=lambda: os.environ.get("POLYMARKET_PRIVATE_KEY", "")
+    )
+    polymarket_funder_address: str = field(
+        default_factory=lambda: os.environ.get("POLYMARKET_FUNDER_ADDRESS", "")
+    )
+    polymarket_signature_type: int = field(
+        default_factory=lambda: int(os.environ.get("POLYMARKET_SIGNATURE_TYPE", "0"))
+    )
     max_order_dollars: float = 50.0
     balance_floor_dollars: float = 25.0
+    # Maker order strategy — GTC limit orders for lower Kalshi fees (4x cheaper)
+    use_maker_orders: bool = True
+    maker_price_offset_cents: int = 1  # Post N cents inside the spread (bid + offset)
+    maker_fill_timeout_sec: float = 10.0  # Cancel unfilled GTC order after this
 
 
 @dataclass(frozen=True)
@@ -128,10 +143,13 @@ class MarketFilterConfig:
         # Soccer leagues
         "KXPREMIERLEAGUE", "KXUCL", "KXFACUP", "KXLALIGA",
         "KXBUNDESLIGA", "KXSERIEA", "KXLIGUE1",
+        "KXEUROPALEAGUE", "KXMLSWINNER",
         # Tennis
         "KXATPMATCH", "KXWTAMATCH",
+        # American sports
+        "KXNBA", "KXNFL",
         # Political
-        "KXFEDCHAIRNOM",
+        "KXFEDCHAIRNOM", "KXPRESPARTY",
     )
 
 

@@ -61,6 +61,8 @@ logger = get_logger("event_engine")
 
 _TRADE_FLOW_WINDOW_SEC = 300.0  # 5-minute sliding window
 _SIGNAL_COOLDOWN_SEC = 30.0  # Don't re-fire the same signal within this window
+_DISCREPANCY_COOLDOWN_SEC = 10.0  # Max one discrepancy observation per pair per 10s
+_DISCREPANCY_FLUSH_INTERVAL_SEC = 30.0  # Flush buffer to DB every 30s
 
 
 @dataclass
@@ -93,6 +95,10 @@ class _LiveState:
     trade_flow: dict[str, TradeFlowStats] = field(default_factory=dict)
     # Signal cooldown: ticker -> monotonic timestamp of last signal dispatch
     signal_cooldown: dict[str, float] = field(default_factory=dict)
+    # Discrepancy analytics buffer
+    discrepancy_buffer: list[dict] = field(default_factory=list)
+    discrepancy_last_observed: dict[str, float] = field(default_factory=dict)
+    discrepancy_total: int = 0
     # Counters
     ticker_updates: int = 0
     arb_checks: int = 0
@@ -209,6 +215,7 @@ class EventEngine:
             asyncio.create_task(self._periodic_mtm(), name="mtm"),
             asyncio.create_task(self._periodic_refresh(), name="refresh"),
             asyncio.create_task(self._periodic_poly_refresh(), name="poly_refresh"),
+            asyncio.create_task(self._periodic_flush_discrepancies(), name="discrepancy_flush"),
         ]
         if self._poly_ws:
             self._tasks.append(
@@ -436,7 +443,7 @@ class EventEngine:
             raw["no_ask_dollars"] = f"{no_ask:.4f}"
 
         # Fast arb checks
-        await self._fast_arb_check(ticker, updated)
+        await self._fast_arb_check(ticker, updated, trigger_source="kalshi_ws")
 
     async def _on_fill(self, msg: dict[str, Any]) -> None:
         """Handle a fill notification from Kalshi."""
@@ -581,7 +588,7 @@ class EventEngine:
             if kalshi_ticker:
                 kalshi_market = state.kalshi_markets.get(kalshi_ticker)
                 if kalshi_market:
-                    await self._fast_arb_check(kalshi_ticker, kalshi_market)
+                    await self._fast_arb_check(kalshi_ticker, kalshi_market, trigger_source="poly_ws")
 
     # ── Fast arb detection ─────────────────────────────────────────────
 
@@ -598,7 +605,10 @@ class EventEngine:
         state.signal_cooldown[key] = now
         return False
 
-    async def _fast_arb_check(self, ticker: str, market: NormalizedMarket) -> None:
+    async def _fast_arb_check(
+        self, ticker: str, market: NormalizedMarket,
+        trigger_source: str = "kalshi_ws",
+    ) -> None:
         """Ultra-fast arb check triggered by every ticker update.
 
         Two checks in <1ms:
@@ -613,6 +623,14 @@ class EventEngine:
             return
         state.arb_checks += 1
         cfg = state.settings.pipeline
+
+        # Skip expired markets (close_time in the past)
+        exp = market.expected_expiration or market.close_time
+        if exp is not None:
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if exp < datetime.now(timezone.utc):
+                return
 
         # ── Check 1: Complement arb ──
         if market.yes_ask > 0 and market.no_ask > 0:
@@ -659,29 +677,57 @@ class EventEngine:
                     if other_no > 0:
                         combined = favored_yes + other_no
                         gross_edge = 1.0 - combined
-                        if gross_edge > 0:
-                            fee = estimate_cross_platform_fee(
-                                yes_price=favored_yes, yes_venue=yes_venue,
-                                no_price=other_no, no_venue=no_venue,
-                            )
-                            net_edge = gross_edge - fee
-                            if net_edge > 0:
-                                edge_pct = (net_edge / combined) * 100.0
-                                if edge_pct >= cfg.min_edge_pct:
-                                    if not self._signal_on_cooldown(state, ticker, "xp"):
-                                        logger.info(
-                                            "RT cross-platform arb: %s K=%.4f P=%.4f edge=%.2f%% (buy YES on %s)",
-                                            ticker, k_yes, p_yes, edge_pct, yes_venue,
-                                        )
-                                        state.signals_detected += 1
-                                        loop = asyncio.get_event_loop()
-                                        loop.run_in_executor(
-                                            self._executor_pool,
-                                            self._execute_xp_arb,
-                                            ticker, market, poly_market,
-                                            pair.similarity, net_edge, edge_pct,
-                                            yes_venue, no_venue,
-                                        )
+                        use_maker = state.settings.execution.use_maker_orders
+                        fee = estimate_cross_platform_fee(
+                            yes_price=favored_yes, yes_venue=yes_venue,
+                            no_price=other_no, no_venue=no_venue,
+                            maker=use_maker,
+                        )
+                        net_edge = gross_edge - fee
+                        edge_pct = (net_edge / combined) * 100.0 if combined > 0 else 0.0
+
+                        # Record discrepancy observation (rate-limited per pair)
+                        now = time.monotonic()
+                        obs_key = f"disc:{ticker}"
+                        last_obs = state.discrepancy_last_observed.get(obs_key, 0.0)
+                        if now - last_obs >= _DISCREPANCY_COOLDOWN_SEC:
+                            state.discrepancy_last_observed[obs_key] = now
+                            k_mid = (market.yes_bid + market.yes_ask) / 2.0
+                            p_mid = (poly_market.yes_bid + poly_market.yes_ask) / 2.0
+                            state.discrepancy_buffer.append({
+                                "kalshi_ticker": ticker,
+                                "poly_ticker": poly_ticker,
+                                "kalshi_yes_bid": market.yes_bid,
+                                "kalshi_yes_ask": market.yes_ask,
+                                "poly_yes_bid": poly_market.yes_bid,
+                                "poly_yes_ask": poly_market.yes_ask,
+                                "mid_discrepancy": round(abs(k_mid - p_mid), 6),
+                                "gross_edge": round(gross_edge, 6),
+                                "net_edge": round(net_edge, 6),
+                                "edge_pct": round(edge_pct, 4),
+                                "favored_venue": yes_venue,
+                                "match_confidence": pair.similarity,
+                                "trigger_source": trigger_source,
+                                "actionable": net_edge > 0 and edge_pct >= cfg.min_xp_edge_pct,
+                            })
+                            state.discrepancy_total += 1
+
+                        # Only dispatch signal if actionable
+                        if net_edge > 0 and edge_pct >= cfg.min_xp_edge_pct:
+                            if not self._signal_on_cooldown(state, ticker, "xp"):
+                                logger.info(
+                                    "RT cross-platform arb: %s K=%.4f P=%.4f edge=%.2f%% (buy YES on %s)",
+                                    ticker, k_yes, p_yes, edge_pct, yes_venue,
+                                )
+                                state.signals_detected += 1
+                                loop = asyncio.get_event_loop()
+                                loop.run_in_executor(
+                                    self._executor_pool,
+                                    self._execute_xp_arb,
+                                    ticker, market, poly_market,
+                                    pair.similarity, net_edge, edge_pct,
+                                    yes_venue, no_venue,
+                                )
 
     # ── Execution (runs in thread pool) ────────────────────────────────
 
@@ -854,7 +900,7 @@ class EventEngine:
 
                     # Try live execution
                     live_executed = False
-                    if settings.execution.live_trading_enabled and settings.execution.kalshi_api_key_id:
+                    if settings.execution.live_trading_enabled:
                         live_executed = self._try_live_execute(sig, dec, decision_id, settings, storage, portfolio)
 
                     if not live_executed:
@@ -881,18 +927,36 @@ class EventEngine:
         self, signal: Signal, decision: Decision, decision_id: int,
         settings: Settings, storage: PostgresStorage, portfolio: PortfolioManager,
     ) -> bool:
-        """Attempt live Kalshi order placement. Returns True if successful."""
+        """Attempt live order placement on Kalshi and/or Polymarket. Returns True if successful."""
+        kalshi_legs = [leg for leg in signal.legs if (leg.venue or "kalshi") == "kalshi"]
+        poly_legs = [leg for leg in signal.legs if leg.venue == "polymarket"]
+
+        # Cross-platform arb: both venues
+        if kalshi_legs and poly_legs and settings.execution.polymarket_private_key:
+            return self._execute_cross_platform_live(
+                signal, decision, decision_id, settings, storage, portfolio,
+                kalshi_legs, poly_legs,
+            )
+
+        # Single-venue Kalshi only (complement arb or Kalshi-only cross-platform)
+        if kalshi_legs and settings.execution.kalshi_api_key_id:
+            return self._execute_kalshi_live(
+                signal, decision, decision_id, settings, storage, portfolio,
+                kalshi_legs,
+            )
+
+        return False
+
+    def _execute_kalshi_live(
+        self, signal: Signal, decision: Decision, decision_id: int,
+        settings: Settings, storage: PostgresStorage, portfolio: PortfolioManager,
+        kalshi_legs: list[TradeLeg],
+    ) -> bool:
+        """Execute Kalshi-only legs. Returns True if all legs fill."""
         from neutralis.execution.kalshi import KalshiExecutor
 
         try:
             with KalshiExecutor(settings.kalshi, settings.execution) as executor:
-                kalshi_legs = [
-                    leg for leg in signal.legs
-                    if (leg.venue or "kalshi") == "kalshi"
-                ]
-                if not kalshi_legs:
-                    return False
-
                 results = []
                 for leg in kalshi_legs:
                     price_cents = max(1, min(99, round(leg.price_dollars * 100)))
@@ -918,7 +982,361 @@ class EventEngine:
                     )
                     return True
         except Exception:
-            logger.warning("Live execution failed for %s", signal.ticker, exc_info=True)
+            logger.warning("Kalshi live execution failed for %s", signal.ticker, exc_info=True)
+        return False
+
+    def _resolve_poly_token_id(self, poly_ticker: str, side: str) -> str | None:
+        """Get the CLOB token ID for a Polymarket leg.
+
+        For side='yes' (buying YES): use YES token (index 0) with BUY.
+        For side='no' (buying NO): use YES token (index 0) with SELL.
+        Returns the YES token ID in both cases — the caller adjusts the side.
+        """
+        state = self._state
+        if state is None:
+            return None
+        pm = state.poly_markets.get(poly_ticker)
+        if pm and pm.clob_token_ids:
+            return pm.clob_token_ids[0]  # Always use YES token
+        return None
+
+    def _compute_maker_price(
+        self, market: NormalizedMarket, leg: TradeLeg, offset_cents: int,
+    ) -> int:
+        """Compute a maker-friendly limit price inside the spread.
+
+        Posts above the best bid (so the order rests on the book as a maker).
+        Capped at ask-1 to avoid crossing the spread and becoming a taker.
+        """
+        if leg.side == "yes":
+            bid_cents = max(1, round(market.yes_bid * 100))
+            ask_cents = max(2, round(market.yes_ask * 100))
+        else:
+            bid_cents = max(1, round(market.no_bid * 100))
+            ask_cents = max(2, round(market.no_ask * 100))
+        return max(1, min(bid_cents + offset_cents, ask_cents - 1))
+
+    def _check_orderbook_depth(
+        self, ticker: str, side: str, price_dollars: float,
+        settings: Settings, min_depth_dollars: float = 10.0,
+    ) -> bool:
+        """Fetch Kalshi orderbook and verify sufficient depth at/better than expected price.
+
+        Returns True if depth is sufficient (or if check fails — fail open).
+        """
+        try:
+            with KalshiClient(settings.kalshi) as client:
+                ob_raw = client.get_orderbook(ticker, depth=5)
+
+            ob_fp = ob_raw.get("orderbook_fp", {})
+            if side == "yes":
+                levels = ob_fp.get("yes_dollars", [])
+            else:
+                levels = ob_fp.get("no_dollars", [])
+
+            if not levels:
+                logger.debug("No orderbook data for %s %s — passing through", ticker, side)
+                return True
+
+            # Sum depth at or better than our target price
+            available = 0.0
+            for level in levels:
+                if len(level) < 2:
+                    continue
+                level_price = float(level[0])
+                level_qty = float(level[1])
+                # For buying: we want levels at or below our price (asks)
+                if level_price <= price_dollars + 0.005:  # small tolerance
+                    available += level_qty
+
+            if available < min_depth_dollars:
+                logger.info(
+                    "Orderbook depth insufficient for %s %s: $%.2f available < $%.2f min",
+                    ticker, side, available, min_depth_dollars,
+                )
+                return False
+
+            logger.debug(
+                "Orderbook depth OK for %s %s: $%.2f available",
+                ticker, side, available,
+            )
+            return True
+        except Exception:
+            logger.debug("Orderbook depth check failed for %s — passing through", ticker, exc_info=True)
+            return True  # Fail open
+
+    def _execute_cross_platform_live(
+        self, signal: Signal, decision: Decision, decision_id: int,
+        settings: Settings, storage: PostgresStorage, portfolio: PortfolioManager,
+        kalshi_legs: list[TradeLeg], poly_legs: list[TradeLeg],
+    ) -> bool:
+        """Execute a cross-platform arb across Kalshi and Polymarket.
+
+        Two modes:
+        - Maker (use_maker_orders=True): Kalshi GTC first → poll → Poly FOK second
+          Kalshi posts a resting limit order (maker fee, 4x cheaper), then if filled
+          we immediately execute the Polymarket side.
+        - Taker (use_maker_orders=False): Poly FOK first → Kalshi FOK second
+          Original flow — execute riskier side first.
+        """
+        if settings.execution.use_maker_orders:
+            return self._execute_xp_maker(
+                signal, decision, decision_id, settings, storage, portfolio,
+                kalshi_legs, poly_legs,
+            )
+        return self._execute_xp_taker(
+            signal, decision, decision_id, settings, storage, portfolio,
+            kalshi_legs, poly_legs,
+        )
+
+    def _execute_xp_taker(
+        self, signal: Signal, decision: Decision, decision_id: int,
+        settings: Settings, storage: PostgresStorage, portfolio: PortfolioManager,
+        kalshi_legs: list[TradeLeg], poly_legs: list[TradeLeg],
+    ) -> bool:
+        """Taker flow: Polymarket FOK first, then Kalshi FOK."""
+        from neutralis.execution.kalshi import KalshiExecutor
+        from neutralis.execution.polymarket import PolymarketExecutor
+
+        poly_results = []
+        kalshi_results = []
+
+        # ── Step 1: Execute Polymarket leg(s) first (FOK) ──
+        try:
+            with PolymarketExecutor(settings.execution) as poly_exec:
+                for leg in poly_legs:
+                    token_id = self._resolve_poly_token_id(leg.ticker, leg.side)
+                    if not token_id:
+                        logger.warning(
+                            "No CLOB token ID for Polymarket ticker %s — skipping",
+                            leg.ticker,
+                        )
+                        return False
+
+                    if signal.combined_cost > 0:
+                        leg_frac = leg.price_dollars / signal.combined_cost
+                    else:
+                        leg_frac = 1.0 / max(len(signal.legs), 1)
+                    leg_dollars = decision.suggested_size_dollars * leg_frac
+                    leg_dollars = min(leg_dollars, settings.execution.max_order_dollars)
+
+                    poly_side = "BUY" if leg.side == "yes" else "SELL"
+                    resp = poly_exec.place_market_order(
+                        token_id=token_id, side=poly_side,
+                        amount=round(leg_dollars, 2),
+                    )
+                    if resp.get("success"):
+                        poly_results.append(resp)
+                    else:
+                        logger.warning(
+                            "Polymarket leg failed for %s: %s",
+                            signal.ticker, resp.get("errorMsg", "unknown"),
+                        )
+                        return False
+        except Exception:
+            logger.warning("Polymarket execution failed for %s", signal.ticker, exc_info=True)
+            return False
+
+        # ── Step 2: Kalshi FOK (with depth check) ──
+        for leg in kalshi_legs:
+            if not self._check_orderbook_depth(
+                leg.ticker, leg.side, leg.price_dollars, settings,
+            ):
+                logger.warning(
+                    "Insufficient Kalshi depth for %s %s @ $%.4f — aborting after Poly fill "
+                    "(one-legged position, exit strategies will manage)",
+                    leg.ticker, leg.side, leg.price_dollars,
+                )
+                return False
+
+        try:
+            with KalshiExecutor(settings.kalshi, settings.execution) as k_exec:
+                for leg in kalshi_legs:
+                    price_cents = max(1, min(99, round(leg.price_dollars * 100)))
+                    if signal.combined_cost > 0:
+                        leg_frac = leg.price_dollars / signal.combined_cost
+                    else:
+                        leg_frac = 1.0 / max(len(signal.legs), 1)
+                    leg_dollars = decision.suggested_size_dollars * leg_frac
+                    leg_dollars = min(leg_dollars, settings.execution.max_order_dollars)
+                    count = max(1, math.floor(leg_dollars / leg.price_dollars))
+
+                    resp = k_exec.place_order(leg.ticker, leg.side, price_cents, count)
+                    order = resp.get("order", {})
+                    if order.get("status") == "executed":
+                        kalshi_results.append(order)
+                    else:
+                        logger.warning(
+                            "Kalshi leg FAILED after Polymarket filled for %s — "
+                            "one-legged position (exit strategies will manage)",
+                            signal.ticker,
+                        )
+                        break
+        except Exception:
+            logger.warning(
+                "Kalshi execution failed after Polymarket filled for %s — "
+                "one-legged position", signal.ticker, exc_info=True,
+            )
+
+        # ── Step 3: Record fills ──
+        all_results = poly_results + kalshi_results
+        if all_results:
+            portfolio.record_fill(
+                signal, decision, decision_id,
+                is_paper=False, execution_results=all_results,
+            )
+            logger.info(
+                "Cross-platform taker: %s poly=%d kalshi=%d fills",
+                signal.ticker, len(poly_results), len(kalshi_results),
+            )
+            return True
+        return False
+
+    def _execute_xp_maker(
+        self, signal: Signal, decision: Decision, decision_id: int,
+        settings: Settings, storage: PostgresStorage, portfolio: PortfolioManager,
+        kalshi_legs: list[TradeLeg], poly_legs: list[TradeLeg],
+    ) -> bool:
+        """Maker flow: Kalshi GTC first (maker fee), poll for fill, then Poly FOK.
+
+        Execution order is reversed from taker flow because:
+        - Kalshi GTC rests on the book (patient, cheap — maker fee 4x lower)
+        - If Kalshi fills, immediately lock in the Poly side (FOK, zero fee)
+        - If Kalshi doesn't fill within timeout → cancel, no capital at risk
+        """
+        from neutralis.execution.kalshi import KalshiExecutor
+        from neutralis.execution.polymarket import PolymarketExecutor
+
+        kalshi_results = []
+        poly_results = []
+        k_market = signal.market_snapshot  # Kalshi NormalizedMarket with bid/ask data
+        if k_market is None:
+            return False
+
+        offset = settings.execution.maker_price_offset_cents
+        timeout = settings.execution.maker_fill_timeout_sec
+
+        # ── Step 0: Orderbook depth check before committing ──
+        for leg in kalshi_legs:
+            if not self._check_orderbook_depth(
+                leg.ticker, leg.side, leg.price_dollars, settings,
+            ):
+                logger.info(
+                    "Insufficient Kalshi depth for %s %s — skipping maker order",
+                    leg.ticker, leg.side,
+                )
+                return False
+
+        # ── Step 1: Kalshi GTC limit order (maker) ──
+        try:
+            with KalshiExecutor(settings.kalshi, settings.execution) as k_exec:
+                for leg in kalshi_legs:
+                    maker_price = self._compute_maker_price(k_market, leg, offset)
+                    if signal.combined_cost > 0:
+                        leg_frac = leg.price_dollars / signal.combined_cost
+                    else:
+                        leg_frac = 1.0 / max(len(signal.legs), 1)
+                    leg_dollars = decision.suggested_size_dollars * leg_frac
+                    leg_dollars = min(leg_dollars, settings.execution.max_order_dollars)
+                    count = max(1, math.floor(leg_dollars / (maker_price / 100.0)))
+
+                    resp = k_exec.place_order(
+                        leg.ticker, leg.side, maker_price, count,
+                        time_in_force="gtc",
+                    )
+                    order = resp.get("order", {})
+                    order_id = order.get("order_id", "")
+                    status = order.get("status", "")
+
+                    # May fill immediately if price crosses the spread
+                    if status == "executed":
+                        kalshi_results.append(order)
+                        continue
+
+                    if not order_id or status in ("canceled", "rejected"):
+                        logger.warning(
+                            "Kalshi maker order rejected for %s: status=%s",
+                            signal.ticker, status,
+                        )
+                        return False
+
+                    # Poll for fill
+                    filled = False
+                    deadline = time.monotonic() + timeout
+                    while time.monotonic() < deadline:
+                        time.sleep(0.5)
+                        check = k_exec.get_order(order_id)
+                        check_order = check.get("order", {})
+                        if check_order.get("status") == "executed":
+                            kalshi_results.append(check_order)
+                            filled = True
+                            break
+
+                    if not filled:
+                        # Cancel unfilled GTC order
+                        k_exec.cancel_order(order_id)
+                        logger.info(
+                            "Kalshi maker order unfilled after %.1fs, canceled for %s",
+                            timeout, signal.ticker,
+                        )
+                        return False
+
+        except Exception:
+            logger.warning("Kalshi maker execution failed for %s", signal.ticker, exc_info=True)
+            return False
+
+        # ── Step 2: Kalshi filled — immediately execute Poly FOK ──
+        try:
+            with PolymarketExecutor(settings.execution) as poly_exec:
+                for leg in poly_legs:
+                    token_id = self._resolve_poly_token_id(leg.ticker, leg.side)
+                    if not token_id:
+                        logger.warning(
+                            "No CLOB token ID for Polymarket ticker %s — "
+                            "one-legged position after Kalshi fill",
+                            leg.ticker,
+                        )
+                        break
+
+                    if signal.combined_cost > 0:
+                        leg_frac = leg.price_dollars / signal.combined_cost
+                    else:
+                        leg_frac = 1.0 / max(len(signal.legs), 1)
+                    leg_dollars = decision.suggested_size_dollars * leg_frac
+                    leg_dollars = min(leg_dollars, settings.execution.max_order_dollars)
+
+                    poly_side = "BUY" if leg.side == "yes" else "SELL"
+                    resp = poly_exec.place_market_order(
+                        token_id=token_id, side=poly_side,
+                        amount=round(leg_dollars, 2),
+                    )
+                    if resp.get("success"):
+                        poly_results.append(resp)
+                    else:
+                        logger.warning(
+                            "Polymarket leg FAILED after Kalshi maker filled for %s — "
+                            "one-legged position (exit strategies will manage)",
+                            signal.ticker,
+                        )
+                        break
+        except Exception:
+            logger.warning(
+                "Polymarket execution failed after Kalshi maker filled for %s — "
+                "one-legged position", signal.ticker, exc_info=True,
+            )
+
+        # ── Step 3: Record fills ──
+        all_results = kalshi_results + poly_results
+        if all_results:
+            portfolio.record_fill(
+                signal, decision, decision_id,
+                is_paper=False, execution_results=all_results,
+            )
+            logger.info(
+                "Cross-platform maker: %s kalshi=%d poly=%d fills",
+                signal.ticker, len(kalshi_results), len(poly_results),
+            )
+            return True
         return False
 
     # ── Periodic tasks ─────────────────────────────────────────────────
@@ -1102,6 +1520,42 @@ class EventEngine:
             len(poly_markets), len(xp_pairs),
         )
 
+    # ── Discrepancy flush ────────────────────────────────────────────
+
+    async def _periodic_flush_discrepancies(self) -> None:
+        """Flush discrepancy observations buffer to DB every 30s."""
+        while self._running:
+            await asyncio.sleep(_DISCREPANCY_FLUSH_INTERVAL_SEC)
+            try:
+                state = self._state
+                if state is None or not state.discrepancy_buffer:
+                    continue
+                # Swap buffer atomically
+                batch = state.discrepancy_buffer
+                state.discrepancy_buffer = []
+                # Write to DB in thread pool
+                loop = asyncio.get_event_loop()
+                count = await loop.run_in_executor(
+                    self._executor_pool, self._flush_discrepancies, batch,
+                )
+                if count > 0:
+                    logger.info("Flushed %d discrepancy observations to DB", count)
+            except Exception:
+                logger.exception("Discrepancy flush failed")
+
+    def _flush_discrepancies(self, batch: list[dict]) -> int:
+        """Write discrepancy batch to Postgres. Runs sync in thread pool."""
+        state = self._state
+        if state is None:
+            return 0
+        settings = state.settings
+        try:
+            with PostgresStorage(settings.db) as storage:
+                return storage.save_discrepancy_batch(batch)
+        except Exception:
+            logger.exception("Failed to save %d discrepancy rows", len(batch))
+            return 0
+
     # ── Health ─────────────────────────────────────────────────────────
 
     def health_snapshot(self) -> dict[str, Any]:
@@ -1127,4 +1581,6 @@ class EventEngine:
             "arb_checks": state.arb_checks if state else 0,
             "signals_detected": state.signals_detected if state else 0,
             "orders_placed": state.orders_placed if state else 0,
+            "discrepancy_observations": state.discrepancy_total if state else 0,
+            "discrepancy_buffer_size": len(state.discrepancy_buffer) if state else 0,
         }

@@ -99,15 +99,21 @@ def estimate_cross_platform_fee(
     no_price: float,
     no_venue: str,
     contracts: int = 1,
+    *,
+    maker: bool = False,
 ) -> float:
-    """Total estimated fee for a cross-platform arb (YES on one venue, NO on another)."""
+    """Total estimated fee for a cross-platform arb (YES on one venue, NO on another).
+
+    When maker=True, Kalshi legs use the maker fee rate (4x cheaper) assuming
+    we'll post GTC limit orders that rest on the book.
+    """
     if yes_venue == "kalshi":
-        yes_fee = kalshi_fee(yes_price, contracts)
+        yes_fee = kalshi_fee(yes_price, contracts, maker=maker)
     else:
         yes_fee = polymarket_fee(yes_price, contracts)
 
     if no_venue == "kalshi":
-        no_fee = kalshi_fee(no_price, contracts)
+        no_fee = kalshi_fee(no_price, contracts, maker=maker)
     else:
         no_fee = polymarket_fee(no_price, contracts)
 

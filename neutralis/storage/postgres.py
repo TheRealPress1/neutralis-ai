@@ -1445,6 +1445,107 @@ class PostgresStorage:
             {"limit": limit, "min_edge": min_edge},
         )
 
+    # -- Discrepancy analytics --
+
+    def save_discrepancy_batch(self, rows: list[dict]) -> int:
+        """Batch-insert discrepancy observations. Returns count inserted."""
+        if not rows:
+            return 0
+        conn = self._ensure_connected()
+        sql = """
+            INSERT INTO discrepancy_log (
+                kalshi_ticker, poly_ticker,
+                kalshi_yes_bid, kalshi_yes_ask,
+                poly_yes_bid, poly_yes_ask,
+                mid_discrepancy, gross_edge, net_edge, edge_pct,
+                favored_venue, match_confidence,
+                trigger_source, actionable
+            ) VALUES (
+                %(kalshi_ticker)s, %(poly_ticker)s,
+                %(kalshi_yes_bid)s, %(kalshi_yes_ask)s,
+                %(poly_yes_bid)s, %(poly_yes_ask)s,
+                %(mid_discrepancy)s, %(gross_edge)s, %(net_edge)s, %(edge_pct)s,
+                %(favored_venue)s, %(match_confidence)s,
+                %(trigger_source)s, %(actionable)s
+            )
+        """
+        with conn.cursor() as cur:
+            cur.executemany(sql, rows)
+        conn.commit()
+        return len(rows)
+
+    def get_discrepancy_summary(self, hours: int = 24) -> list[dict]:
+        """Per-pair discrepancy stats over the last N hours."""
+        return self._fetch_dicts(
+            """
+            SELECT
+                kalshi_ticker,
+                COUNT(*) AS observations,
+                AVG(mid_discrepancy) AS avg_discrepancy,
+                MAX(mid_discrepancy) AS max_discrepancy,
+                AVG(edge_pct) AS avg_edge_pct,
+                MAX(edge_pct) AS max_edge_pct,
+                SUM(actionable::int) AS actionable_count
+            FROM discrepancy_log
+            WHERE ts >= now() - make_interval(hours => %(hours)s)
+            GROUP BY kalshi_ticker
+            ORDER BY observations DESC
+            """,
+            {"hours": hours},
+        )
+
+    def get_discrepancy_distribution(self, hours: int = 24) -> list[dict]:
+        """Edge percent histogram in 0.5% buckets."""
+        return self._fetch_dicts(
+            """
+            SELECT
+                FLOOR(edge_pct * 2) / 2 AS bucket,
+                COUNT(*) AS count,
+                SUM(actionable::int) AS actionable
+            FROM discrepancy_log
+            WHERE ts >= now() - make_interval(hours => %(hours)s)
+            GROUP BY bucket
+            ORDER BY bucket
+            """,
+            {"hours": hours},
+        )
+
+    def get_discrepancy_hourly(self, hours: int = 24) -> list[dict]:
+        """Observations and edge stats by hour of day (UTC)."""
+        return self._fetch_dicts(
+            """
+            SELECT
+                EXTRACT(HOUR FROM ts)::int AS hour,
+                COUNT(*) AS observations,
+                AVG(edge_pct) AS avg_edge,
+                MAX(edge_pct) AS max_edge,
+                SUM(actionable::int) AS actionable
+            FROM discrepancy_log
+            WHERE ts >= now() - make_interval(hours => %(hours)s)
+            GROUP BY hour
+            ORDER BY hour
+            """,
+            {"hours": hours},
+        )
+
+    def get_discrepancy_by_trigger(self, hours: int = 24) -> list[dict]:
+        """Stats grouped by trigger source (kalshi_ws vs poly_ws)."""
+        return self._fetch_dicts(
+            """
+            SELECT
+                trigger_source,
+                COUNT(*) AS observations,
+                AVG(edge_pct) AS avg_edge,
+                MAX(edge_pct) AS max_edge,
+                SUM(actionable::int) AS actionable
+            FROM discrepancy_log
+            WHERE ts >= now() - make_interval(hours => %(hours)s)
+            GROUP BY trigger_source
+            ORDER BY observations DESC
+            """,
+            {"hours": hours},
+        )
+
     def get_recent_snapshots_for_ticker(
         self, ticker: str, limit: int = 10,
     ) -> list[NormalizedMarket]:
