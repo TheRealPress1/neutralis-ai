@@ -115,6 +115,192 @@ export interface RiskProfile {
   updated_at: string | null;
 }
 
+// --- Arb Signals ---
+
+export interface ArbSignal {
+  id: number;
+  mapping_id: number;
+  kalshi_ticker: string;
+  title: string;
+  kalshi_bid: number;
+  kalshi_ask: number;
+  poly_bid: number;
+  poly_ask: number;
+  edge_kalshi_to_poly: number;
+  edge_poly_to_kalshi: number;
+  ts: string;
+}
+
+// --- Execution ---
+
+export interface Order {
+  id: string;
+  ticker: string;
+  venue: string;
+  side: "buy_yes" | "buy_no";
+  decision_id: number;
+  status: "filled" | "partial" | "cancelled" | "pending";
+  requested_price: number;
+  requested_size_dollars: number;
+  filled_size_dollars: number;
+  avg_fill_price: number | null;
+  slippage_bps: number | null;
+  fees_dollars: number;
+  created_at: string;
+}
+
+export interface Fill {
+  id: string;
+  order_id: string;
+  fill_number: number;
+  ticker?: string;
+  side?: "buy_yes" | "buy_no";
+  price: number;
+  requested_price?: number;
+  quantity: number;
+  size_dollars: number;
+  fee_dollars: number;
+  slippage_bps: number;
+  created_at: string;
+}
+
+export interface ExecutionStats {
+  total_orders: number;
+  filled: number;
+  partial: number;
+  cancelled: number;
+  avg_slippage_bps: number;
+  total_fees: number;
+}
+
+// --- Backtest ---
+
+export interface BacktestResult {
+  start_date: string;
+  end_date: string;
+  time_steps: number;
+  duration_ms: number;
+  total_pnl: number;
+  total_trades: number;
+  total_signals: number;
+  total_passed: number;
+  total_rejected: number;
+  positions_opened: number;
+  positions_closed: number;
+  win_count: number;
+  loss_count: number;
+  best_trade: number;
+  worst_trade: number;
+  max_drawdown: number;
+  avg_trade_pnl: number;
+  win_rate: number;
+  equity_curve: Array<{ ts: string; realized_pnl: number; open_positions: number; total_exposure: number }>;
+  trades: Array<{ ts: string; ticker: string; venue: string; side: string; price: number; size_dollars: number; edge_pct: number }>;
+  closed_positions: Array<{ ticker: string; venue: string; side: string; entry_price: number; size_dollars: number; realized_pnl: number; category: string }>;
+  by_category: Record<string, { pnl: number; trades: number }>;
+  by_venue: Record<string, unknown>;
+  by_signal_type: Record<string, unknown>;
+  config_snapshot: Record<string, unknown>;
+}
+
+export interface BacktestDataRange {
+  earliest: string;
+  latest: string;
+  total_runs: number;
+  total_snapshots: number;
+}
+
+export interface OptimizerResult {
+  rank: number;
+  objective_value: number;
+  total_pnl: number;
+  win_rate: number;
+  sharpe_ratio: number;
+  total_trades: number;
+  weights: Record<string, number>;
+}
+
+// --- Analytics ---
+
+export interface AnalyticsSummary {
+  total_pnl: number;
+  total_closed: number;
+  avg_trade_pnl: number;
+  max_drawdown: number;
+  best_day: number;
+  worst_day: number;
+  avg_win: number;
+  avg_loss: number;
+}
+
+export interface CategoryBreakdown {
+  category: string;
+  total_pnl: number;
+}
+
+export interface DailyPnL {
+  date: string;
+  pnl: number;
+  losses?: number;
+}
+
+export interface GuardStat {
+  guard_name: string;
+  rejections: number;
+  total_evaluations: number;
+  rejection_rate: number;
+}
+
+export interface PnLBucket {
+  bucket_start: number;
+  count: number;
+}
+
+export interface VenueBreakdown {
+  venue: string;
+  total_trades: number;
+  total_pnl: number;
+}
+
+// --- Decision Reasons ---
+
+export interface DecisionReasons {
+  ticker: string;
+  verdict: "pass" | "reject";
+  selected: boolean;
+  edge_pct: number;
+  confidence_score: number;
+  roi_per_day: number;
+  time_to_resolution_days: number;
+  suggested_size: number;
+  selection_score: number | null;
+  guard_results: GuardResult[];
+  allocation_reasons: string[];
+  features_json: Record<string, any>;
+}
+
+// --- Enriched Signals & Regime ---
+
+export interface EnrichedSignal {
+  id: string;
+  ticker: string;
+  signal_type: "complement_arb" | "cross_platform_discrepancy";
+  confidence_score: number;
+  edge_pct: number;
+  roi_per_day: number;
+  signal_created_at: string;
+  verdict: "pass" | "reject" | null;
+  selected: boolean;
+  guard_results: GuardResult[];
+  allocation_reasons?: string[];
+}
+
+export interface RegimeState {
+  regime: "normal" | "risk_off";
+  metrics_json: Record<string, any>;
+  params_json: Record<string, any>;
+}
+
 // --- Automation / Kill Switch ---
 
 export interface AutomationState {

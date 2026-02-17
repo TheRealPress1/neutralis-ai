@@ -457,7 +457,7 @@ export default function PerformanceAnalytics({
           value={fmtPct(
             summary.total_closed > 0
               ? (summary.total_closed -
-                  (timeline.reduce((s, d) => s + d.losses, 0) || 0)) /
+                  (timeline.reduce((s, d) => s + (d.losses ?? 0), 0) || 0)) /
                   summary.total_closed
               : 0
           )}

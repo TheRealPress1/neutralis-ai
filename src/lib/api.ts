@@ -9,6 +9,22 @@ import type {
   RiskProfile,
   AutomationState,
   AuditLogEntry,
+  ArbSignal,
+  Order,
+  Fill,
+  ExecutionStats,
+  BacktestResult,
+  BacktestDataRange,
+  OptimizerResult,
+  DecisionReasons,
+  AnalyticsSummary,
+  DailyPnL,
+  CategoryBreakdown,
+  VenueBreakdown,
+  PnLBucket,
+  GuardStat,
+  EnrichedSignal,
+  RegimeState,
 } from "@/types/api";
 
 const API_BASE =
@@ -107,6 +123,86 @@ export async function activateProfile(
   const res = await fetch(url.toString(), { method: "PUT" });
   if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
   return res.json() as Promise<RiskProfile>;
+}
+
+// --- Arb Signals ---
+
+export function fetchArbSignals(limit = 50, offset = 0) {
+  return apiFetch<ArbSignal[]>("/api/arb-signals", {
+    limit: String(limit),
+    offset: String(offset),
+  });
+}
+
+// --- Execution ---
+
+export function fetchOrders(limit = 50, status?: string) {
+  const params: Record<string, string> = { limit: String(limit) };
+  if (status) params.status = status;
+  return apiFetch<Order[]>("/api/orders", params);
+}
+
+export function fetchFills(limit = 50) {
+  return apiFetch<Fill[]>("/api/fills", { limit: String(limit) });
+}
+
+export function fetchFillsForOrder(orderId: string) {
+  return apiFetch<Fill[]>(`/api/orders/${orderId}/fills`);
+}
+
+export function fetchExecutionStats() {
+  return apiFetch<ExecutionStats>("/api/execution/stats");
+}
+
+// --- Backtest ---
+
+export function fetchBacktestDataRange() {
+  return apiFetch<BacktestDataRange>("/api/backtest/data-range");
+}
+
+export function runBacktest(config: Record<string, unknown>) {
+  return apiPost<BacktestResult>("/api/backtest/run", config);
+}
+
+export function runOptimization(config: Record<string, unknown>) {
+  return apiPost<{ results: OptimizerResult[]; completed: number; total_combos: number }>("/api/backtest/optimize", config);
+}
+
+// --- Decision Reasons ---
+
+export function fetchDecisionReasons(decisionId: number) {
+  return apiFetch<DecisionReasons>(`/api/decisions/${decisionId}/reasons`);
+}
+
+// --- Analytics ---
+
+export function fetchAnalyticsSummary() {
+  return apiFetch<AnalyticsSummary>("/api/analytics/summary");
+}
+
+export function fetchPnLTimeline(days = 30) {
+  return apiFetch<DailyPnL[]>("/api/analytics/pnl-timeline", { days: String(days) });
+}
+
+export function fetchBreakdown() {
+  return apiFetch<{ by_category: CategoryBreakdown[]; by_venue: VenueBreakdown[]; pnl_distribution: PnLBucket[] }>("/api/analytics/breakdown");
+}
+
+export function fetchGuardStats() {
+  return apiFetch<GuardStat[]>("/api/analytics/guard-stats");
+}
+
+// --- Enriched Signals & Regime ---
+
+export function fetchEnrichedSignals(limit = 50, filters?: Record<string, string | number>) {
+  const raw: Record<string, string | number> = { limit, ...filters };
+  const params: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) params[k] = String(v);
+  return apiFetch<EnrichedSignal[]>("/api/signals/enriched", params);
+}
+
+export function fetchCurrentRegime() {
+  return apiFetch<RegimeState>("/api/regime/current");
 }
 
 // --- Automation / Kill Switch ---
