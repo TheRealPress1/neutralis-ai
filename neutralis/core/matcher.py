@@ -39,6 +39,52 @@ _ENTITY_STOP = frozenset({
 # Regex: sequences of 2+ capitalised words (possibly with hyphens/apostrophes).
 _ENTITY_RE = re.compile(r"\b(?:[A-Z][A-Za-z'\-]+(?:\s+|$)){2,}")
 
+# Common sports abbreviation expansions (pattern, replacement).
+# Applied case-insensitively before tokenisation and entity extraction.
+_ABBREVIATION_MAP: list[tuple[re.Pattern, str]] = [
+    # Soccer - English
+    (re.compile(r"\bNottm\b", re.IGNORECASE), "Nottingham"),
+    (re.compile(r"\bMan City\b", re.IGNORECASE), "Manchester City"),
+    (re.compile(r"\bMan Utd\b", re.IGNORECASE), "Manchester United"),
+    (re.compile(r"\bMan United\b", re.IGNORECASE), "Manchester United"),
+    (re.compile(r"\bWolves\b", re.IGNORECASE), "Wolverhampton"),
+    (re.compile(r"\bSheff\b", re.IGNORECASE), "Sheffield"),
+    (re.compile(r"\bSoton\b", re.IGNORECASE), "Southampton"),
+    (re.compile(r"\bBham\b", re.IGNORECASE), "Birmingham"),
+    # Soccer - European
+    (re.compile(r"\bPSG\b"), "Paris Saint-Germain"),
+    (re.compile(r"\bAtl\.?\s*Madrid\b", re.IGNORECASE), "Atletico Madrid"),
+    # American sports
+    (re.compile(r"\bOKC\b"), "Oklahoma City"),
+    (re.compile(r"\bPhilly\b", re.IGNORECASE), "Philadelphia"),
+    (re.compile(r"\bLA Clippers\b", re.IGNORECASE), "Los Angeles Clippers"),
+    (re.compile(r"\bLA Lakers\b", re.IGNORECASE), "Los Angeles Lakers"),
+    (re.compile(r"\bPro Basketball\b", re.IGNORECASE), "NBA"),
+    # Awards
+    (re.compile(r"\bAcademy Awards?\b", re.IGNORECASE), "Oscars"),
+    (re.compile(r"\b98th Oscars\b", re.IGNORECASE), "Oscars"),
+    # Crypto — normalise dollar representations
+    (re.compile(r"\$150k\b", re.IGNORECASE), "$150000"),
+    (re.compile(r"\$200k\b", re.IGNORECASE), "$200000"),
+    (re.compile(r"\$250k\b", re.IGNORECASE), "$250000"),
+    (re.compile(r"\$100k\b", re.IGNORECASE), "$100000"),
+    (re.compile(r"\$125k\b", re.IGNORECASE), "$125000"),
+    (re.compile(r"\$149,999\.99\b"), "$150000"),
+    (re.compile(r"\$109,999\.99\b"), "$110000"),
+    (re.compile(r"\$99,999\.99\b"), "$100000"),
+    (re.compile(r"\$124,999\.99\b"), "$125000"),
+    (re.compile(r"\$129,999\.99\b"), "$130000"),
+    (re.compile(r"\$139,999\.99\b"), "$140000"),
+    (re.compile(r"\$199,999\.99\b"), "$200000"),
+]
+
+
+def _expand_abbreviations(title: str) -> str:
+    """Expand common sports abbreviations in a market title."""
+    for pattern, replacement in _ABBREVIATION_MAP:
+        title = pattern.sub(replacement, title)
+    return title
+
 
 @dataclass(frozen=True)
 class MarketPair:
@@ -199,6 +245,27 @@ def _temporal_score(market_a: NormalizedMarket, market_b: NormalizedMarket) -> f
 # Main matching function
 # ---------------------------------------------------------------------------
 
+def _spread(market: NormalizedMarket) -> float:
+    """Bid-ask spread on the YES side.
+
+    One-sided quotes (bid=0, ask>0) return the full ask as spread — this
+    catches dead/expired markets that would otherwise look clean.
+    """
+    if market.yes_ask > 0:
+        if market.yes_bid > 0:
+            return market.yes_ask - market.yes_bid
+        return market.yes_ask  # one-sided quote: treat ask as spread
+    return 0.0
+
+
+def _liquidity_ratio(a: NormalizedMarket, b: NormalizedMarket) -> float:
+    """Ratio of the larger liquidity to the smaller.  Returns inf if either is zero."""
+    la, lb = a.liquidity, b.liquidity
+    if la <= 0 or lb <= 0:
+        return float("inf")
+    return max(la, lb) / min(la, lb)
+
+
 def match_markets(
     kalshi_markets: list[NormalizedMarket],
     poly_markets: list[NormalizedMarket],
@@ -211,20 +278,24 @@ def match_markets(
     2. Entity overlap — shared proper nouns (person, team, event names)
     3. Temporal proximity — how close the expiration dates are
 
-    Each Kalshi market matches at most one Polymarket market (best score).
+    Post-filters:
+    - Liquidity parity: reject if venue liquidity differs by >max_liquidity_ratio
+    - Spread check: reject if either side has a bid-ask spread >max_spread
+    - Uniqueness: each Polymarket market matches at most one Kalshi market
     """
     cfg = config or MatchingConfig()
-    pairs: list[MarketPair] = []
 
-    # Pre-compute normalised text and tokens
-    # Filter out Kalshi multi-leg parlays (commas in title = combo bet)
+    # Pre-compute normalised text and tokens (with abbreviation expansion)
+    # Parlays are now filtered during normalization (mve_selected_legs / "yes "/"no " prefix)
     kalshi_prepared = [
-        (m, _normalize_text(m.title), _significant_tokens(m.title))
+        (m, _normalize_text(_expand_abbreviations(m.title)),
+         _significant_tokens(_expand_abbreviations(m.title)))
         for m in kalshi_markets
-        if m.title and "," not in m.title
+        if m.title
     ]
     poly_prepared = [
-        (m, _normalize_text(m.title), _significant_tokens(m.title))
+        (m, _normalize_text(_expand_abbreviations(m.title)),
+         _significant_tokens(_expand_abbreviations(m.title)))
         for m in poly_markets
         if m.title
     ]
@@ -234,22 +305,23 @@ def match_markets(
         len(kalshi_prepared), len(poly_prepared),
     )
 
-    # Build IDF table from all titles
-    all_titles = [m.title for m, _, _ in kalshi_prepared] + [
-        m.title for m, _, _ in poly_prepared
+    # Build IDF table from all (expanded) titles
+    all_titles = [_expand_abbreviations(m.title) for m, _, _ in kalshi_prepared] + [
+        _expand_abbreviations(m.title) for m, _, _ in poly_prepared
     ]
     idf = _build_idf(all_titles)
 
-    # Pre-compute entities
-    kalshi_entities = [_extract_entities(m.title) for m, _, _ in kalshi_prepared]
-    poly_entities = [_extract_entities(m.title) for m, _, _ in poly_prepared]
+    # Pre-compute entities (with abbreviation expansion)
+    kalshi_entities = [_extract_entities(_expand_abbreviations(m.title)) for m, _, _ in kalshi_prepared]
+    poly_entities = [_extract_entities(_expand_abbreviations(m.title)) for m, _, _ in poly_prepared]
+
+    # Collect (score, kalshi_idx, poly_idx, pair) candidates — we'll deduplicate after
+    candidates: list[tuple[float, int, int, MarketPair]] = []
 
     for ki, (k_market, k_text, k_tokens) in enumerate(kalshi_prepared):
         if not k_tokens:
             continue
 
-        best_match: Optional[MarketPair] = None
-        best_score = 0.0
         k_ents = kalshi_entities[ki]
 
         for pi, (p_market, p_text, p_tokens) in enumerate(poly_prepared):
@@ -273,16 +345,49 @@ def match_markets(
                 + cfg.weight_temporal * temporal
             )
 
-            if composite >= cfg.min_similarity and composite > best_score:
-                best_score = composite
-                best_match = MarketPair(
-                    kalshi_market=k_market,
-                    polymarket_market=p_market,
-                    similarity=round(composite, 4),
-                )
+            if composite < cfg.min_similarity:
+                continue
 
-        if best_match is not None:
-            pairs.append(best_match)
+            # Post-filter: liquidity parity
+            liq_ratio = _liquidity_ratio(k_market, p_market)
+            if liq_ratio > cfg.max_liquidity_ratio:
+                logger.debug(
+                    "Rejected (liquidity): '%s' <-> '%s' ratio=%.1f",
+                    k_market.title[:40], p_market.title[:40], liq_ratio,
+                )
+                continue
+
+            # Post-filter: bid-ask spread
+            k_spread = _spread(k_market)
+            p_spread = _spread(p_market)
+            if k_spread > cfg.max_spread or p_spread > cfg.max_spread:
+                logger.debug(
+                    "Rejected (spread): '%s' (%.2f) <-> '%s' (%.2f)",
+                    k_market.title[:40], k_spread,
+                    p_market.title[:40], p_spread,
+                )
+                continue
+
+            pair = MarketPair(
+                kalshi_market=k_market,
+                polymarket_market=p_market,
+                similarity=round(composite, 4),
+            )
+            candidates.append((composite, ki, pi, pair))
+
+    # Deduplicate: each Kalshi and each Polymarket market matches at most once.
+    # Sort by score descending so higher-confidence matches win ties.
+    candidates.sort(key=lambda c: c[0], reverse=True)
+    used_kalshi: set[int] = set()
+    used_poly: set[int] = set()
+    pairs: list[MarketPair] = []
+
+    for score, ki, pi, pair in candidates:
+        if ki in used_kalshi or pi in used_poly:
+            continue
+        used_kalshi.add(ki)
+        used_poly.add(pi)
+        pairs.append(pair)
 
     logger.info("Matching complete: %d pairs found", len(pairs))
     for pair in pairs[:10]:

@@ -34,13 +34,6 @@ class SignalType(str, Enum):
 class DecisionVerdict(str, Enum):
     PASS = "pass"
     REJECT = "reject"
-    REDUCE = "reduce"
-
-
-class AutomationStatus(str, Enum):
-    RUNNING = "running"
-    PAUSED = "paused"
-    KILLED = "killed"
 
 
 class PositionStatus(str, Enum):
@@ -86,6 +79,9 @@ class NormalizedMarket:
     no_bids: tuple[OrderbookLevel, ...] = ()
 
     venue: str = "kalshi"
+
+    # Polymarket-specific: CLOB token IDs for WebSocket subscription
+    clob_token_ids: tuple[str, ...] = ()
 
     snapshot_ts: datetime = field(default_factory=datetime.now)
 
@@ -164,6 +160,11 @@ class Signal:
     market_snapshot: Optional[NormalizedMarket] = None
     cross_platform: Optional[CrossPlatformMatch] = None
     created_at: datetime = field(default_factory=datetime.now)
+    # Scoring fields (alpha vNext)
+    confidence_score: int = 0
+    time_to_resolution_days: float = 0.0
+    roi_per_day: float = 0.0
+    features_json: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -182,6 +183,10 @@ class Decision:
     guard_results: tuple[GuardResult, ...] = ()
     suggested_size_dollars: float = 0.0
     created_at: datetime = field(default_factory=datetime.now)
+    # Ranked selection fields (alpha vNext)
+    selected: bool = False
+    selection_score: float = 0.0
+    allocation_reasons: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -197,6 +202,8 @@ class Trade:
     size_dollars: float = 0.0
     quantity: float = 0.0
     is_paper: bool = True
+    order_id: Optional[str] = None
+    fill_price: Optional[float] = None
     created_at: datetime = field(default_factory=datetime.now)
 
 
@@ -216,6 +223,9 @@ class Position:
     trade_count: int = 0
     opened_at: datetime = field(default_factory=datetime.now)
     closed_at: Optional[datetime] = None
+    category: str = "other"
+    exit_reason: Optional[str] = None
+    exit_price: Optional[float] = None
 
 
 @dataclass(frozen=True)

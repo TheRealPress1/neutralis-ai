@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
+from neutralis.categories import classify_market
 from neutralis.config import PipelineConfig, PortfolioConfig
 from neutralis.models import GuardResult, NormalizedMarket, PortfolioSnapshot, Signal
 
@@ -246,52 +248,6 @@ def check_open_position_count(
     )
 
 
-def check_daily_loss_limit(
-    daily_loss: float,
-    config: PortfolioConfig,
-) -> GuardResult:
-    """Check if daily realized loss has exceeded the limit."""
-    limit = config.daily_loss_limit_dollars
-    passed = daily_loss < limit
-    return GuardResult(
-        guard_name="daily_loss_limit",
-        passed=passed,
-        reason=(
-            f"daily loss ${daily_loss:.2f} < limit ${limit:.2f}"
-            if passed
-            else f"daily loss ${daily_loss:.2f} >= limit ${limit:.2f}"
-        ),
-        value=daily_loss,
-        threshold=limit,
-    )
-
-
-def check_kill_switch(is_killed: bool) -> GuardResult:
-    """Check if the kill switch has been triggered."""
-    return GuardResult(
-        guard_name="kill_switch",
-        passed=not is_killed,
-        reason=(
-            "kill switch not triggered"
-            if not is_killed
-            else "KILL SWITCH ACTIVE — all trades blocked"
-        ),
-    )
-
-
-def check_automation_active(is_active: bool) -> GuardResult:
-    """Check if automation is running (not paused or killed)."""
-    return GuardResult(
-        guard_name="automation_active",
-        passed=is_active,
-        reason=(
-            "automation is running"
-            if is_active
-            else "automation is paused or stopped — trades blocked"
-        ),
-    )
-
-
 def check_duplicate_position(
     signal: Signal,
     snapshot: PortfolioSnapshot,
@@ -313,4 +269,40 @@ def check_duplicate_position(
         guard_name="duplicate_position",
         passed=True,
         reason="no duplicate positions found",
+    )
+
+
+def check_category_exposure(
+    proposed_size: float,
+    category: str,
+    category_overrides: dict[str, Any],
+    snapshot: PortfolioSnapshot,
+) -> GuardResult:
+    """Check per-category exposure limit from category overrides."""
+    override = category_overrides.get(category, {})
+    cat_max = override.get("max_exposure_dollars")
+    if cat_max is None:
+        return GuardResult(
+            guard_name="category_exposure",
+            passed=True,
+            reason=f"no per-category limit for '{category}'",
+        )
+
+    current = sum(
+        p.size_dollars
+        for p in snapshot.positions
+        if classify_market(p.ticker, p.event_ticker) == category
+    )
+    new_total = current + proposed_size
+    passed = new_total <= cat_max
+    return GuardResult(
+        guard_name="category_exposure",
+        passed=passed,
+        reason=(
+            f"category '{category}' exposure ${new_total:.2f} <= cap ${cat_max:.2f}"
+            if passed
+            else f"category '{category}' exposure ${new_total:.2f} > cap ${cat_max:.2f}"
+        ),
+        value=new_total,
+        threshold=cat_max,
     )

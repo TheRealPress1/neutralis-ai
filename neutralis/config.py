@@ -31,6 +31,8 @@ _load_dotenv()
 class KalshiConfig:
     base_url: str = "https://api.elections.kalshi.com/trade-api/v2"
     markets_path: str = "/markets"
+    series_path: str = "/series"
+    events_path: str = "/events"
     orderbook_path: str = "/markets/{ticker}/orderbook"
     max_reads_per_sec: int = 20
     default_market_limit: int = 1000
@@ -54,10 +56,12 @@ class PipelineConfig:
     scan_interval_sec: float = 30.0
     min_edge_pct: float = 1.0
     min_liquidity_dollars: float = 50.0
-    max_time_to_expiry_hours: float = 720.0
+    max_time_to_expiry_hours: float = 43800.0  # ~5 years (tournament/political markets)
     min_time_to_expiry_hours: float = 1.0
     fee_rate: float = 0.07
     max_position_dollars: float = 25.0
+    min_xp_edge_pct: float = 0.05  # Cross-platform arb threshold (lower — one side is fee-free)
+    slippage_per_leg: float = 0.005  # $0.005 per leg execution buffer (price movement risk)
 
 
 @dataclass(frozen=True)
@@ -65,17 +69,19 @@ class PolymarketConfig:
     gamma_base_url: str = "https://gamma-api.polymarket.com"
     clob_base_url: str = "https://clob.polymarket.com"
     default_market_limit: int = 100
-    max_pages: int = 10
+    max_pages: int = 50
 
 
 @dataclass(frozen=True)
 class MatchingConfig:
-    min_similarity: float = 0.55
+    min_similarity: float = 0.65
     min_discrepancy_pct: float = 3.0
-    min_token_overlap: int = 1
+    min_token_overlap: int = 2
     weight_text: float = 0.50
     weight_entity: float = 0.35
     weight_temporal: float = 0.15
+    max_liquidity_ratio: float = 10.0  # reject if venue liquidity differs >Nx
+    max_spread: float = 0.40  # reject if bid-ask spread > this on either side
 
 
 @dataclass(frozen=True)
@@ -85,7 +91,112 @@ class PortfolioConfig:
     max_ticker_exposure_dollars: float = 50.0
     max_venue_exposure_pct: float = 0.80
     max_open_positions: int = 50
-    daily_loss_limit_dollars: float = 100.0
+
+
+@dataclass(frozen=True)
+class ExitConfig:
+    stop_loss_pct: float = 15.0
+    take_profit_pct: float = 25.0
+    time_decay_hours: float = 24.0
+    time_decay_edge_floor_pct: float = 1.0
+    min_exit_liquidity_dollars: float = 10.0
+    enabled: bool = True
+
+
+@dataclass(frozen=True)
+class ExecutionConfig:
+    live_trading_enabled: bool = field(
+        default_factory=lambda: os.environ.get("LIVE_TRADING_ENABLED", "").lower()
+        in ("true", "1", "yes")
+    )
+    kalshi_api_key_id: str = field(
+        default_factory=lambda: os.environ.get("KALSHI_API_KEY_ID", "")
+    )
+    kalshi_private_key_path: str = field(
+        default_factory=lambda: os.environ.get("KALSHI_PRIVATE_KEY_PATH", "")
+    )
+    # Polymarket CLOB execution credentials
+    polymarket_private_key: str = field(
+        default_factory=lambda: os.environ.get("POLYMARKET_PRIVATE_KEY", "")
+    )
+    polymarket_funder_address: str = field(
+        default_factory=lambda: os.environ.get("POLYMARKET_FUNDER_ADDRESS", "")
+    )
+    polymarket_signature_type: int = field(
+        default_factory=lambda: int(os.environ.get("POLYMARKET_SIGNATURE_TYPE", "0"))
+    )
+    max_order_dollars: float = 50.0
+    balance_floor_dollars: float = 25.0
+    # Maker order strategy — GTC limit orders for lower Kalshi fees (4x cheaper)
+    use_maker_orders: bool = True
+    maker_price_offset_cents: int = 1  # Post N cents inside the spread (bid + offset)
+    maker_fill_timeout_sec: float = 10.0  # Cancel unfilled GTC order after this
+
+
+@dataclass(frozen=True)
+class MarketFilterConfig:
+    enabled: bool = True
+    category_whitelist: tuple[str, ...] = ("politics", "economics", "crypto")
+    incremental_updates: bool = True
+    full_refresh_interval_sec: float = 300.0
+    # Series with known cross-platform overlap (Polymarket counterparts exist)
+    priority_series: tuple[str, ...] = (
+        # Soccer tournament winners
+        "KXPREMIERLEAGUE", "KXUCL", "KXFACUP", "KXLALIGA",
+        "KXBUNDESLIGA", "KXSERIEA", "KXLIGUE1",
+        "KXEUROPALEAGUE", "KXMLSWINNER",
+        # Soccer match 3-way markets (Team A / Team B / Draw)
+        "KXEPLGAME", "KXBUNDESLIGAGAME", "KXLIGUE1GAME",
+        "KXSERIEAGAME", "KXBRASILEIROGAME", "KXSCOTTISHPREMGAME", "KXUEFAGAME",
+        # Tennis
+        "KXATPMATCH", "KXWTAMATCH",
+        # American sports
+        "KXNBA", "KXNFL",
+        "KXNBAMVP", "KXNBAEAST", "KXNBAWEST",
+        # Crypto milestones (Polymarket has BTC/ETH milestone markets)
+        "KXBTCMAXY", "KXBTCMINY", "KXETHMAXY", "KXETHMINY",
+        "KXBTC2026200", "KXBTC2026250", "KXCRYPTORESERVE",
+        # Economics (Polymarket has Fed/inflation/GDP markets)
+        "KXFEDDECISION", "KXRATECUT", "KXFED", "KXCPIYOY", "KXGDP",
+        # Political
+        "KXFEDCHAIRNOM", "KXPRESPARTY",
+        "KXSENATE", "KXGOVCA",
+        # Entertainment (Polymarket has Oscar/Nobel markets)
+        "KXOSCARPIC", "KXOSCARACTO", "KXOSCARACTR", "KXOSCARDIR",
+        "KXNOBELPEACE",
+    )
+
+
+@dataclass(frozen=True)
+class WebSocketConfig:
+    enabled: bool = field(
+        default_factory=lambda: os.environ.get("WEBSOCKET_ENABLED", "").lower()
+        in ("true", "1", "yes")
+    )
+    ws_url: str = "wss://api.elections.kalshi.com/trade-api/ws/v2"
+    reconnect_delay_sec: float = 1.0
+    max_reconnect_delay_sec: float = 60.0
+    health_port: int = 9091
+    # Focus on high-crossover categories for real-time arb detection
+    focus_categories: tuple[str, ...] = ("Sports", "Crypto", "Politics")
+    # How often to run periodic tasks (settlement, MTM, full REST refresh)
+    settlement_interval_sec: float = 60.0
+    mtm_interval_sec: float = 30.0
+    rest_refresh_interval_sec: float = 300.0
+    # Max markets to subscribe to on WS (performance guard)
+    max_ws_subscriptions: int = 2000
+
+
+@dataclass(frozen=True)
+class PolymarketWSConfig:
+    enabled: bool = field(
+        default_factory=lambda: os.environ.get("POLYMARKET_WS_ENABLED", "").lower()
+        in ("true", "1", "yes")
+    )
+    ws_url: str = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+    reconnect_delay_sec: float = 1.0
+    max_reconnect_delay_sec: float = 60.0
+    max_subscriptions: int = 500
 
 
 @dataclass(frozen=True)
@@ -94,6 +205,8 @@ class SchedulerConfig:
     max_consecutive_errors: int = 5
     max_backoff_sec: float = 300.0
     startup_health_check: bool = True
+    heartbeat_every_n_runs: int = 10
+    health_port: int = 9090
 
 
 @dataclass(frozen=True)
@@ -121,6 +234,11 @@ class Settings:
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
     api: APIConfig = field(default_factory=APIConfig)
     alerts: AlertsConfig = field(default_factory=AlertsConfig)
+    exits: ExitConfig = field(default_factory=ExitConfig)
+    execution: ExecutionConfig = field(default_factory=ExecutionConfig)
+    market_filter: MarketFilterConfig = field(default_factory=MarketFilterConfig)
+    websocket: WebSocketConfig = field(default_factory=WebSocketConfig)
+    polymarket_ws: PolymarketWSConfig = field(default_factory=PolymarketWSConfig)
 
 
 def load_settings() -> Settings:
@@ -160,4 +278,9 @@ def load_settings_with_profile(storage: object) -> Settings:
         scheduler=base.scheduler,
         api=base.api,
         alerts=base.alerts,
+        exits=base.exits,
+        execution=base.execution,
+        market_filter=base.market_filter,
+        websocket=base.websocket,
+        polymarket_ws=base.polymarket_ws,
     )

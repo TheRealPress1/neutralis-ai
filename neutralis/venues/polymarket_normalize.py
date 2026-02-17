@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from neutralis.logging import get_logger
-from neutralis.models import MarketStatus, MarketType, NormalizedMarket
+from neutralis.models import MarketStatus, MarketType, NormalizedMarket, ThreeWayGroup, ThreeWayOutcome
 
 logger = get_logger(__name__)
 
@@ -63,11 +63,24 @@ def normalize_market(raw: dict[str, Any]) -> Optional[NormalizedMarket]:
         except (json.JSONDecodeError, TypeError):
             outcome_prices = None
 
+    # Map prices to YES/NO by checking outcome labels, not position.
+    # Polymarket outcome order is NOT guaranteed — must match by label.
     yes_price = 0.0
     no_price = 0.0
-    if outcome_prices and len(outcome_prices) >= 2:
-        yes_price = _safe_float(outcome_prices[0])
-        no_price = _safe_float(outcome_prices[1])
+    if outcome_prices and len(outcome_prices) >= 2 and outcomes:
+        # Build label -> price mapping
+        for i, label in enumerate(outcomes):
+            label_lower = str(label).strip().lower()
+            if label_lower == "yes":
+                yes_price = _safe_float(outcome_prices[i])
+            elif label_lower == "no":
+                no_price = _safe_float(outcome_prices[i])
+
+        # Fallback: if labels aren't "Yes"/"No" (e.g. "Team A"/"Team B"),
+        # treat first outcome as YES, second as NO (common convention)
+        if yes_price == 0.0 and no_price == 0.0:
+            yes_price = _safe_float(outcome_prices[0])
+            no_price = _safe_float(outcome_prices[1])
 
     # Use bestBid/bestAsk when they indicate real two-sided markets
     best_bid = _safe_float(raw.get("bestBid"))
@@ -90,6 +103,30 @@ def normalize_market(raw: dict[str, Any]) -> Optional[NormalizedMarket]:
     else:
         status = MarketStatus.INACTIVE
 
+    # Extract YES CLOB token ID for WebSocket subscription.
+    # clobTokenIds is parallel to outcomes: clobTokenIds[i] is the token for outcomes[i].
+    # We only want the YES token — subscribing to the NO token would cause price updates
+    # to be misinterpreted as YES prices (NO token price ≈ 1 - YES price).
+    clob_token_ids_raw = raw.get("clobTokenIds")
+    if isinstance(clob_token_ids_raw, str):
+        try:
+            clob_token_ids_raw = json.loads(clob_token_ids_raw)
+        except (json.JSONDecodeError, TypeError):
+            clob_token_ids_raw = None
+
+    clob_token_ids: tuple[str, ...] = ()
+    if clob_token_ids_raw and outcomes and len(clob_token_ids_raw) >= 2:
+        # Find the YES token by matching outcome labels
+        yes_idx = None
+        for i, label in enumerate(outcomes):
+            if str(label).strip().lower() == "yes" and i < len(clob_token_ids_raw):
+                yes_idx = i
+                break
+        # Fallback: first token (standard ordering is ["Yes", "No"])
+        if yes_idx is None:
+            yes_idx = 0
+        clob_token_ids = (str(clob_token_ids_raw[yes_idx]),)
+
     return NormalizedMarket(
         ticker=str(ticker),
         event_ticker=raw.get("slug", ""),
@@ -108,4 +145,92 @@ def normalize_market(raw: dict[str, Any]) -> Optional[NormalizedMarket]:
         close_time=_parse_iso_dt(raw.get("endDate")),
         expected_expiration=_parse_iso_dt(raw.get("endDate")),
         venue="polymarket",
+        clob_token_ids=clob_token_ids,
+    )
+
+
+_DRAW_LABELS = {"draw", "tie", "drawn"}
+
+
+def normalize_three_way_market(raw: dict[str, Any]) -> Optional[ThreeWayGroup]:
+    """Convert a Polymarket market with exactly 3 outcomes into a ThreeWayGroup.
+
+    Polymarket 3-way markets have outcomes like ["Team A Wins", "Team B Wins", "Draw"]
+    with parallel outcomePrices and clobTokenIds arrays.
+    """
+    ticker = raw.get("conditionId") or raw.get("id") or ""
+    if not ticker:
+        return None
+
+    outcomes = raw.get("outcomes")
+    if isinstance(outcomes, str):
+        try:
+            outcomes = json.loads(outcomes)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    if not outcomes or len(outcomes) != 3:
+        return None
+
+    question = raw.get("question", "")
+    if not question:
+        return None
+
+    # Parse prices
+    outcome_prices = raw.get("outcomePrices")
+    if isinstance(outcome_prices, str):
+        try:
+            outcome_prices = json.loads(outcome_prices)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    if not outcome_prices or len(outcome_prices) < 3:
+        return None
+
+    # Parse CLOB token IDs
+    clob_ids_raw = raw.get("clobTokenIds")
+    if isinstance(clob_ids_raw, str):
+        try:
+            clob_ids_raw = json.loads(clob_ids_raw)
+        except (json.JSONDecodeError, TypeError):
+            clob_ids_raw = ["", "", ""]
+    if not clob_ids_raw or len(clob_ids_raw) < 3:
+        clob_ids_raw = ["", "", ""]
+
+    # Status
+    closed = raw.get("closed", False)
+    active = raw.get("active", True)
+    if closed or not active:
+        return None
+
+    # Identify draw vs team outcomes by label
+    draw_idx = None
+    for i, label in enumerate(outcomes):
+        if str(label).strip().lower() in _DRAW_LABELS:
+            draw_idx = i
+            break
+
+    if draw_idx is None:
+        return None  # Can't identify draw — not a match market
+
+    team_indices = [i for i in range(3) if i != draw_idx]
+
+    def _make_outcome(idx: int) -> ThreeWayOutcome:
+        price = _safe_float(outcome_prices[idx])
+        return ThreeWayOutcome(
+            label=str(outcomes[idx]).strip(),
+            ticker=str(ticker),
+            ask=price,
+            bid=price,  # Poly doesn't separate bid/ask per outcome in Gamma
+            venue="polymarket",
+            token_id=str(clob_ids_raw[idx]) if idx < len(clob_ids_raw) else "",
+        )
+
+    return ThreeWayGroup(
+        event_id=raw.get("slug", str(ticker)),
+        venue="polymarket",
+        title=question,
+        outcome_a=_make_outcome(team_indices[0]),
+        outcome_b=_make_outcome(team_indices[1]),
+        outcome_draw=_make_outcome(draw_idx),
+        close_time=_parse_iso_dt(raw.get("endDate")),
+        liquidity=_safe_float(raw.get("liquidity")),
     )

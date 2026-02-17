@@ -73,6 +73,13 @@ def normalize_market(
         logger.warning("Skipping market with no ticker: %s", raw.get("title", "?"))
         return None
 
+    # Skip multi-leg parlays — they have mve_selected_legs or titles starting with "yes "/"no "
+    if raw.get("mve_selected_legs"):
+        return None
+    title_raw = raw.get("title", "")
+    if title_raw.startswith("yes ") or title_raw.startswith("no "):
+        return None
+
     try:
         market_type = MarketType(raw.get("market_type", "binary"))
     except ValueError:

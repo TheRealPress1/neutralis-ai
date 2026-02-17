@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import csv
 import dataclasses
-import io
 from contextlib import asynccontextmanager
 from datetime import datetime
 from enum import Enum
@@ -12,12 +10,10 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from neutralis.audit import AuditLogger
 from neutralis.config import load_settings
-from neutralis.guard.kill_switch import KillSwitch
 from neutralis.profiles import (
     activate_profile,
     load_active_profile,
@@ -28,23 +24,11 @@ from neutralis.portfolio.manager import PortfolioManager
 from neutralis.storage.postgres import PostgresStorage
 
 _storage: PostgresStorage | None = None
-_kill_switch: KillSwitch | None = None
-_audit: AuditLogger | None = None
 
 
 def _get_storage() -> PostgresStorage:
     assert _storage is not None, "Storage not initialized"
     return _storage
-
-
-def _get_kill_switch() -> KillSwitch:
-    assert _kill_switch is not None, "KillSwitch not initialized"
-    return _kill_switch
-
-
-def _get_audit() -> AuditLogger:
-    assert _audit is not None, "AuditLogger not initialized"
-    return _audit
 
 
 def _serialize(obj: Any) -> Any:
@@ -64,22 +48,18 @@ def _serialize(obj: Any) -> Any:
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):  # noqa: ARG001
-    global _storage, _kill_switch, _audit  # noqa: PLW0603
+    global _storage  # noqa: PLW0603
     settings = load_settings()
     _storage = PostgresStorage(settings.db)
     _storage.connect()
-    _kill_switch = KillSwitch(_storage)
-    _audit = AuditLogger(_storage)
     yield
     _storage.close()
     _storage = None
-    _kill_switch = None
-    _audit = None
 
 
 app = FastAPI(
     title="Neutralis.ai Dashboard",
-    version="2.0.0",
+    version="1.0.0",
     lifespan=lifespan,
 )
 
@@ -115,21 +95,6 @@ def portfolio_stats():
     return storage.get_portfolio_stats()
 
 
-@app.get("/api/portfolio/performance")
-def portfolio_performance():
-    """Return portfolio performance metrics including drawdown."""
-    storage = _get_storage()
-    ks = _get_kill_switch()
-    stats = storage.get_portfolio_stats()
-    state = ks.get_state()
-    return {
-        **stats,
-        "peak_portfolio_value": state.get("peak_portfolio_value", 0),
-        "max_drawdown_dollars": state.get("max_drawdown_dollars", 0),
-        "daily_loss_dollars": state.get("daily_loss_dollars", 0),
-    }
-
-
 # --- Positions ---
 
 @app.get("/api/positions")
@@ -159,6 +124,32 @@ def get_position(position_id: str):
 def list_signals(limit: int = Query(50, ge=1, le=500)):
     storage = _get_storage()
     return JSONResponse(content=_serialize(storage.get_recent_signals(limit=limit)))
+
+
+@app.get("/api/signals/enriched")
+def enriched_signals(
+    limit: int = Query(50, ge=1, le=200),
+    min_confidence: int = Query(0, ge=0, le=100),
+    signal_type: str | None = Query(None),
+    verdict: str | None = Query(None, pattern="^(pass|reject)$"),
+):
+    storage = _get_storage()
+    rows = storage.get_enriched_signals(
+        limit=limit,
+        min_confidence=min_confidence,
+        signal_type=signal_type,
+        verdict=verdict,
+    )
+    return JSONResponse(content=_serialize(rows))
+
+
+@app.get("/api/regime/current")
+def current_regime():
+    storage = _get_storage()
+    regime = storage.get_current_regime()
+    if regime is None:
+        return {"regime": "normal", "metrics_json": {}, "params_json": {}}
+    return _serialize(regime)
 
 
 # --- Decisions ---
@@ -217,7 +208,8 @@ class ProfileUpdate(BaseModel):
     max_venue_exposure_pct: float | None = None
     max_open_positions: int | None = None
     min_similarity: float | None = None
-    daily_loss_limit_dollars: float | None = None
+    category_overrides: dict | None = None
+    strategy: str | None = None
 
 
 @app.get("/api/profiles")
@@ -239,101 +231,332 @@ def get_active_profile():
 @app.put("/api/profiles/{profile_id}")
 def update_profile_endpoint(profile_id: int, body: ProfileUpdate):
     storage = _get_storage()
-    audit = _get_audit()
     updates = body.model_dump(exclude_none=True)
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     updated = update_profile(storage, profile_id, updates)
     if updated is None:
         raise HTTPException(status_code=404, detail="Profile not found")
-    audit.profile_changed(profile_id, updates)
     return updated.to_dict()
 
 
 @app.put("/api/profiles/{profile_id}/activate")
 def activate_profile_endpoint(profile_id: int):
     storage = _get_storage()
-    audit = _get_audit()
     activate_profile(storage, profile_id)
     profile = load_active_profile(storage)
     if profile is None:
         raise HTTPException(status_code=404, detail="Profile not found after activation")
-    audit.profile_activated(profile_id, profile.name)
     return profile.to_dict()
 
 
-# --- Automation / Kill Switch ---
+# --- Execution ---
 
-@app.get("/api/automation/state")
-def get_automation_state():
-    ks = _get_kill_switch()
-    return ks.get_state()
-
-
-@app.post("/api/automation/start")
-def start_automation():
-    ks = _get_kill_switch()
-    audit = _get_audit()
-    state = ks.start()
-    audit.automation_started()
-    return state
-
-
-@app.post("/api/automation/pause")
-def pause_automation():
-    ks = _get_kill_switch()
-    audit = _get_audit()
-    state = ks.pause()
-    audit.automation_paused()
-    return state
-
-
-class KillRequest(BaseModel):
-    reason: str = "Manual kill switch"
-
-
-@app.post("/api/automation/kill")
-def trigger_kill_switch(body: KillRequest):
-    ks = _get_kill_switch()
-    audit = _get_audit()
-    state = ks.kill(reason=body.reason)
-    audit.kill_switch_triggered(body.reason)
-    return state
-
-
-# --- Audit Logs / Activity ---
-
-@app.get("/api/activity")
-def list_activity(
-    event_type: str | None = Query(None),
-    entity_type: str | None = Query(None),
+@app.get("/api/orders")
+def list_orders(
+    status: str | None = Query(None, pattern="^(pending|filled|partial|cancelled)$"),
     limit: int = Query(50, ge=1, le=500),
 ):
-    """Return recent audit log entries with optional filtering."""
     storage = _get_storage()
-    return storage.get_audit_logs(
-        event_type=event_type,
-        entity_type=entity_type,
-        limit=limit,
+    return JSONResponse(
+        content=_serialize(storage.get_recent_orders(limit=limit, status=status)),
     )
 
 
-# --- Exports ---
-
-@app.get("/api/exports/trades.csv")
-def export_trades_csv(limit: int = Query(500, ge=1, le=10000)):
-    """Export trade blotter as CSV."""
+@app.get("/api/fills")
+def list_fills(limit: int = Query(50, ge=1, le=500)):
     storage = _get_storage()
-    trades = storage.get_recent_trades(limit=limit)
+    return JSONResponse(content=_serialize(storage.get_recent_fills(limit=limit)))
 
-    output = io.StringIO()
-    if trades:
-        writer = csv.DictWriter(output, fieldnames=trades[0].keys())
-        writer.writeheader()
-        writer.writerows(trades)
 
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=neutralis_trades.csv"},
+@app.get("/api/fills/{order_id}")
+def fills_for_order(order_id: str):
+    storage = _get_storage()
+    return JSONResponse(content=_serialize(storage.get_fills_for_order(order_id)))
+
+
+@app.get("/api/decisions/{decision_id}/reasons")
+def decision_reasons(decision_id: int):
+    storage = _get_storage()
+    row = storage.get_decision_with_reasons(decision_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    return JSONResponse(content=_serialize(row))
+
+
+@app.get("/api/execution/stats")
+def execution_stats():
+    storage = _get_storage()
+    return storage.get_execution_stats()
+
+
+# --- Polymarket Connection ---
+
+class PolymarketConnectRequest(BaseModel):
+    wallet_address: str
+    signature: str
+    message: str
+    user_id: str
+
+
+class PolymarketCredsRequest(BaseModel):
+    wallet_address: str
+    api_key: str
+    api_secret: str
+    passphrase: str
+    user_id: str
+
+
+@app.post("/api/polymarket/connect")
+def connect_polymarket(req: PolymarketConnectRequest):
+    from eth_account.messages import encode_defunct
+    from eth_account import Account
+
+    if not req.user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+
+    try:
+        msg = encode_defunct(text=req.message)
+        recovered = Account.recover_message(msg, signature=req.signature)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    if recovered.lower() != req.wallet_address.lower():
+        raise HTTPException(
+            status_code=400,
+            detail="Signature does not match wallet address",
+        )
+
+    storage = _get_storage()
+    row_id = storage.upsert_polymarket_connection(
+        req.wallet_address.lower(), req.user_id,
     )
+    return {"connected": True, "wallet_address": req.wallet_address.lower(), "id": row_id}
+
+
+@app.get("/api/polymarket/status")
+def polymarket_status(user_id: str = Query(...)):
+    storage = _get_storage()
+    conn = storage.get_polymarket_connection(user_id)
+    if conn is None:
+        return {"connected": False, "wallet_address": None, "has_l2_creds": False}
+    return {
+        "connected": True,
+        "wallet_address": conn["wallet_address"],
+        "has_l2_creds": conn.get("api_key_enc") is not None,
+    }
+
+
+@app.post("/api/polymarket/credentials")
+def store_polymarket_credentials(req: PolymarketCredsRequest):
+    from neutralis.services.credential_store import encrypt
+
+    if not req.user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+
+    storage = _get_storage()
+    conn = storage.get_polymarket_connection(req.user_id)
+    if conn is None or conn["wallet_address"] != req.wallet_address.lower():
+        raise HTTPException(
+            status_code=400,
+            detail="Wallet not connected. Connect wallet first.",
+        )
+
+    storage.update_polymarket_l2_creds(
+        wallet_address=req.wallet_address.lower(),
+        user_id=req.user_id,
+        api_key_enc=encrypt(req.api_key),
+        api_secret_enc=encrypt(req.api_secret),
+        passphrase_enc=encrypt(req.passphrase),
+    )
+    return {"stored": True, "wallet_address": req.wallet_address.lower()}
+
+
+# --- Arb Signals ---
+
+@app.get("/api/arb/signals")
+def list_arb_signals(
+    limit: int = Query(50, ge=1, le=500),
+    min_edge: float = Query(0.0, ge=0.0),
+):
+    storage = _get_storage()
+    return JSONResponse(
+        content=_serialize(storage.get_recent_arb_signals(limit=limit, min_edge=min_edge)),
+    )
+
+
+# --- Analytics ---
+
+@app.get("/api/analytics/summary")
+def analytics_summary():
+    storage = _get_storage()
+    return storage.get_analytics_summary()
+
+
+@app.get("/api/analytics/pnl-timeline")
+def pnl_timeline(days: int = Query(90, ge=7, le=365)):
+    storage = _get_storage()
+    return _serialize(storage.get_daily_pnl(days=days))
+
+
+@app.get("/api/analytics/breakdown")
+def analytics_breakdown():
+    storage = _get_storage()
+    by_category: list = []
+    by_venue: list = []
+    pnl_dist: list = []
+    try:
+        by_category = storage.get_category_breakdown()
+    except Exception:
+        storage._safe_rollback()
+    try:
+        by_venue = storage.get_venue_breakdown()
+    except Exception:
+        storage._safe_rollback()
+    try:
+        pnl_dist = storage.get_pnl_distribution()
+    except Exception:
+        storage._safe_rollback()
+    return {
+        "by_category": _serialize(by_category),
+        "by_venue": _serialize(by_venue),
+        "pnl_distribution": _serialize(pnl_dist),
+    }
+
+
+@app.get("/api/analytics/guard-stats")
+def guard_stats():
+    storage = _get_storage()
+    return _serialize(storage.get_guard_effectiveness())
+
+
+# --- Categories ---
+
+@app.get("/api/categories")
+def list_categories():
+    from neutralis.categories import ALL_CATEGORIES
+    return [
+        {
+            "slug": c.slug,
+            "label": c.label,
+            "color": c.color,
+            "description": c.description,
+        }
+        for c in ALL_CATEGORIES
+    ]
+
+
+# --- Backtest ---
+
+class BacktestRequest(BaseModel):
+    start_date: str
+    end_date: str
+    pipeline_overrides: dict[str, Any] | None = None
+    portfolio_overrides: dict[str, Any] | None = None
+    matching_overrides: dict[str, Any] | None = None
+    exit_overrides: dict[str, Any] | None = None
+    scoring_weights: dict[str, float] | None = None
+
+
+@app.post("/api/backtest/run")
+def run_backtest_endpoint(req: BacktestRequest):
+    from neutralis.backtest.engine import run_backtest
+
+    try:
+        result = run_backtest(
+            start_date=req.start_date,
+            end_date=req.end_date,
+            pipeline_overrides=req.pipeline_overrides,
+            portfolio_overrides=req.portfolio_overrides,
+            matching_overrides=req.matching_overrides,
+            exit_overrides=req.exit_overrides,
+            scoring_weights=req.scoring_weights,
+        )
+        return result.to_dict()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/backtest/data-range")
+def backtest_data_range():
+    """Return the date range of available historical data."""
+    storage = _get_storage()
+    rows = storage._fetch_dicts("""
+        SELECT
+            MIN(snapshot_ts)::date AS earliest,
+            MAX(snapshot_ts)::date AS latest,
+            COUNT(DISTINCT date_trunc('minute', snapshot_ts)) AS total_runs,
+            COUNT(*) AS total_snapshots
+        FROM market_snapshots
+    """)
+    if not rows:
+        return {"earliest": None, "latest": None, "total_runs": 0, "total_snapshots": 0}
+    row = rows[0]
+    return {
+        "earliest": str(row["earliest"]) if row["earliest"] else None,
+        "latest": str(row["latest"]) if row["latest"] else None,
+        "total_runs": row["total_runs"],
+        "total_snapshots": row["total_snapshots"],
+    }
+
+
+# --- Optimizer ---
+
+# In-memory progress tracking (simple single-process approach)
+_optimizer_runs: dict[int, dict] = {}
+_optimizer_next_id = 1
+
+
+class OptimizeRequest(BaseModel):
+    start_date: str
+    end_date: str
+    objective: str = "total_pnl"
+    step_size: float = 0.10
+    max_combos: int = 50
+    top_n: int = 10
+
+
+@app.post("/api/backtest/optimize")
+def optimize_weights(req: OptimizeRequest):
+    from neutralis.backtest.optimizer import run_optimization
+
+    global _optimizer_next_id  # noqa: PLW0603
+    run_id = _optimizer_next_id
+    _optimizer_next_id += 1
+
+    _optimizer_runs[run_id] = {
+        "id": run_id,
+        "status": "running",
+        "completed": 0,
+        "total_combos": req.max_combos,
+        "results": [],
+    }
+
+    def on_progress(completed: int, total: int) -> None:
+        _optimizer_runs[run_id]["completed"] = completed
+        _optimizer_runs[run_id]["total_combos"] = total
+
+    try:
+        results = run_optimization(
+            start_date=req.start_date,
+            end_date=req.end_date,
+            objective=req.objective,
+            step_size=req.step_size,
+            max_combos=req.max_combos,
+            top_n=req.top_n,
+            progress_callback=on_progress,
+        )
+        _optimizer_runs[run_id]["status"] = "completed"
+        _optimizer_runs[run_id]["results"] = results
+        return _optimizer_runs[run_id]
+    except Exception as e:
+        _optimizer_runs[run_id]["status"] = "failed"
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/backtest/optimize/{run_id}/progress")
+def optimizer_progress(run_id: int):
+    run = _optimizer_runs.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Optimizer run not found")
+    return run

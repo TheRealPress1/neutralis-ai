@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime
 
-from neutralis.config import PortfolioConfig, Settings
+from neutralis.categories import classify_market
+from neutralis.config import ExitConfig, PortfolioConfig, Settings
 from neutralis.logging import get_logger
 from neutralis.models import (
     Decision,
@@ -44,10 +45,14 @@ class PortfolioManager:
         signal: Signal,
         decision: Decision,
         decision_id: int,
+        *,
+        is_paper: bool = True,
+        execution_results: list[dict] | None = None,
     ) -> list[Trade]:
-        """Record paper trades from a PASS decision and update positions.
+        """Record trades from a PASS decision and update positions.
 
         For each leg in the signal, create a Trade and upsert the Position.
+        When execution_results is provided, uses actual fill data from the exchange.
         Returns the list of created Trade objects.
         """
         if decision.verdict != DecisionVerdict.PASS:
@@ -58,7 +63,7 @@ class PortfolioManager:
         if signal.market_snapshot is not None:
             venue = signal.market_snapshot.venue
 
-        for leg in signal.legs:
+        for i, leg in enumerate(signal.legs):
             side = TradeSide.BUY_YES if leg.side == "yes" else TradeSide.BUY_NO
             leg_venue = leg.venue or venue  # per-leg venue if set, else signal-level
 
@@ -74,6 +79,24 @@ class PortfolioManager:
 
             quantity = leg_size / leg.price_dollars if leg.price_dollars > 0 else 0.0
 
+            # Use actual execution data if available
+            order_id = None
+            fill_price = None
+            if execution_results and i < len(execution_results):
+                ex = execution_results[i]
+                order_id = ex.get("order_id")
+                # Kalshi returns prices in cents; convert to dollars
+                if leg.side == "yes" and ex.get("yes_price"):
+                    fill_price = ex["yes_price"] / 100.0
+                elif leg.side == "no" and ex.get("no_price"):
+                    fill_price = ex["no_price"] / 100.0
+                # Use actual fill count if available
+                actual_count = ex.get("fill_count")
+                if actual_count and actual_count > 0:
+                    quantity = float(actual_count)
+                    if fill_price and fill_price > 0:
+                        leg_size = round(quantity * fill_price, 2)
+
             trade = Trade(
                 signal_id=signal.id,
                 decision_id=decision_id,
@@ -81,20 +104,24 @@ class PortfolioManager:
                 event_ticker=signal.event_ticker,
                 venue=leg_venue,
                 side=side,
-                price=leg.price_dollars,
+                price=fill_price or leg.price_dollars,
                 size_dollars=leg_size,
                 quantity=round(quantity, 4),
-                is_paper=True,
+                is_paper=is_paper,
+                order_id=order_id,
+                fill_price=fill_price,
             )
 
             self._storage.save_trade(trade)
             self._upsert_position(trade)
             trades.append(trade)
 
+            mode = "PAPER" if is_paper else "LIVE"
             logger.info(
-                "Trade: %s %s %s $%.2f @ %.4f (%d contracts)",
-                trade.venue, trade.side.value, trade.ticker,
+                "%s Trade: %s %s %s $%.2f @ %.4f (%d contracts)%s",
+                mode, trade.venue, trade.side.value, trade.ticker,
                 trade.size_dollars, trade.price, trade.quantity,
+                f" order_id={order_id}" if order_id else "",
             )
 
         return trades
@@ -106,6 +133,7 @@ class PortfolioManager:
         )
 
         if existing is None:
+            category = classify_market(trade.ticker, trade.event_ticker)
             position = Position(
                 ticker=trade.ticker,
                 event_ticker=trade.event_ticker,
@@ -116,6 +144,7 @@ class PortfolioManager:
                 size_dollars=trade.size_dollars,
                 quantity=trade.quantity,
                 trade_count=1,
+                category=category,
             )
             self._storage.save_position(position)
             return position
@@ -156,10 +185,12 @@ class PortfolioManager:
         self,
         position_id: str,
         settlement_price: float,
+        exit_reason: str = "settlement",
     ) -> Position:
         """Close a position at a settlement price and calculate realized P&L.
 
         settlement_price: 1.0 if the position's side won, 0.0 if it lost.
+        For exit strategies, pass the current bid price as settlement_price.
         """
         position = self._storage.get_position(position_id)
         if position is None:
@@ -171,16 +202,19 @@ class PortfolioManager:
         realized_pnl = settlement_value - position.size_dollars
 
         now = datetime.now()
+        exit_price = settlement_price if exit_reason != "settlement" else None
         self._storage.close_position(
             position_id=position_id,
             realized_pnl=round(realized_pnl, 4),
             closed_at=now,
+            exit_reason=exit_reason,
+            exit_price=exit_price,
         )
 
         logger.info(
-            "Position closed: %s %s %s | P&L=$%.2f",
+            "Position closed: %s %s %s | reason=%s P&L=$%.2f",
             position.ticker, position.side.value, position.venue,
-            realized_pnl,
+            exit_reason, realized_pnl,
         )
 
         return Position(
@@ -198,6 +232,9 @@ class PortfolioManager:
             trade_count=position.trade_count,
             opened_at=position.opened_at,
             closed_at=now,
+            category=position.category,
+            exit_reason=exit_reason,
+            exit_price=exit_price,
         )
 
     def get_snapshot(self) -> PortfolioSnapshot:
@@ -319,3 +356,145 @@ class PortfolioManager:
         """Return total dollar exposure to a specific ticker."""
         positions = self._storage.get_positions_by_ticker(ticker)
         return sum(p.size_dollars for p in positions)
+
+    # -- Exit strategies --
+
+    def evaluate_exits(
+        self,
+        settings: Settings,
+        exit_config: ExitConfig | None = None,
+    ) -> list[tuple[Position, str, float]]:
+        """Evaluate exit conditions for all open positions.
+
+        Runs AFTER mark_to_market so unrealized_pnl is fresh.
+        Returns list of (position, exit_reason, exit_price).
+        """
+        from neutralis.venues.kalshi_client import KalshiClient
+        from neutralis.venues.polymarket_client import PolymarketClient
+
+        cfg = exit_config or ExitConfig()
+        if not cfg.enabled:
+            return []
+
+        positions = self._storage.get_open_positions()
+        if not positions:
+            return []
+
+        kalshi_pos = [p for p in positions if p.venue == "kalshi"]
+        poly_pos = [p for p in positions if p.venue == "polymarket"]
+
+        # Fetch current bid prices (conservative exit prices)
+        bid_prices: dict[str, float] = {}
+
+        if kalshi_pos:
+            with KalshiClient(settings.kalshi) as client:
+                for pos in kalshi_pos:
+                    try:
+                        raw = client.get_market(pos.ticker)
+                        if raw is None:
+                            continue
+                        if pos.side == TradeSide.BUY_YES:
+                            bid_str = raw.get("yes_bid_dollars")
+                        else:
+                            bid_str = raw.get("no_bid_dollars")
+                        if bid_str is not None:
+                            bid_prices[pos.id] = float(bid_str)
+                    except Exception:
+                        logger.warning("Exit: error fetching bid for %s", pos.ticker)
+
+        if poly_pos:
+            with PolymarketClient(settings.polymarket) as client:
+                for pos in poly_pos:
+                    try:
+                        raw = client.get_market(pos.ticker)
+                        if raw is None:
+                            continue
+                        outcome_prices = raw.get("outcomePrices", [])
+                        if outcome_prices and len(outcome_prices) >= 2:
+                            idx = 0 if pos.side == TradeSide.BUY_YES else 1
+                            bid_prices[pos.id] = float(outcome_prices[idx])
+                    except Exception:
+                        logger.warning("Exit: error fetching bid for %s", pos.ticker)
+
+        exits: list[tuple[Position, str, float]] = []
+
+        for pos in positions:
+            current_bid = bid_prices.get(pos.id)
+            if current_bid is None or current_bid <= 0.01:
+                continue
+
+            exit_value = current_bid * pos.quantity
+            pnl_dollars = exit_value - pos.size_dollars
+            pnl_pct = (pnl_dollars / pos.size_dollars * 100) if pos.size_dollars > 0 else 0.0
+
+            exit_reason = None
+
+            # 1. Stop loss
+            if pnl_pct <= -cfg.stop_loss_pct:
+                exit_reason = "stop_loss"
+            # 2. Take profit
+            elif pnl_pct >= cfg.take_profit_pct:
+                exit_reason = "take_profit"
+            # 3. Time decay
+            if exit_reason is None:
+                exit_reason = self._check_time_decay(pos, current_bid, cfg)
+
+            if exit_reason is not None:
+                exits.append((pos, exit_reason, current_bid))
+
+        return exits
+
+    def _check_time_decay(
+        self,
+        pos: Position,
+        current_bid: float,
+        cfg: ExitConfig,
+    ) -> str | None:
+        """Check if position should exit due to time decay."""
+        from datetime import datetime as dt, timezone
+
+        rows = self._storage._fetch_dicts(
+            """SELECT expected_expiration, close_time
+               FROM market_snapshots
+               WHERE ticker = %(ticker)s
+               ORDER BY snapshot_ts DESC LIMIT 1""",
+            {"ticker": pos.ticker},
+        )
+        if not rows:
+            return None
+
+        expiry = rows[0].get("expected_expiration") or rows[0].get("close_time")
+        if expiry is None:
+            return None
+
+        if isinstance(expiry, str):
+            expiry = dt.fromisoformat(expiry)
+
+        now = dt.now(timezone.utc)
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+
+        hours_to_expiry = (expiry - now).total_seconds() / 3600.0
+        if hours_to_expiry > cfg.time_decay_hours:
+            return None
+
+        # Check if edge has narrowed below floor
+        current_edge_pct = ((current_bid - pos.entry_price) / pos.entry_price * 100
+                            if pos.entry_price > 0 else 0.0)
+        if current_edge_pct < cfg.time_decay_edge_floor_pct:
+            return "time_decay"
+
+        return None
+
+    def execute_exit(
+        self,
+        position: Position,
+        exit_reason: str,
+        exit_price: float,
+    ) -> Position:
+        """Close a position at the given bid price with an exit reason."""
+        return self.close_position(
+            position_id=position.id,
+            settlement_price=exit_price,
+            exit_reason=exit_reason,
+        )

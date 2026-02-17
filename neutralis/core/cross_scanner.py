@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from neutralis.config import MatchingConfig
+from neutralis.config import MatchingConfig, PipelineConfig
 from neutralis.core.matcher import MarketPair
+from neutralis.fees import estimate_cross_platform_fee
 from neutralis.logging import get_logger
 from neutralis.models import CrossPlatformMatch, Signal, SignalType, TradeLeg
 
@@ -13,14 +14,16 @@ logger = get_logger(__name__)
 def scan_cross_platform(
     pairs: list[MarketPair],
     config: MatchingConfig | None = None,
+    pipeline_config: PipelineConfig | None = None,
 ) -> list[Signal]:
     """Scan matched market pairs for cross-venue arbitrage opportunities.
 
     The arb trade: buy YES on the cheaper venue, buy NO on the other venue.
     One side always wins → guaranteed $1.00 return.
-    Edge = $1.00 - (favored_yes + other_no).
+    Edge = $1.00 - (favored_yes + other_no) - fees - slippage.
     """
     cfg = config or MatchingConfig()
+    cfg_pipe = pipeline_config or PipelineConfig()
     signals: list[Signal] = []
 
     for pair in pairs:
@@ -31,16 +34,6 @@ def scan_cross_platform(
         poly_yes = p.yes_ask
 
         if kalshi_yes <= 0 or poly_yes <= 0:
-            continue
-
-        abs_diff = abs(kalshi_yes - poly_yes)
-        lower_price = min(kalshi_yes, poly_yes)
-        if lower_price <= 0:
-            continue
-
-        discrepancy_pct = (abs_diff / lower_price) * 100.0
-
-        if discrepancy_pct < cfg.min_discrepancy_pct:
             continue
 
         # Determine which venue has cheaper YES
@@ -67,7 +60,23 @@ def scan_cross_platform(
         if gross_edge <= 0:
             continue  # No arb exists
 
-        edge_pct = (gross_edge / combined_cost) * 100.0
+        # Deduct per-venue fees from each leg
+        estimated_fee = estimate_cross_platform_fee(
+            yes_price=favored_yes,
+            yes_venue=yes_venue,
+            no_price=other_no,
+            no_venue=no_venue,
+        )
+        slippage = cfg_pipe.slippage_per_leg * 2  # two legs
+        net_edge = gross_edge - estimated_fee - slippage
+        if net_edge <= 0:
+            continue  # Not profitable after fees + slippage
+
+        edge_pct = (net_edge / combined_cost) * 100.0
+
+        # Price discrepancy for analytics (not used as gate)
+        lower_price = min(kalshi_yes, poly_yes)
+        discrepancy_pct = (abs(kalshi_yes - poly_yes) / lower_price) * 100.0
 
         xp_match = CrossPlatformMatch(
             kalshi_ticker=k.ticker,
@@ -108,7 +117,7 @@ def scan_cross_platform(
             no_ask=k.no_ask,
             combined_cost=round(combined_cost, 6),
             gross_edge=round(gross_edge, 6),
-            net_edge=round(gross_edge, 6),
+            net_edge=round(net_edge, 6),
             edge_pct=round(edge_pct, 4),
             legs=legs,
             market_snapshot=k,
