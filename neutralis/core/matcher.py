@@ -59,6 +59,23 @@ _ABBREVIATION_MAP: list[tuple[re.Pattern, str]] = [
     (re.compile(r"\bPhilly\b", re.IGNORECASE), "Philadelphia"),
     (re.compile(r"\bLA Clippers\b", re.IGNORECASE), "Los Angeles Clippers"),
     (re.compile(r"\bLA Lakers\b", re.IGNORECASE), "Los Angeles Lakers"),
+    (re.compile(r"\bPro Basketball\b", re.IGNORECASE), "NBA"),
+    # Awards
+    (re.compile(r"\bAcademy Awards?\b", re.IGNORECASE), "Oscars"),
+    (re.compile(r"\b98th Oscars\b", re.IGNORECASE), "Oscars"),
+    # Crypto — normalise dollar representations
+    (re.compile(r"\$150k\b", re.IGNORECASE), "$150000"),
+    (re.compile(r"\$200k\b", re.IGNORECASE), "$200000"),
+    (re.compile(r"\$250k\b", re.IGNORECASE), "$250000"),
+    (re.compile(r"\$100k\b", re.IGNORECASE), "$100000"),
+    (re.compile(r"\$125k\b", re.IGNORECASE), "$125000"),
+    (re.compile(r"\$149,999\.99\b"), "$150000"),
+    (re.compile(r"\$109,999\.99\b"), "$110000"),
+    (re.compile(r"\$99,999\.99\b"), "$100000"),
+    (re.compile(r"\$124,999\.99\b"), "$125000"),
+    (re.compile(r"\$129,999\.99\b"), "$130000"),
+    (re.compile(r"\$139,999\.99\b"), "$140000"),
+    (re.compile(r"\$199,999\.99\b"), "$200000"),
 ]
 
 

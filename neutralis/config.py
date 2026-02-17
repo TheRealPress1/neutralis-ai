@@ -152,8 +152,18 @@ class MarketFilterConfig:
         "KXATPMATCH", "KXWTAMATCH",
         # American sports
         "KXNBA", "KXNFL",
+        "KXNBAMVP", "KXNBAEAST", "KXNBAWEST",
+        # Crypto milestones (Polymarket has BTC/ETH milestone markets)
+        "KXBTCMAXY", "KXBTCMINY", "KXETHMAXY", "KXETHMINY",
+        "KXBTC2026200", "KXBTC2026250", "KXCRYPTORESERVE",
+        # Economics (Polymarket has Fed/inflation/GDP markets)
+        "KXFEDDECISION", "KXRATECUT", "KXFED", "KXCPIYOY", "KXGDP",
         # Political
         "KXFEDCHAIRNOM", "KXPRESPARTY",
+        "KXSENATE", "KXGOVCA",
+        # Entertainment (Polymarket has Oscar/Nobel markets)
+        "KXOSCARPIC", "KXOSCARACTO", "KXOSCARACTR", "KXOSCARDIR",
+        "KXNOBELPEACE",
     )
 
 
