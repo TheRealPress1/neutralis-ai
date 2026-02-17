@@ -103,14 +103,29 @@ def normalize_market(raw: dict[str, Any]) -> Optional[NormalizedMarket]:
     else:
         status = MarketStatus.INACTIVE
 
-    # Extract CLOB token IDs for WebSocket subscription
+    # Extract YES CLOB token ID for WebSocket subscription.
+    # clobTokenIds is parallel to outcomes: clobTokenIds[i] is the token for outcomes[i].
+    # We only want the YES token — subscribing to the NO token would cause price updates
+    # to be misinterpreted as YES prices (NO token price ≈ 1 - YES price).
     clob_token_ids_raw = raw.get("clobTokenIds")
     if isinstance(clob_token_ids_raw, str):
         try:
             clob_token_ids_raw = json.loads(clob_token_ids_raw)
         except (json.JSONDecodeError, TypeError):
             clob_token_ids_raw = None
-    clob_token_ids = tuple(clob_token_ids_raw) if clob_token_ids_raw else ()
+
+    clob_token_ids: tuple[str, ...] = ()
+    if clob_token_ids_raw and outcomes and len(clob_token_ids_raw) >= 2:
+        # Find the YES token by matching outcome labels
+        yes_idx = None
+        for i, label in enumerate(outcomes):
+            if str(label).strip().lower() == "yes" and i < len(clob_token_ids_raw):
+                yes_idx = i
+                break
+        # Fallback: first token (standard ordering is ["Yes", "No"])
+        if yes_idx is None:
+            yes_idx = 0
+        clob_token_ids = (str(clob_token_ids_raw[yes_idx]),)
 
     return NormalizedMarket(
         ticker=str(ticker),
