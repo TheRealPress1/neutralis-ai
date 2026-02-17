@@ -92,6 +92,10 @@ def normalize_market(
         logger.warning("Unknown status for %s: %s", ticker, raw.get("status"))
         status = MarketStatus.ACTIVE
 
+    # Reject non-active markets (determined, finalized, closed, etc.)
+    if status not in (MarketStatus.ACTIVE, MarketStatus.INITIALIZED):
+        return None
+
     yes_bids: tuple[OrderbookLevel, ...] = ()
     no_bids: tuple[OrderbookLevel, ...] = ()
     if orderbook_raw:

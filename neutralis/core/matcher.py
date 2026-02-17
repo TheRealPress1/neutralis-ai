@@ -39,6 +39,35 @@ _ENTITY_STOP = frozenset({
 # Regex: sequences of 2+ capitalised words (possibly with hyphens/apostrophes).
 _ENTITY_RE = re.compile(r"\b(?:[A-Z][A-Za-z'\-]+(?:\s+|$)){2,}")
 
+# Common sports abbreviation expansions (pattern, replacement).
+# Applied case-insensitively before tokenisation and entity extraction.
+_ABBREVIATION_MAP: list[tuple[re.Pattern, str]] = [
+    # Soccer - English
+    (re.compile(r"\bNottm\b", re.IGNORECASE), "Nottingham"),
+    (re.compile(r"\bMan City\b", re.IGNORECASE), "Manchester City"),
+    (re.compile(r"\bMan Utd\b", re.IGNORECASE), "Manchester United"),
+    (re.compile(r"\bMan United\b", re.IGNORECASE), "Manchester United"),
+    (re.compile(r"\bWolves\b", re.IGNORECASE), "Wolverhampton"),
+    (re.compile(r"\bSheff\b", re.IGNORECASE), "Sheffield"),
+    (re.compile(r"\bSoton\b", re.IGNORECASE), "Southampton"),
+    (re.compile(r"\bBham\b", re.IGNORECASE), "Birmingham"),
+    # Soccer - European
+    (re.compile(r"\bPSG\b"), "Paris Saint-Germain"),
+    (re.compile(r"\bAtl\.?\s*Madrid\b", re.IGNORECASE), "Atletico Madrid"),
+    # American sports
+    (re.compile(r"\bOKC\b"), "Oklahoma City"),
+    (re.compile(r"\bPhilly\b", re.IGNORECASE), "Philadelphia"),
+    (re.compile(r"\bLA Clippers\b", re.IGNORECASE), "Los Angeles Clippers"),
+    (re.compile(r"\bLA Lakers\b", re.IGNORECASE), "Los Angeles Lakers"),
+]
+
+
+def _expand_abbreviations(title: str) -> str:
+    """Expand common sports abbreviations in a market title."""
+    for pattern, replacement in _ABBREVIATION_MAP:
+        title = pattern.sub(replacement, title)
+    return title
+
 
 @dataclass(frozen=True)
 class MarketPair:
@@ -200,9 +229,15 @@ def _temporal_score(market_a: NormalizedMarket, market_b: NormalizedMarket) -> f
 # ---------------------------------------------------------------------------
 
 def _spread(market: NormalizedMarket) -> float:
-    """Bid-ask spread on the YES side. Returns 0 if no two-sided quote."""
-    if market.yes_ask > 0 and market.yes_bid > 0:
-        return market.yes_ask - market.yes_bid
+    """Bid-ask spread on the YES side.
+
+    One-sided quotes (bid=0, ask>0) return the full ask as spread — this
+    catches dead/expired markets that would otherwise look clean.
+    """
+    if market.yes_ask > 0:
+        if market.yes_bid > 0:
+            return market.yes_ask - market.yes_bid
+        return market.yes_ask  # one-sided quote: treat ask as spread
     return 0.0
 
 
@@ -233,15 +268,17 @@ def match_markets(
     """
     cfg = config or MatchingConfig()
 
-    # Pre-compute normalised text and tokens
+    # Pre-compute normalised text and tokens (with abbreviation expansion)
     # Parlays are now filtered during normalization (mve_selected_legs / "yes "/"no " prefix)
     kalshi_prepared = [
-        (m, _normalize_text(m.title), _significant_tokens(m.title))
+        (m, _normalize_text(_expand_abbreviations(m.title)),
+         _significant_tokens(_expand_abbreviations(m.title)))
         for m in kalshi_markets
         if m.title
     ]
     poly_prepared = [
-        (m, _normalize_text(m.title), _significant_tokens(m.title))
+        (m, _normalize_text(_expand_abbreviations(m.title)),
+         _significant_tokens(_expand_abbreviations(m.title)))
         for m in poly_markets
         if m.title
     ]
@@ -251,15 +288,15 @@ def match_markets(
         len(kalshi_prepared), len(poly_prepared),
     )
 
-    # Build IDF table from all titles
-    all_titles = [m.title for m, _, _ in kalshi_prepared] + [
-        m.title for m, _, _ in poly_prepared
+    # Build IDF table from all (expanded) titles
+    all_titles = [_expand_abbreviations(m.title) for m, _, _ in kalshi_prepared] + [
+        _expand_abbreviations(m.title) for m, _, _ in poly_prepared
     ]
     idf = _build_idf(all_titles)
 
-    # Pre-compute entities
-    kalshi_entities = [_extract_entities(m.title) for m, _, _ in kalshi_prepared]
-    poly_entities = [_extract_entities(m.title) for m, _, _ in poly_prepared]
+    # Pre-compute entities (with abbreviation expansion)
+    kalshi_entities = [_extract_entities(_expand_abbreviations(m.title)) for m, _, _ in kalshi_prepared]
+    poly_entities = [_extract_entities(_expand_abbreviations(m.title)) for m, _, _ in poly_prepared]
 
     # Collect (score, kalshi_idx, poly_idx, pair) candidates — we'll deduplicate after
     candidates: list[tuple[float, int, int, MarketPair]] = []
