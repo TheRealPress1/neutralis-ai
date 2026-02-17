@@ -275,7 +275,7 @@ def run_backtest(
 
             # Cross-platform matching + scanning
             pairs = match_markets(kalshi_markets, poly_markets, matching_cfg)
-            xp_signals = scan_cross_platform(pairs, matching_cfg)
+            xp_signals = scan_cross_platform(pairs, matching_cfg, pipeline_config=pipeline_cfg)
 
             # Compute regime for this time step
             di_overall = 0.0

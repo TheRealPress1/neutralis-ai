@@ -28,6 +28,7 @@ class MarketType(str, Enum):
 class SignalType(str, Enum):
     COMPLEMENT_ARB = "complement_arb"
     CROSS_PLATFORM_DISCREPANCY = "cross_platform_discrepancy"
+    THREE_WAY_ARB = "three_way_arb"
 
 
 class DecisionVerdict(str, Enum):
@@ -102,6 +103,38 @@ class CrossPlatformMatch:
     match_confidence: float
     price_discrepancy_pct: float
     favored_venue: str
+
+
+@dataclass(frozen=True)
+class ThreeWayOutcome:
+    """One outcome in a 3-way market (Team A / Team B / Draw)."""
+    label: str
+    ticker: str
+    ask: float
+    bid: float
+    venue: str = "kalshi"
+    token_id: str = ""
+
+
+@dataclass(frozen=True)
+class ThreeWayGroup:
+    """Three mutually exclusive outcomes for a single match/event."""
+    event_id: str
+    venue: str
+    title: str
+    outcome_a: ThreeWayOutcome
+    outcome_b: ThreeWayOutcome
+    outcome_draw: ThreeWayOutcome
+    close_time: Optional[datetime] = None
+    liquidity: float = 0.0
+
+    @property
+    def combined_ask(self) -> float:
+        return self.outcome_a.ask + self.outcome_b.ask + self.outcome_draw.ask
+
+    @property
+    def outcomes(self) -> tuple[ThreeWayOutcome, ThreeWayOutcome, ThreeWayOutcome]:
+        return (self.outcome_a, self.outcome_b, self.outcome_draw)
 
 
 @dataclass(frozen=True)

@@ -51,17 +51,20 @@ def kalshi_fee(
     return kalshi_fee_per_contract(price, maker=maker) * contracts
 
 
+_POLYMARKET_TAKER_RATE = 0.0001  # 0.01% taker fee (Polymarket US, CFTC-regulated)
+
+
 def polymarket_fee(
     price: float,
     contracts: int = 1,
 ) -> float:
-    """Polymarket fee. Zero for standard markets (political, sports, etc.).
+    """Polymarket fee — 0.01% taker fee on all markets.
 
-    15-minute crypto markets have taker fees but we don't trade those.
-    Polymarket US (CFTC-regulated) charges 0.01% — negligible.
+    Negligible for most trades but adds accuracy on tight arbs.
     """
-    # No meaningful fee for the markets we trade
-    return 0.0
+    if price <= 0:
+        return 0.0
+    return round(price * contracts * _POLYMARKET_TAKER_RATE, 6)
 
 
 def estimate_total_fee(
@@ -99,16 +102,44 @@ def estimate_cross_platform_fee(
     no_price: float,
     no_venue: str,
     contracts: int = 1,
+    *,
+    maker: bool = False,
 ) -> float:
-    """Total estimated fee for a cross-platform arb (YES on one venue, NO on another)."""
+    """Total estimated fee for a cross-platform arb (YES on one venue, NO on another).
+
+    When maker=True, Kalshi legs use the maker fee rate (4x cheaper) assuming
+    we'll post GTC limit orders that rest on the book.
+    """
     if yes_venue == "kalshi":
-        yes_fee = kalshi_fee(yes_price, contracts)
+        yes_fee = kalshi_fee(yes_price, contracts, maker=maker)
     else:
         yes_fee = polymarket_fee(yes_price, contracts)
 
     if no_venue == "kalshi":
-        no_fee = kalshi_fee(no_price, contracts)
+        no_fee = kalshi_fee(no_price, contracts, maker=maker)
     else:
         no_fee = polymarket_fee(no_price, contracts)
 
     return yes_fee + no_fee
+
+
+def estimate_three_way_fee(
+    prices: tuple[float, float, float],
+    venues: tuple[str, str, str] = ("kalshi", "kalshi", "kalshi"),
+    contracts: int = 1,
+    *,
+    maker: bool = False,
+) -> float:
+    """Total fee for a 3-leg Dutch book arb (buy all 3 outcomes).
+
+    Each leg's fee depends on the venue:
+    - Kalshi legs pay the standard parabolic fee (maker or taker)
+    - Polymarket legs are free
+    """
+    total = 0.0
+    for price, venue in zip(prices, venues):
+        if venue == "kalshi":
+            total += kalshi_fee(price, contracts, maker=maker)
+        else:
+            total += polymarket_fee(price, contracts)
+    return total
