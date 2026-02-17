@@ -63,7 +63,7 @@ export async function getApiKeys() {
 
   if (error) return { error: error.message, keys: [] };
 
-  const decrypted = (data ?? []).map((row) => ({
+  const decrypted = (data ?? []).map((row: any) => ({
     ...row,
     api_secret: tryDecrypt(row.api_secret),
     private_key_pem: tryDecrypt(row.private_key_pem),
