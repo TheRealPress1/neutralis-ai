@@ -9,7 +9,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from neutralis.config import PipelineConfig
-from neutralis.fees import estimate_total_fee
 from neutralis.logging import get_logger
 from neutralis.models import (
     MarketType,
@@ -65,7 +64,7 @@ def scan_complement_arb(
             continue
 
         gross_edge = 1.0 - combined_cost
-        estimated_fee = estimate_total_fee(m.yes_ask, m.no_ask, venue=m.venue)
+        estimated_fee = cfg.fee_rate * m.notional_value
         net_edge = gross_edge - estimated_fee
 
         if net_edge <= 0:

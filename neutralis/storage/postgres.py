@@ -12,8 +12,6 @@ from neutralis.logging import get_logger
 from neutralis.core.matcher import MarketPair
 from neutralis.models import (
     Decision,
-    MarketStatus,
-    MarketType,
     NormalizedMarket,
     Position,
     PositionStatus,
@@ -48,14 +46,6 @@ class PostgresStorage:
 
     def __exit__(self, *args: object) -> None:
         self.close()
-
-    def _safe_rollback(self) -> None:
-        """Rollback the current transaction if one is in error state."""
-        if self._conn and not self._conn.closed:
-            try:
-                self._conn.rollback()
-            except Exception:
-                pass
 
     def _ensure_connected(self) -> psycopg.Connection:
         if self._conn is None or self._conn.closed:
@@ -129,8 +119,6 @@ class PostgresStorage:
         """Insert a signal row. Returns the signal id."""
         conn = self._ensure_connected()
 
-        features_json_str = json.dumps(signal.features_json) if signal.features_json else "{}"
-
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -138,16 +126,12 @@ class PostgresStorage:
                     id, signal_type, ticker, event_ticker,
                     yes_ask, no_ask, combined_cost,
                     gross_edge, net_edge, edge_pct,
-                    snapshot_id, created_at,
-                    confidence_score, time_to_resolution_days,
-                    roi_per_day, features_json
+                    snapshot_id, created_at
                 ) VALUES (
                     %(id)s, %(signal_type)s, %(ticker)s, %(event_ticker)s,
                     %(yes_ask)s, %(no_ask)s, %(combined_cost)s,
                     %(gross_edge)s, %(net_edge)s, %(edge_pct)s,
-                    %(snapshot_id)s, %(created_at)s,
-                    %(confidence_score)s, %(time_to_resolution_days)s,
-                    %(roi_per_day)s, %(features_json)s::jsonb
+                    %(snapshot_id)s, %(created_at)s
                 )
                 """,
                 {
@@ -163,10 +147,6 @@ class PostgresStorage:
                     "edge_pct": signal.edge_pct,
                     "snapshot_id": snapshot_id,
                     "created_at": signal.created_at,
-                    "confidence_score": signal.confidence_score,
-                    "time_to_resolution_days": signal.time_to_resolution_days,
-                    "roi_per_day": signal.roi_per_day,
-                    "features_json": features_json_str,
                 },
             )
         conn.commit()
@@ -188,19 +168,16 @@ class PostgresStorage:
                 for gr in decision.guard_results
             ]
         )
-        allocation_reasons_json = json.dumps(list(decision.allocation_reasons))
 
         with conn.cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO decisions (
                     signal_id, verdict, guard_results,
-                    suggested_size, created_at,
-                    selected, selection_score, allocation_reasons
+                    suggested_size, created_at
                 ) VALUES (
                     %(signal_id)s, %(verdict)s, %(guard_results)s::jsonb,
-                    %(suggested_size)s, %(created_at)s,
-                    %(selected)s, %(selection_score)s, %(allocation_reasons)s::jsonb
+                    %(suggested_size)s, %(created_at)s
                 )
                 RETURNING id
                 """,
@@ -210,9 +187,6 @@ class PostgresStorage:
                     "guard_results": guard_results_json,
                     "suggested_size": decision.suggested_size_dollars,
                     "created_at": decision.created_at,
-                    "selected": decision.selected,
-                    "selection_score": decision.selection_score,
-                    "allocation_reasons": allocation_reasons_json,
                 },
             )
             row = cur.fetchone()
@@ -318,7 +292,7 @@ class PostgresStorage:
         "id, ticker, event_ticker, venue, side, status, "
         "entry_price, size_dollars, quantity, "
         "realized_pnl, unrealized_pnl, trade_count, "
-        "opened_at, closed_at, category, exit_reason, exit_price"
+        "opened_at, closed_at"
     )
 
     @staticmethod
@@ -338,9 +312,6 @@ class PostgresStorage:
             trade_count=row[11],
             opened_at=row[12],
             closed_at=row[13],
-            category=row[14] if len(row) > 14 else "other",
-            exit_reason=row[15] if len(row) > 15 else None,
-            exit_price=float(row[16]) if len(row) > 16 and row[16] is not None else None,
         )
 
     def save_trade(self, trade: Trade) -> str:
@@ -352,11 +323,11 @@ class PostgresStorage:
                 INSERT INTO trades (
                     id, signal_id, decision_id, ticker, event_ticker,
                     venue, side, price, size_dollars, quantity,
-                    is_paper, order_id, fill_price, created_at
+                    is_paper, created_at
                 ) VALUES (
                     %(id)s, %(signal_id)s, %(decision_id)s, %(ticker)s, %(event_ticker)s,
                     %(venue)s, %(side)s, %(price)s, %(size_dollars)s, %(quantity)s,
-                    %(is_paper)s, %(order_id)s, %(fill_price)s, %(created_at)s
+                    %(is_paper)s, %(created_at)s
                 )
                 """,
                 {
@@ -371,8 +342,6 @@ class PostgresStorage:
                     "size_dollars": trade.size_dollars,
                     "quantity": trade.quantity,
                     "is_paper": trade.is_paper,
-                    "order_id": trade.order_id,
-                    "fill_price": trade.fill_price,
                     "created_at": trade.created_at,
                 },
             )
@@ -389,13 +358,12 @@ class PostgresStorage:
                     id, ticker, event_ticker, venue, side, status,
                     entry_price, size_dollars, quantity,
                     realized_pnl, unrealized_pnl, trade_count,
-                    opened_at, closed_at, category, exit_reason, exit_price
+                    opened_at, closed_at
                 ) VALUES (
                     %(id)s, %(ticker)s, %(event_ticker)s, %(venue)s, %(side)s, %(status)s,
                     %(entry_price)s, %(size_dollars)s, %(quantity)s,
                     %(realized_pnl)s, %(unrealized_pnl)s, %(trade_count)s,
-                    %(opened_at)s, %(closed_at)s, %(category)s,
-                    %(exit_reason)s, %(exit_price)s
+                    %(opened_at)s, %(closed_at)s
                 )
                 """,
                 {
@@ -413,9 +381,6 @@ class PostgresStorage:
                     "trade_count": position.trade_count,
                     "opened_at": position.opened_at,
                     "closed_at": position.closed_at,
-                    "category": position.category,
-                    "exit_reason": position.exit_reason,
-                    "exit_price": position.exit_price,
                 },
             )
         conn.commit()
@@ -470,8 +435,6 @@ class PostgresStorage:
         position_id: str,
         realized_pnl: float,
         closed_at: object,
-        exit_reason: str | None = None,
-        exit_price: float | None = None,
     ) -> None:
         """Mark a position as closed with realized P&L."""
         conn = self._ensure_connected()
@@ -482,17 +445,13 @@ class PostgresStorage:
                 SET status = 'closed',
                     realized_pnl = %(realized_pnl)s,
                     unrealized_pnl = 0,
-                    closed_at = %(closed_at)s,
-                    exit_reason = %(exit_reason)s,
-                    exit_price = %(exit_price)s
+                    closed_at = %(closed_at)s
                 WHERE id = %(id)s AND status = 'open'
                 """,
                 {
                     "id": position_id,
                     "realized_pnl": realized_pnl,
                     "closed_at": closed_at,
-                    "exit_reason": exit_reason,
-                    "exit_price": exit_price,
                 },
             )
         conn.commit()
@@ -651,848 +610,27 @@ class PostgresStorage:
             "total_trades": trade_count,
         }
 
-    # -- Analytics queries --
+    # -- Audit Logs --
 
-    def get_daily_pnl(self, days: int = 90) -> list[dict]:
-        """Daily realized P&L for closed positions over the last N days."""
-        return self._fetch_dicts(
-            """
-            SELECT
-                DATE(closed_at) AS date,
-                SUM(realized_pnl) AS pnl,
-                COUNT(*) AS trades,
-                SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) AS wins,
-                SUM(CASE WHEN realized_pnl <= 0 THEN 1 ELSE 0 END) AS losses
-            FROM positions
-            WHERE status = 'closed'
-              AND closed_at >= now() - make_interval(days => %(days)s)
-            GROUP BY DATE(closed_at)
-            ORDER BY date
-            """,
-            {"days": days},
-        )
-
-    def get_category_breakdown(self) -> list[dict]:
-        """P&L and trade counts per market category."""
-        return self._fetch_dicts("""
-            SELECT
-                category,
-                COUNT(*) AS total_trades,
-                SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) AS wins,
-                SUM(CASE WHEN realized_pnl <= 0 THEN 1 ELSE 0 END) AS losses,
-                COALESCE(SUM(realized_pnl), 0) AS total_pnl,
-                COALESCE(AVG(realized_pnl), 0) AS avg_pnl
-            FROM positions
-            WHERE status = 'closed'
-            GROUP BY category
-            ORDER BY total_pnl DESC
-        """)
-
-    def get_venue_breakdown(self) -> list[dict]:
-        """P&L and trade counts per venue."""
-        return self._fetch_dicts("""
-            SELECT
-                venue,
-                COUNT(*) AS total_trades,
-                SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) AS wins,
-                SUM(CASE WHEN realized_pnl <= 0 THEN 1 ELSE 0 END) AS losses,
-                COALESCE(SUM(realized_pnl), 0) AS total_pnl
-            FROM positions
-            WHERE status = 'closed'
-            GROUP BY venue
-        """)
-
-    def get_analytics_summary(self) -> dict:
-        """Aggregate analytics: total P&L, best/worst day, max drawdown, avg trade."""
-        rows = self._fetch_dicts("""
-            WITH daily AS (
-                SELECT DATE(closed_at) AS d, SUM(realized_pnl) AS pnl
-                FROM positions WHERE status = 'closed'
-                GROUP BY DATE(closed_at)
-            ),
-            cumulative AS (
-                SELECT d, pnl, SUM(pnl) OVER (ORDER BY d) AS cum_pnl
-                FROM daily
-            ),
-            drawdown AS (
-                SELECT d, cum_pnl,
-                       cum_pnl - MAX(cum_pnl) OVER (
-                           ORDER BY d ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                       ) AS dd
-                FROM cumulative
-            )
-            SELECT
-                (SELECT COALESCE(SUM(realized_pnl), 0) FROM positions WHERE status = 'closed')
-                    AS total_pnl,
-                (SELECT COUNT(*) FROM positions WHERE status = 'closed')
-                    AS total_closed,
-                (SELECT COALESCE(MAX(pnl), 0) FROM daily) AS best_day,
-                (SELECT COALESCE(MIN(pnl), 0) FROM daily) AS worst_day,
-                (SELECT COALESCE(MIN(dd), 0) FROM drawdown) AS max_drawdown,
-                (SELECT COALESCE(AVG(realized_pnl), 0) FROM positions WHERE status = 'closed')
-                    AS avg_trade_pnl,
-                (SELECT COALESCE(AVG(realized_pnl), 0) FROM positions
-                    WHERE status = 'closed' AND realized_pnl > 0) AS avg_win,
-                (SELECT COALESCE(ABS(AVG(realized_pnl)), 0) FROM positions
-                    WHERE status = 'closed' AND realized_pnl <= 0) AS avg_loss
-        """)
-        return rows[0] if rows else {}
-
-    def get_pnl_distribution(self, bucket_size: float = 5.0) -> list[dict]:
-        """Histogram of realized P&L values."""
-        return self._fetch_dicts(
-            """
-            SELECT
-                FLOOR(realized_pnl / %(bucket)s) * %(bucket)s AS bucket_start,
-                COUNT(*) AS count
-            FROM positions
-            WHERE status = 'closed'
-            GROUP BY bucket_start
-            ORDER BY bucket_start
-            """,
-            {"bucket": bucket_size},
-        )
-
-    def get_guard_effectiveness(self) -> list[dict]:
-        """Rejection rate per guard name from decisions."""
-        return self._fetch_dicts("""
-            SELECT
-                g->>'guard_name' AS guard_name,
-                COUNT(*) AS total_evaluations,
-                SUM(CASE WHEN (g->>'passed')::boolean = false THEN 1 ELSE 0 END)
-                    AS rejections,
-                ROUND(
-                    SUM(CASE WHEN (g->>'passed')::boolean = false THEN 1 ELSE 0 END)::numeric
-                    / NULLIF(COUNT(*), 0), 4
-                ) AS rejection_rate
-            FROM decisions, jsonb_array_elements(guard_results) AS g
-            GROUP BY g->>'guard_name'
-            ORDER BY rejections DESC
-        """)
-
-    # -- Signal feed & regime queries --
-
-    def get_enriched_signals(
+    def get_audit_logs(
         self,
+        event_type: str | None = None,
+        entity_type: str | None = None,
         limit: int = 50,
-        min_confidence: int = 0,
-        signal_type: str | None = None,
-        verdict: str | None = None,
     ) -> list[dict]:
-        """Signals joined with their latest decision, for the live feed."""
-        where_clauses = ["s.confidence_score >= %(min_confidence)s"]
-        params: dict = {"limit": limit, "min_confidence": min_confidence}
+        """Return recent audit log entries with optional filtering."""
+        conditions = []
+        params: dict = {"limit": limit}
 
-        if signal_type:
-            where_clauses.append("s.signal_type = %(signal_type)s")
-            params["signal_type"] = signal_type
-        if verdict:
-            where_clauses.append("d.verdict = %(verdict)s")
-            params["verdict"] = verdict
+        if event_type:
+            conditions.append("event_type = %(event_type)s")
+            params["event_type"] = event_type
+        if entity_type:
+            conditions.append("entity_type = %(entity_type)s")
+            params["entity_type"] = entity_type
 
-        where_sql = " AND ".join(where_clauses)
-
-        return self._fetch_dicts(f"""
-            SELECT
-                s.id, s.signal_type, s.ticker, s.event_ticker,
-                s.edge_pct, s.net_edge, s.confidence_score,
-                s.roi_per_day, s.time_to_resolution_days,
-                s.features_json, s.created_at AS signal_created_at,
-                d.id AS decision_id, d.verdict, d.selected,
-                d.selection_score, d.suggested_size,
-                d.guard_results, d.allocation_reasons
-            FROM signals s
-            LEFT JOIN decisions d ON d.signal_id = s.id
-            WHERE {where_sql}
-            ORDER BY s.created_at DESC
-            LIMIT %(limit)s
-        """, params)
-
-    def get_current_regime(self) -> dict | None:
-        """Return the most recent regime state."""
-        rows = self._fetch_dicts(
-            "SELECT * FROM regime_states ORDER BY created_at DESC LIMIT 1"
-        )
-        return rows[0] if rows else None
-
-    # -- Backtest queries --
-
-    def get_snapshot_timestamps(
-        self, start_date: str, end_date: str,
-    ) -> list[dict]:
-        """Get distinct pipeline-run timestamps within a date range.
-
-        Groups snapshots into runs by rounding snapshot_ts to the nearest minute.
-        Returns [{ts, kalshi_count, poly_count}] ordered chronologically.
-        """
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         return self._fetch_dicts(
-            """
-            SELECT
-                date_trunc('minute', snapshot_ts) AS ts,
-                COUNT(*) FILTER (WHERE venue = 'kalshi') AS kalshi_count,
-                COUNT(*) FILTER (WHERE venue = 'polymarket') AS poly_count
-            FROM market_snapshots
-            WHERE snapshot_ts >= %(start)s::timestamptz
-              AND snapshot_ts < %(end)s::timestamptz
-            GROUP BY date_trunc('minute', snapshot_ts)
-            HAVING COUNT(*) >= 2
-            ORDER BY ts
-            """,
-            {"start": start_date, "end": end_date},
+            f"SELECT * FROM audit_logs {where} ORDER BY created_at DESC LIMIT %(limit)s",
+            params,
         )
-
-    def get_snapshots_at(
-        self, ts: object, venue: str | None = None,
-    ) -> list[NormalizedMarket]:
-        """Fetch all market snapshots at a given pipeline-run timestamp.
-
-        Matches within a 1-minute window around `ts`.
-        """
-        conn = self._ensure_connected()
-        sql = """
-            SELECT
-                ticker, event_ticker, market_type, title, status,
-                yes_bid, yes_ask, no_bid, no_ask,
-                volume, volume_24h, liquidity, open_interest, notional_value,
-                close_time, expected_expiration, snapshot_ts, venue
-            FROM market_snapshots
-            WHERE snapshot_ts >= %(ts)s::timestamptz
-              AND snapshot_ts < %(ts)s::timestamptz + interval '1 minute'
-        """
-        params: dict = {"ts": str(ts)}
-        if venue:
-            sql += " AND venue = %(venue)s"
-            params["venue"] = venue
-
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            rows = cur.fetchall()
-
-        markets: list[NormalizedMarket] = []
-        for r in rows:
-            try:
-                markets.append(NormalizedMarket(
-                    ticker=r[0],
-                    event_ticker=r[1],
-                    market_type=MarketType(r[2]) if r[2] else MarketType.BINARY,
-                    title=r[3] or "",
-                    subtitle="",
-                    status=MarketStatus(r[4]) if r[4] else MarketStatus.ACTIVE,
-                    yes_bid=float(r[5]),
-                    yes_ask=float(r[6]),
-                    no_bid=float(r[7]),
-                    no_ask=float(r[8]),
-                    volume=float(r[9]),
-                    volume_24h=float(r[10]),
-                    liquidity=float(r[11]),
-                    open_interest=float(r[12]),
-                    notional_value=float(r[13]),
-                    close_time=r[14],
-                    expected_expiration=r[15],
-                    venue=r[17] or "kalshi",
-                ))
-            except (ValueError, TypeError):
-                continue
-        return markets
-
-    def get_market_outcome(self, ticker: str) -> str | None:
-        """Check if a market resolved by looking at the latest snapshot status.
-
-        Returns 'yes', 'no', or None if not yet resolved.
-        Uses the last snapshot: if status is determined/finalized/closed,
-        infers outcome from yes_ask (near 1.0 = yes won, near 0.0 = no won).
-        """
-        rows = self._fetch_dicts(
-            """
-            SELECT status, yes_ask, no_ask
-            FROM market_snapshots
-            WHERE ticker = %(ticker)s
-            ORDER BY snapshot_ts DESC
-            LIMIT 1
-            """,
-            {"ticker": ticker},
-        )
-        if not rows:
-            return None
-        row = rows[0]
-        status = row.get("status", "")
-        if status not in ("determined", "finalized", "closed"):
-            return None
-        yes_ask = float(row.get("yes_ask", 0.5))
-        if yes_ask >= 0.90:
-            return "yes"
-        if yes_ask <= 0.10:
-            return "no"
-        return None
-
-    # -- Alpha vNext: regime & disagreement --
-
-    def save_regime_state(
-        self, regime: str, metrics: dict, params: dict,
-    ) -> int:
-        """Insert a regime state row. Returns the generated id."""
-        conn = self._ensure_connected()
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO regime_states (regime, metrics_json, params_json)
-                VALUES (%(regime)s, %(metrics)s::jsonb, %(params)s::jsonb)
-                RETURNING id
-                """,
-                {
-                    "regime": regime,
-                    "metrics": json.dumps(metrics),
-                    "params": json.dumps(params),
-                },
-            )
-            row = cur.fetchone()
-            assert row is not None
-            state_id: int = row[0]
-        conn.commit()
-        return state_id
-
-    def save_disagreement_index(
-        self, overall: float, by_category: dict, sample_size: int,
-    ) -> int:
-        """Insert a disagreement index row. Returns the generated id."""
-        conn = self._ensure_connected()
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO disagreement_index (overall, by_category, sample_size)
-                VALUES (%(overall)s, %(by_category)s::jsonb, %(sample_size)s)
-                RETURNING id
-                """,
-                {
-                    "overall": overall,
-                    "by_category": json.dumps(by_category),
-                    "sample_size": sample_size,
-                },
-            )
-            row = cur.fetchone()
-            assert row is not None
-            idx_id: int = row[0]
-        conn.commit()
-        return idx_id
-
-    def save_scheduler_run(self, run_number: int, run_stats: object) -> int:
-        """Insert a scheduler run metrics row. Returns the generated id."""
-        conn = self._ensure_connected()
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO scheduler_runs (
-                    run_number, duration_ms,
-                    kalshi_markets, poly_markets,
-                    complement_signals, cross_platform_signals, matches,
-                    decisions_pass, decisions_reject, decisions_selected,
-                    open_positions, total_exposure,
-                    positions_settled, settlement_pnl, marked_positions,
-                    exits_triggered, exit_pnl,
-                    regime, disagreement_index
-                ) VALUES (
-                    %(run_number)s, %(duration_ms)s,
-                    %(kalshi_markets)s, %(poly_markets)s,
-                    %(complement_signals)s, %(cross_platform_signals)s, %(matches)s,
-                    %(decisions_pass)s, %(decisions_reject)s, %(decisions_selected)s,
-                    %(open_positions)s, %(total_exposure)s,
-                    %(positions_settled)s, %(settlement_pnl)s, %(marked_positions)s,
-                    %(exits_triggered)s, %(exit_pnl)s,
-                    %(regime)s, %(disagreement_index)s
-                )
-                RETURNING id
-                """,
-                {
-                    "run_number": run_number,
-                    "duration_ms": getattr(run_stats, "duration_ms", 0.0),
-                    "kalshi_markets": getattr(run_stats, "kalshi_markets", 0),
-                    "poly_markets": getattr(run_stats, "poly_markets", 0),
-                    "complement_signals": getattr(run_stats, "complement_signals", 0),
-                    "cross_platform_signals": getattr(run_stats, "cross_platform_signals", 0),
-                    "matches": getattr(run_stats, "matches", 0),
-                    "decisions_pass": getattr(run_stats, "decisions_pass", 0),
-                    "decisions_reject": getattr(run_stats, "decisions_reject", 0),
-                    "decisions_selected": getattr(run_stats, "decisions_selected", 0),
-                    "open_positions": getattr(run_stats, "open_positions", 0),
-                    "total_exposure": getattr(run_stats, "total_exposure", 0.0),
-                    "positions_settled": getattr(run_stats, "positions_settled", 0),
-                    "settlement_pnl": getattr(run_stats, "settlement_pnl", 0.0),
-                    "marked_positions": getattr(run_stats, "marked_positions", 0),
-                    "exits_triggered": getattr(run_stats, "exits_triggered", 0),
-                    "exit_pnl": getattr(run_stats, "exit_pnl", 0.0),
-                    "regime": getattr(run_stats, "regime", "normal"),
-                    "disagreement_index": getattr(run_stats, "disagreement_index", 0.0),
-                },
-            )
-            row = cur.fetchone()
-            assert row is not None
-            run_id: int = row[0]
-        conn.commit()
-        return run_id
-
-    # -- Execution: orders and fills --
-
-    def save_order(self, order: object) -> str:
-        """Insert an order row (idempotent via ON CONFLICT DO NOTHING).
-
-        Returns the order id if inserted, or '' if skipped due to conflict.
-        """
-        conn = self._ensure_connected()
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO orders (
-                    id, tick_id, signal_id, decision_id,
-                    ticker, event_ticker, venue, side, order_type,
-                    requested_price, requested_size_dollars, requested_quantity,
-                    status, filled_size_dollars, filled_quantity, fill_count,
-                    avg_fill_price, slippage_bps, fees_dollars,
-                    is_paper, user_id, created_at, updated_at, expired_at
-                ) VALUES (
-                    %(id)s, %(tick_id)s, %(signal_id)s, %(decision_id)s,
-                    %(ticker)s, %(event_ticker)s, %(venue)s, %(side)s, %(order_type)s,
-                    %(requested_price)s, %(requested_size_dollars)s, %(requested_quantity)s,
-                    %(status)s, %(filled_size_dollars)s, %(filled_quantity)s, %(fill_count)s,
-                    %(avg_fill_price)s, %(slippage_bps)s, %(fees_dollars)s,
-                    %(is_paper)s, %(user_id)s, %(created_at)s, %(updated_at)s, %(expired_at)s
-                )
-                ON CONFLICT (tick_id, decision_id, ticker, side) DO NOTHING
-                RETURNING id
-                """,
-                {
-                    "id": getattr(order, "id"),
-                    "tick_id": getattr(order, "tick_id"),
-                    "signal_id": getattr(order, "signal_id"),
-                    "decision_id": getattr(order, "decision_id"),
-                    "ticker": getattr(order, "ticker"),
-                    "event_ticker": getattr(order, "event_ticker"),
-                    "venue": getattr(order, "venue"),
-                    "side": getattr(order, "side"),
-                    "order_type": getattr(order, "order_type"),
-                    "requested_price": getattr(order, "requested_price"),
-                    "requested_size_dollars": getattr(order, "requested_size_dollars"),
-                    "requested_quantity": getattr(order, "requested_quantity"),
-                    "status": getattr(order, "status"),
-                    "filled_size_dollars": getattr(order, "filled_size_dollars"),
-                    "filled_quantity": getattr(order, "filled_quantity"),
-                    "fill_count": getattr(order, "fill_count"),
-                    "avg_fill_price": getattr(order, "avg_fill_price"),
-                    "slippage_bps": getattr(order, "slippage_bps"),
-                    "fees_dollars": getattr(order, "fees_dollars"),
-                    "is_paper": getattr(order, "is_paper"),
-                    "user_id": getattr(order, "user_id"),
-                    "created_at": getattr(order, "created_at"),
-                    "updated_at": getattr(order, "updated_at"),
-                    "expired_at": getattr(order, "expired_at"),
-                },
-            )
-            row = cur.fetchone()
-        conn.commit()
-        return row[0] if row else ""
-
-    def save_fill(self, fill: object) -> str:
-        """Insert a fill row. Returns the fill id."""
-        conn = self._ensure_connected()
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO fills (
-                    id, order_id, fill_number,
-                    price, quantity, size_dollars,
-                    fee_dollars, slippage_bps, liquidity_consumed,
-                    trade_id, is_paper, user_id, created_at
-                ) VALUES (
-                    %(id)s, %(order_id)s, %(fill_number)s,
-                    %(price)s, %(quantity)s, %(size_dollars)s,
-                    %(fee_dollars)s, %(slippage_bps)s, %(liquidity_consumed)s,
-                    %(trade_id)s, %(is_paper)s, %(user_id)s, %(created_at)s
-                )
-                """,
-                {
-                    "id": getattr(fill, "id"),
-                    "order_id": getattr(fill, "order_id"),
-                    "fill_number": getattr(fill, "fill_number"),
-                    "price": getattr(fill, "price"),
-                    "quantity": getattr(fill, "quantity"),
-                    "size_dollars": getattr(fill, "size_dollars"),
-                    "fee_dollars": getattr(fill, "fee_dollars"),
-                    "slippage_bps": getattr(fill, "slippage_bps"),
-                    "liquidity_consumed": getattr(fill, "liquidity_consumed"),
-                    "trade_id": getattr(fill, "trade_id"),
-                    "is_paper": getattr(fill, "is_paper"),
-                    "user_id": getattr(fill, "user_id"),
-                    "created_at": getattr(fill, "created_at"),
-                },
-            )
-        conn.commit()
-        return getattr(fill, "id")
-
-    def update_order_status(
-        self,
-        order_id: str,
-        status: str,
-        filled_size_dollars: float = 0.0,
-        filled_quantity: float = 0.0,
-        fill_count: int = 0,
-        avg_fill_price: float | None = None,
-        slippage_bps: float | None = None,
-        fees_dollars: float = 0.0,
-        expired_at: object = None,
-    ) -> None:
-        """Update an order's status and fill aggregates."""
-        conn = self._ensure_connected()
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE orders
-                SET status = %(status)s,
-                    filled_size_dollars = %(filled_size_dollars)s,
-                    filled_quantity = %(filled_quantity)s,
-                    fill_count = %(fill_count)s,
-                    avg_fill_price = %(avg_fill_price)s,
-                    slippage_bps = %(slippage_bps)s,
-                    fees_dollars = %(fees_dollars)s,
-                    expired_at = %(expired_at)s,
-                    updated_at = now()
-                WHERE id = %(id)s
-                """,
-                {
-                    "id": order_id,
-                    "status": status,
-                    "filled_size_dollars": filled_size_dollars,
-                    "filled_quantity": filled_quantity,
-                    "fill_count": fill_count,
-                    "avg_fill_price": avg_fill_price,
-                    "slippage_bps": slippage_bps,
-                    "fees_dollars": fees_dollars,
-                    "expired_at": expired_at,
-                },
-            )
-        conn.commit()
-
-    def update_fill_trade_id(self, fill_id: str, trade_id: str) -> None:
-        """Link a fill to a legacy trade row."""
-        conn = self._ensure_connected()
-        with conn.cursor() as cur:
-            cur.execute(
-                "UPDATE fills SET trade_id = %(trade_id)s WHERE id = %(id)s",
-                {"id": fill_id, "trade_id": trade_id},
-            )
-        conn.commit()
-
-    def get_recent_orders(
-        self, limit: int = 50, status: str | None = None,
-    ) -> list[dict]:
-        """Return recent orders, optionally filtered by status."""
-        if status:
-            return self._fetch_dicts(
-                "SELECT * FROM orders WHERE status = %(status)s "
-                "ORDER BY created_at DESC LIMIT %(limit)s",
-                {"status": status, "limit": limit},
-            )
-        return self._fetch_dicts(
-            "SELECT * FROM orders ORDER BY created_at DESC LIMIT %(limit)s",
-            {"limit": limit},
-        )
-
-    def get_fills_for_order(self, order_id: str) -> list[dict]:
-        """Return all fills for a given order."""
-        return self._fetch_dicts(
-            "SELECT * FROM fills WHERE order_id = %(order_id)s "
-            "ORDER BY fill_number",
-            {"order_id": order_id},
-        )
-
-    def get_recent_fills(self, limit: int = 50) -> list[dict]:
-        """Return recent fills joined with order fields."""
-        return self._fetch_dicts(
-            """
-            SELECT f.*, o.ticker, o.venue, o.side, o.event_ticker,
-                   o.requested_price
-            FROM fills f
-            JOIN orders o ON f.order_id = o.id
-            ORDER BY f.created_at DESC
-            LIMIT %(limit)s
-            """,
-            {"limit": limit},
-        )
-
-    def get_decision_with_reasons(self, decision_id: int) -> dict | None:
-        """Return a decision with full guard results and signal features."""
-        rows = self._fetch_dicts(
-            """
-            SELECT d.*, s.ticker, s.event_ticker, s.edge_pct, s.signal_type,
-                   s.confidence_score, s.features_json, s.roi_per_day,
-                   s.time_to_resolution_days
-            FROM decisions d
-            JOIN signals s ON d.signal_id = s.id
-            WHERE d.id = %(id)s
-            """,
-            {"id": decision_id},
-        )
-        return rows[0] if rows else None
-
-    def get_execution_stats(self) -> dict:
-        """Aggregate execution statistics across all orders."""
-        conn = self._ensure_connected()
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT
-                    COUNT(*) AS total_orders,
-                    COUNT(*) FILTER (WHERE status = 'filled') AS filled,
-                    COUNT(*) FILTER (WHERE status = 'partial') AS partial,
-                    COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled,
-                    COALESCE(AVG(slippage_bps) FILTER (WHERE slippage_bps IS NOT NULL), 0)
-                        AS avg_slippage_bps,
-                    COALESCE(SUM(fees_dollars), 0) AS total_fees
-                FROM orders
-            """)
-            row = cur.fetchone()
-
-        if row is None:
-            return {
-                "total_orders": 0, "filled": 0, "partial": 0,
-                "cancelled": 0, "avg_slippage_bps": 0.0, "total_fees": 0.0,
-            }
-
-        return {
-            "total_orders": row[0],
-            "filled": row[1],
-            "partial": row[2],
-            "cancelled": row[3],
-            "avg_slippage_bps": round(float(row[4]), 2),
-            "total_fees": round(float(row[5]), 4),
-        }
-
-    # -- Polymarket credentials --
-
-    def upsert_polymarket_connection(self, wallet_address: str, user_id: str) -> int:
-        """Insert or update a polymarket wallet connection. Returns row id."""
-        conn = self._ensure_connected()
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO polymarket_credentials (wallet_address, user_id)
-                VALUES (%(wallet_address)s, %(user_id)s)
-                ON CONFLICT (user_id, wallet_address) DO UPDATE
-                    SET updated_at = now()
-                RETURNING id
-                """,
-                {"wallet_address": wallet_address, "user_id": user_id},
-            )
-            row = cur.fetchone()
-            assert row is not None
-            row_id: int = row[0]
-        conn.commit()
-        return row_id
-
-    def get_polymarket_connection(self, user_id: str) -> dict | None:
-        """Return the polymarket connection for a user, or None."""
-        rows = self._fetch_dicts(
-            "SELECT * FROM polymarket_credentials "
-            "WHERE user_id = %(user_id)s "
-            "ORDER BY updated_at DESC LIMIT 1",
-            {"user_id": user_id},
-        )
-        return rows[0] if rows else None
-
-    def update_polymarket_l2_creds(
-        self,
-        wallet_address: str,
-        user_id: str,
-        api_key_enc: str,
-        api_secret_enc: str,
-        passphrase_enc: str,
-    ) -> None:
-        """Store encrypted L2 credentials for a connected wallet."""
-        conn = self._ensure_connected()
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE polymarket_credentials
-                SET api_key_enc = %(api_key_enc)s,
-                    api_secret_enc = %(api_secret_enc)s,
-                    passphrase_enc = %(passphrase_enc)s,
-                    updated_at = now()
-                WHERE wallet_address = %(wallet_address)s
-                  AND user_id = %(user_id)s
-                """,
-                {
-                    "wallet_address": wallet_address,
-                    "user_id": user_id,
-                    "api_key_enc": api_key_enc,
-                    "api_secret_enc": api_secret_enc,
-                    "passphrase_enc": passphrase_enc,
-                },
-            )
-        conn.commit()
-
-    # -- Market mappings --
-
-    def upsert_market_mapping(
-        self,
-        kalshi_ticker: str,
-        polymarket_token_id_yes: str,
-        title: str,
-        match_confidence: float,
-    ) -> int:
-        """Create or update a market mapping. Returns the mapping id."""
-        conn = self._ensure_connected()
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO market_mappings (
-                    kalshi_ticker, polymarket_token_id_yes, title, match_confidence
-                ) VALUES (
-                    %(kalshi_ticker)s, %(polymarket_token_id_yes)s,
-                    %(title)s, %(match_confidence)s
-                )
-                ON CONFLICT (kalshi_ticker, polymarket_token_id_yes) DO UPDATE
-                    SET title = EXCLUDED.title,
-                        match_confidence = EXCLUDED.match_confidence,
-                        updated_at = now()
-                RETURNING id
-                """,
-                {
-                    "kalshi_ticker": kalshi_ticker,
-                    "polymarket_token_id_yes": polymarket_token_id_yes,
-                    "title": title,
-                    "match_confidence": match_confidence,
-                },
-            )
-            row = cur.fetchone()
-            assert row is not None
-            mapping_id: int = row[0]
-        conn.commit()
-        return mapping_id
-
-    def get_active_mappings(self, limit: int = 100) -> list[dict]:
-        """Return all active market mappings."""
-        return self._fetch_dicts(
-            "SELECT * FROM market_mappings WHERE active = TRUE "
-            "ORDER BY updated_at DESC LIMIT %(limit)s",
-            {"limit": limit},
-        )
-
-    # -- Arb signals --
-
-    def save_arb_signal(
-        self,
-        mapping_id: int,
-        kalshi_bid: float,
-        kalshi_ask: float,
-        poly_bid: float,
-        poly_ask: float,
-        edge_kp: float,
-        edge_pk: float,
-        liquidity_notes: str | None = None,
-    ) -> int:
-        """Insert an arb signal row. Returns the generated id."""
-        conn = self._ensure_connected()
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO arb_signals (
-                    mapping_id, kalshi_bid, kalshi_ask,
-                    poly_bid, poly_ask,
-                    edge_kalshi_to_poly, edge_poly_to_kalshi,
-                    liquidity_notes
-                ) VALUES (
-                    %(mapping_id)s, %(kalshi_bid)s, %(kalshi_ask)s,
-                    %(poly_bid)s, %(poly_ask)s,
-                    %(edge_kp)s, %(edge_pk)s,
-                    %(liquidity_notes)s
-                )
-                RETURNING id
-                """,
-                {
-                    "mapping_id": mapping_id,
-                    "kalshi_bid": kalshi_bid,
-                    "kalshi_ask": kalshi_ask,
-                    "poly_bid": poly_bid,
-                    "poly_ask": poly_ask,
-                    "edge_kp": edge_kp,
-                    "edge_pk": edge_pk,
-                    "liquidity_notes": liquidity_notes,
-                },
-            )
-            row = cur.fetchone()
-            assert row is not None
-            signal_id: int = row[0]
-        conn.commit()
-        return signal_id
-
-    def get_recent_arb_signals(
-        self, limit: int = 50, min_edge: float = 0.0,
-    ) -> list[dict]:
-        """Return recent arb signals joined with market mapping titles."""
-        return self._fetch_dicts(
-            """
-            SELECT
-                a.id, a.mapping_id, a.ts,
-                a.kalshi_bid, a.kalshi_ask,
-                a.poly_bid, a.poly_ask,
-                a.edge_kalshi_to_poly, a.edge_poly_to_kalshi,
-                a.liquidity_notes,
-                m.kalshi_ticker, m.polymarket_token_id_yes,
-                m.title, m.match_confidence
-            FROM arb_signals a
-            JOIN market_mappings m ON a.mapping_id = m.id
-            WHERE GREATEST(a.edge_kalshi_to_poly, a.edge_poly_to_kalshi) >= %(min_edge)s
-            ORDER BY a.ts DESC
-            LIMIT %(limit)s
-            """,
-            {"limit": limit, "min_edge": min_edge},
-        )
-
-    def get_recent_snapshots_for_ticker(
-        self, ticker: str, limit: int = 10,
-    ) -> list[NormalizedMarket]:
-        """Fetch the most recent snapshots for a ticker, for feature extraction.
-
-        Used by the scoring pipeline to compute rolling volatility.
-        """
-        conn = self._ensure_connected()
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT
-                    ticker, event_ticker, market_type, title, status,
-                    yes_bid, yes_ask, no_bid, no_ask,
-                    volume, volume_24h, liquidity, open_interest, notional_value,
-                    close_time, expected_expiration, snapshot_ts, venue
-                FROM market_snapshots
-                WHERE ticker = %(ticker)s
-                ORDER BY snapshot_ts DESC
-                LIMIT %(limit)s
-                """,
-                {"ticker": ticker, "limit": limit},
-            )
-            rows = cur.fetchall()
-
-        markets: list[NormalizedMarket] = []
-        for r in rows:
-            try:
-                markets.append(NormalizedMarket(
-                    ticker=r[0],
-                    event_ticker=r[1],
-                    market_type=MarketType(r[2]) if r[2] else MarketType.BINARY,
-                    title=r[3] or "",
-                    subtitle="",
-                    status=MarketStatus(r[4]) if r[4] else MarketStatus.ACTIVE,
-                    yes_bid=float(r[5]),
-                    yes_ask=float(r[6]),
-                    no_bid=float(r[7]),
-                    no_ask=float(r[8]),
-                    volume=float(r[9]),
-                    volume_24h=float(r[10]),
-                    liquidity=float(r[11]),
-                    open_interest=float(r[12]),
-                    notional_value=float(r[13]),
-                    close_time=r[14],
-                    expected_expiration=r[15],
-                    venue=r[17] or "kalshi",
-                ))
-            except (ValueError, TypeError):
-                continue
-        return markets

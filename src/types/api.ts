@@ -26,7 +26,6 @@ export interface Position {
   trade_count: number;
   opened_at: string;
   closed_at: string | null;
-  category: string;
 }
 
 export interface Signal {
@@ -80,325 +79,6 @@ export type ActivityItem =
   | { kind: "signal"; data: Signal }
   | { kind: "decision"; data: Decision };
 
-export interface CategoryMeta {
-  slug: string;
-  label: string;
-  color: string;
-  description: string;
-}
-
-export interface CategoryOverride {
-  enabled: boolean;
-  risk_level: "conservative" | "moderate" | "aggressive";
-  max_exposure_dollars: number | null;
-}
-
-export interface AnalyticsSummary {
-  total_pnl: number;
-  total_closed: number;
-  best_day: number;
-  worst_day: number;
-  max_drawdown: number;
-  avg_trade_pnl: number;
-  avg_win: number;
-  avg_loss: number;
-}
-
-export interface DailyPnL {
-  date: string;
-  pnl: number;
-  trades: number;
-  wins: number;
-  losses: number;
-}
-
-export interface CategoryBreakdown {
-  category: string;
-  total_trades: number;
-  wins: number;
-  losses: number;
-  total_pnl: number;
-  avg_pnl: number;
-}
-
-export interface VenueBreakdown {
-  venue: string;
-  total_trades: number;
-  wins: number;
-  losses: number;
-  total_pnl: number;
-}
-
-export interface PnLBucket {
-  bucket_start: number;
-  count: number;
-}
-
-export interface GuardStat {
-  guard_name: string;
-  total_evaluations: number;
-  rejections: number;
-  rejection_rate: number;
-}
-
-// --- Execution ---
-
-export interface Order {
-  id: string;
-  tick_id: string;
-  signal_id: string;
-  decision_id: number;
-  ticker: string;
-  event_ticker: string;
-  venue: string;
-  side: "buy_yes" | "buy_no";
-  order_type: string;
-  requested_price: number;
-  requested_size_dollars: number;
-  requested_quantity: number;
-  status: "pending" | "filled" | "partial" | "cancelled";
-  filled_size_dollars: number;
-  filled_quantity: number;
-  fill_count: number;
-  avg_fill_price: number | null;
-  slippage_bps: number | null;
-  fees_dollars: number;
-  is_paper: boolean;
-  created_at: string;
-  updated_at: string;
-  expired_at: string | null;
-}
-
-export interface Fill {
-  id: string;
-  order_id: string;
-  fill_number: number;
-  price: number;
-  quantity: number;
-  size_dollars: number;
-  fee_dollars: number;
-  slippage_bps: number;
-  liquidity_consumed: number;
-  trade_id: string | null;
-  is_paper: boolean;
-  created_at: string;
-  // Joined from orders
-  ticker?: string;
-  venue?: string;
-  side?: "buy_yes" | "buy_no";
-  event_ticker?: string;
-  requested_price?: number;
-}
-
-export interface DecisionReasons {
-  id: number;
-  signal_id: string;
-  verdict: "pass" | "reject";
-  guard_results: GuardResult[];
-  suggested_size: number;
-  selected: boolean | null;
-  selection_score: number | null;
-  allocation_reasons: string[] | null;
-  created_at: string;
-  ticker: string;
-  event_ticker: string;
-  edge_pct: number;
-  signal_type: string;
-  confidence_score: number;
-  features_json: Record<string, unknown> | null;
-  roi_per_day: number;
-  time_to_resolution_days: number;
-}
-
-export interface ExecutionStats {
-  total_orders: number;
-  filled: number;
-  partial: number;
-  cancelled: number;
-  avg_slippage_bps: number;
-  total_fees: number;
-}
-
-// --- Enriched Signals & Regime ---
-
-export interface EnrichedSignal {
-  id: string;
-  signal_type: "complement_arb" | "cross_platform_discrepancy";
-  ticker: string;
-  event_ticker: string;
-  edge_pct: number;
-  net_edge: number;
-  confidence_score: number;
-  roi_per_day: number;
-  time_to_resolution_days: number;
-  features_json: Record<string, unknown> | null;
-  signal_created_at: string;
-  decision_id: number | null;
-  verdict: "pass" | "reject" | null;
-  selected: boolean | null;
-  selection_score: number | null;
-  suggested_size: number | null;
-  guard_results: GuardResult[] | null;
-  allocation_reasons: string[] | null;
-}
-
-export interface RegimeState {
-  regime: "normal" | "risk_off";
-  metrics_json: Record<string, unknown>;
-  params_json: Record<string, unknown>;
-}
-
-// --- Optimizer ---
-
-export interface OptimizerRequest {
-  start_date: string;
-  end_date: string;
-  objective: "total_pnl" | "sharpe_ratio" | "profit_factor" | "composite";
-  step_size?: number;
-  max_combos?: number;
-  top_n?: number;
-}
-
-export interface OptimizerResult {
-  rank: number;
-  objective_value: number;
-  total_pnl: number;
-  win_rate: number;
-  sharpe_ratio: number;
-  total_trades: number;
-  weights: Record<string, number>;
-}
-
-export interface OptimizerRun {
-  id: number;
-  status: "running" | "completed" | "failed";
-  completed: number;
-  total_combos: number;
-  results: OptimizerResult[];
-}
-
-// --- Backtest ---
-
-export interface BacktestRequest {
-  start_date: string;
-  end_date: string;
-  pipeline_overrides?: Record<string, number>;
-  portfolio_overrides?: Record<string, number>;
-  matching_overrides?: Record<string, number>;
-  exit_overrides?: Record<string, number>;
-  scoring_weights?: Record<string, number>;
-}
-
-export interface BacktestEquityPoint {
-  ts: string;
-  realized_pnl: number;
-  open_positions: number;
-  total_exposure: number;
-}
-
-export interface BacktestTrade {
-  ts: string;
-  ticker: string;
-  venue: string;
-  side: string;
-  price: number;
-  size_dollars: number;
-  signal_type: string;
-  edge_pct: number;
-}
-
-export interface BacktestClosedPosition {
-  ticker: string;
-  venue: string;
-  side: string;
-  entry_price: number;
-  size_dollars: number;
-  realized_pnl: number;
-  opened_at: string;
-  closed_at: string;
-  category: string;
-}
-
-export interface BacktestBreakdown {
-  trades: number;
-  pnl: number;
-  wins: number;
-  losses: number;
-}
-
-export interface BacktestResult {
-  start_date: string;
-  end_date: string;
-  time_steps: number;
-  duration_ms: number;
-  total_pnl: number;
-  total_trades: number;
-  total_signals: number;
-  total_passed: number;
-  total_rejected: number;
-  positions_opened: number;
-  positions_closed: number;
-  win_count: number;
-  loss_count: number;
-  best_trade: number;
-  worst_trade: number;
-  max_drawdown: number;
-  avg_trade_pnl: number;
-  win_rate: number;
-  equity_curve: BacktestEquityPoint[];
-  trades: BacktestTrade[];
-  closed_positions: BacktestClosedPosition[];
-  by_category: Record<string, BacktestBreakdown>;
-  by_venue: Record<string, BacktestBreakdown>;
-  by_signal_type: Record<string, { trades: number; total_edge_pct: number }>;
-  config_snapshot: Record<string, Record<string, number>>;
-}
-
-// --- Polymarket / Arb ---
-
-export interface PolymarketConnectionStatus {
-  connected: boolean;
-  wallet_address: string | null;
-  has_l2_creds: boolean;
-}
-
-export interface MarketMapping {
-  id: number;
-  kalshi_ticker: string;
-  polymarket_token_id_yes: string;
-  title: string;
-  resolution_notes: string | null;
-  match_confidence: number;
-  active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ArbSignal {
-  id: number;
-  mapping_id: number;
-  ts: string;
-  kalshi_bid: number;
-  kalshi_ask: number;
-  poly_bid: number;
-  poly_ask: number;
-  edge_kalshi_to_poly: number;
-  edge_poly_to_kalshi: number;
-  liquidity_notes: string | null;
-  // Joined from market_mappings
-  kalshi_ticker: string;
-  polymarket_token_id_yes: string;
-  title: string;
-  match_confidence: number;
-}
-
-export interface BacktestDataRange {
-  earliest: string | null;
-  latest: string | null;
-  total_runs: number;
-  total_snapshots: number;
-}
-
 export interface RiskProfile {
   id: number;
   name: string;
@@ -427,11 +107,38 @@ export interface RiskProfile {
   // Matching
   min_similarity: number;
 
-  // Category overrides
-  category_overrides: Record<string, CategoryOverride>;
-  strategy: string | null;
+  // Daily loss limit
+  daily_loss_limit_dollars: number;
 
   user_id: string | null;
   created_at: string | null;
   updated_at: string | null;
+}
+
+// --- Automation / Kill Switch ---
+
+export interface AutomationState {
+  id?: number;
+  status: "running" | "paused" | "killed";
+  kill_switch: boolean;
+  killed_reason: string | null;
+  paused_at: string | null;
+  killed_at: string | null;
+  started_at: string | null;
+  daily_loss_dollars: number;
+  daily_loss_reset_at: string | null;
+  peak_portfolio_value: number;
+  max_drawdown_dollars: number;
+  updated_at: string | null;
+}
+
+// --- Audit Logs ---
+
+export interface AuditLogEntry {
+  id: number;
+  event_type: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
 }

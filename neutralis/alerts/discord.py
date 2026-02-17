@@ -16,7 +16,6 @@ _GREEN = 0x2ECC71
 _RED = 0xE74C3C
 _ORANGE = 0xE67E22
 _BLUE = 0x3498DB
-_PURPLE = 0x9B59B6
 
 
 class DiscordNotifier:
@@ -99,60 +98,6 @@ class DiscordNotifier:
                 {"name": "Side", "value": side.upper(), "inline": True},
                 {"name": "Result", "value": result.upper(), "inline": True},
                 {"name": "Realized P&L", "value": pnl_str, "inline": True},
-            ],
-        )
-
-    def notify_exit(
-        self,
-        ticker: str,
-        side: str,
-        venue: str,
-        exit_reason: str,
-        exit_price: float,
-        pnl: float,
-    ) -> None:
-        """Alert when a position is closed by an exit strategy."""
-        color = _GREEN if pnl >= 0 else _RED
-        pnl_str = f"+${pnl:.2f}" if pnl >= 0 else f"-${abs(pnl):.2f}"
-        reason_labels = {
-            "stop_loss": "Stop Loss",
-            "take_profit": "Take Profit",
-            "time_decay": "Time Decay",
-        }
-        self._send_embed(
-            title=f"\U0001f6a8 Exit: {reason_labels.get(exit_reason, exit_reason)}",
-            color=color,
-            fields=[
-                {"name": "Ticker", "value": ticker, "inline": True},
-                {"name": "Side", "value": side.upper(), "inline": True},
-                {"name": "Venue", "value": venue.capitalize(), "inline": True},
-                {"name": "Exit Price", "value": f"${exit_price:.4f}", "inline": True},
-                {"name": "Realized P&L", "value": pnl_str, "inline": True},
-            ],
-        )
-
-    def notify_heartbeat(
-        self,
-        uptime_sec: float,
-        total_runs: int,
-        total_errors: int,
-        total_pnl: float,
-        total_exit_pnl: float,
-        regime: str,
-    ) -> None:
-        """Periodic heartbeat -- proof of life with cumulative stats."""
-        hours = uptime_sec / 3600
-        pnl = total_pnl + total_exit_pnl
-        pnl_str = f"+${pnl:.2f}" if pnl >= 0 else f"-${abs(pnl):.2f}"
-        self._send_embed(
-            title="\U0001f49c Heartbeat",
-            color=_PURPLE,
-            fields=[
-                {"name": "Uptime", "value": f"{hours:.1f}h", "inline": True},
-                {"name": "Runs", "value": str(total_runs), "inline": True},
-                {"name": "Errors", "value": str(total_errors), "inline": True},
-                {"name": "Cumulative P&L", "value": pnl_str, "inline": True},
-                {"name": "Regime", "value": regime, "inline": True},
             ],
         )
 

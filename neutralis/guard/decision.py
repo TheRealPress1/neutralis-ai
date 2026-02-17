@@ -1,15 +1,17 @@
-"""Guard evaluator -- runs all constraints and produces a Decision."""
+"""Guard evaluator -- runs all constraints and produces a Decision.
+
+Includes kill switch and daily loss limit checks (v3).
+"""
 
 from __future__ import annotations
 
-from typing import Any
-
-from neutralis.categories import classify_market, is_category_enabled, resolve_pipeline_config
 from neutralis.config import PipelineConfig, PortfolioConfig
 from neutralis.guard.constraints import (
-    check_category_exposure,
+    check_automation_active,
+    check_daily_loss_limit,
     check_duplicate_position,
     check_event_exposure,
+    check_kill_switch,
     check_liquidity,
     check_min_edge,
     check_open_position_count,
@@ -39,38 +41,26 @@ def evaluate_signal(
     config: PipelineConfig | None = None,
     portfolio_snapshot: PortfolioSnapshot | None = None,
     portfolio_config: PortfolioConfig | None = None,
-    category_overrides: dict[str, Any] | None = None,
+    *,
+    automation_active: bool = True,
+    kill_switch_engaged: bool = False,
+    daily_loss: float = 0.0,
 ) -> Decision:
     """Run all guard checks on a signal and produce a Decision.
 
-    When portfolio_snapshot is provided, runs portfolio-aware checks.
-    When category_overrides is provided, applies per-category risk tuning.
+    Phase 0 (v3): Automation + kill switch + daily loss safety checks.
+    Phase 1 (v1): Market-level checks (edge, liquidity, expiry, depth).
+    Phase 2 (v2): Portfolio-level checks (exposure, concentration, duplicates).
     """
     cfg = config or PipelineConfig()
 
-    # Phase 0: Category classification and override checks
-    category = classify_market(market.title, market.event_ticker)
+    # Phase 0: Safety checks (v3 — kill switch, automation state)
+    safety_results: list[GuardResult] = [
+        check_automation_active(automation_active),
+        check_kill_switch(kill_switch_engaged),
+    ]
 
-    if category_overrides:
-        # Reject if category is disabled
-        if not is_category_enabled(category, category_overrides):
-            logger.info(
-                "Decision: signal=%s REJECTED — category '%s' disabled",
-                signal.id, category,
-            )
-            return Decision(
-                signal_id=signal.id,
-                verdict=DecisionVerdict.REJECT,
-                guard_results=(GuardResult(
-                    guard_name="category_disabled",
-                    passed=False,
-                    reason=f"category '{category}' is disabled in active profile",
-                ),),
-            )
-        # Adjust config thresholds for this category's risk level
-        cfg = resolve_pipeline_config(cfg, category, category_overrides)
-
-    # Phase 1: Market-level checks
+    # Phase 1: Market-level checks (v1, unchanged)
     market_results: list[GuardResult] = [
         check_min_edge(signal.edge_pct, cfg),
         check_liquidity(market, cfg),
@@ -78,7 +68,7 @@ def evaluate_signal(
         check_orderbook_depth(market),
     ]
 
-    # Phase 2: Portfolio-level checks (only when snapshot provided)
+    # Phase 2: Portfolio-level checks (v2 + v3 daily loss)
     portfolio_results: list[GuardResult] = []
     if portfolio_snapshot is not None:
         pcfg = portfolio_config or PortfolioConfig()
@@ -87,6 +77,7 @@ def evaluate_signal(
         preliminary_size = compute_size(signal, market, cfg)
 
         portfolio_results = [
+            check_daily_loss_limit(daily_loss, pcfg),
             check_open_position_count(portfolio_snapshot, pcfg),
             check_duplicate_position(signal, portfolio_snapshot),
             check_total_exposure(preliminary_size, portfolio_snapshot, pcfg),
@@ -101,15 +92,7 @@ def evaluate_signal(
             ),
         ]
 
-        # Per-category exposure guard
-        if category_overrides:
-            portfolio_results.append(
-                check_category_exposure(
-                    preliminary_size, category, category_overrides, portfolio_snapshot,
-                )
-            )
-
-    results = tuple(market_results + portfolio_results)
+    results = tuple(safety_results + market_results + portfolio_results)
     all_passed = all(r.passed for r in results)
 
     if all_passed:
@@ -117,8 +100,6 @@ def evaluate_signal(
             signal, market, cfg,
             portfolio_snapshot=portfolio_snapshot,
             portfolio_config=portfolio_config,
-            category=category,
-            category_overrides=category_overrides,
         )
         verdict = DecisionVerdict.PASS if suggested_size > 0 else DecisionVerdict.REJECT
     else:
@@ -133,9 +114,8 @@ def evaluate_signal(
     )
 
     logger.info(
-        "Decision: signal=%s category=%s verdict=%s size=$%.2f guards=%d/%d passed",
+        "Decision: signal=%s verdict=%s size=$%.2f guards=%d/%d passed",
         signal.id,
-        category,
         verdict.value,
         suggested_size,
         sum(1 for r in results if r.passed),
@@ -144,138 +124,3 @@ def evaluate_signal(
     )
 
     return decision
-
-
-# ---------------------------------------------------------------------------
-# Ranked selection (alpha vNext)
-# ---------------------------------------------------------------------------
-
-
-def select_portfolio(
-    decisions: list[tuple[Signal, Decision]],
-    portfolio_snapshot: PortfolioSnapshot,
-    portfolio_config: PortfolioConfig | None = None,
-    min_confidence: int = 0,
-) -> list[tuple[Signal, Decision]]:
-    """Rank approved decisions by selection_score and greedily select
-    the best subset that fits within portfolio constraints.
-
-    Each provisional PASS decision gets:
-    - selection_score = roi_per_day * confidence_score / 100
-    - selected = True if it fits within constraints
-
-    Non-PASS decisions are passed through unchanged.
-
-    Args:
-        decisions: List of (signal, decision) pairs from evaluate_signal.
-        portfolio_snapshot: Current portfolio state.
-        portfolio_config: Portfolio limits.
-        min_confidence: Minimum confidence score required (from regime).
-
-    Returns:
-        Updated list of (signal, decision) with selected flags set.
-    """
-    pcfg = portfolio_config or PortfolioConfig()
-
-    # Separate PASS and non-PASS
-    candidates: list[tuple[Signal, Decision, float]] = []
-    results: list[tuple[Signal, Decision]] = []
-
-    for signal, decision in decisions:
-        if decision.verdict != DecisionVerdict.PASS:
-            results.append((signal, decision))
-            continue
-
-        # Compute selection score
-        confidence = signal.confidence_score
-        roi = signal.roi_per_day
-        sel_score = roi * confidence / 100.0 if confidence > 0 else 0.0
-
-        # Reject if below regime confidence minimum
-        if confidence < min_confidence:
-            updated = Decision(
-                signal_id=decision.signal_id,
-                verdict=DecisionVerdict.REJECT,
-                guard_results=decision.guard_results + (
-                    GuardResult(
-                        guard_name="regime_confidence",
-                        passed=False,
-                        reason=f"confidence {confidence} < regime min {min_confidence}",
-                        value=float(confidence),
-                        threshold=float(min_confidence),
-                    ),
-                ),
-                suggested_size_dollars=0.0,
-                selected=False,
-                selection_score=sel_score,
-                allocation_reasons=("below regime confidence minimum",),
-            )
-            results.append((signal, updated))
-            continue
-
-        candidates.append((signal, decision, sel_score))
-
-    # Sort by selection score descending
-    candidates.sort(key=lambda c: c[2], reverse=True)
-
-    # Greedy allocation
-    used_exposure = portfolio_snapshot.total_exposure_dollars
-    used_positions = portfolio_snapshot.open_position_count
-    used_events: dict[str, float] = dict(portfolio_snapshot.event_exposure)
-    used_tickers: set[str] = set()
-    for p in portfolio_snapshot.positions:
-        used_tickers.add(p.ticker)
-
-    selected_count = 0
-
-    for signal, decision, sel_score in candidates:
-        size = decision.suggested_size_dollars
-        reasons: list[str] = []
-
-        # Check constraints
-        if used_positions >= pcfg.max_open_positions:
-            reasons.append("max open positions reached")
-        if used_exposure + size > pcfg.max_total_exposure_dollars:
-            reasons.append("total exposure budget exhausted")
-
-        event_exp = used_events.get(signal.event_ticker, 0.0)
-        if event_exp + size > pcfg.max_event_exposure_dollars:
-            reasons.append(f"event '{signal.event_ticker}' cap reached")
-
-        if reasons:
-            updated = Decision(
-                signal_id=decision.signal_id,
-                verdict=DecisionVerdict.PASS,
-                guard_results=decision.guard_results,
-                suggested_size_dollars=decision.suggested_size_dollars,
-                selected=False,
-                selection_score=sel_score,
-                allocation_reasons=tuple(reasons),
-            )
-            results.append((signal, updated))
-            continue
-
-        # Selected
-        updated = Decision(
-            signal_id=decision.signal_id,
-            verdict=DecisionVerdict.PASS,
-            guard_results=decision.guard_results,
-            suggested_size_dollars=decision.suggested_size_dollars,
-            selected=True,
-            selection_score=sel_score,
-            allocation_reasons=("selected",),
-        )
-        results.append((signal, updated))
-        selected_count += 1
-
-        # Update running totals
-        used_exposure += size
-        used_positions += 1
-        used_events[signal.event_ticker] = event_exp + size
-
-    logger.info(
-        "Ranked selection: %d candidates, %d selected, %d dropped",
-        len(candidates), selected_count, len(candidates) - selected_count,
-    )
-
-    return results

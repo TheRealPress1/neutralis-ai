@@ -1,32 +1,14 @@
 /* Typed fetch client for the FastAPI dashboard endpoints. */
 
 import type {
-  AnalyticsSummary,
-  ArbSignal,
-  BacktestDataRange,
-  BacktestRequest,
-  BacktestResult,
-  CategoryBreakdown,
-  CategoryMeta,
-  DailyPnL,
-  DecisionReasons,
-  EnrichedSignal,
-  ExecutionStats,
-  Fill,
-  GuardStat,
-  OptimizerRequest,
-  OptimizerRun,
-  Order,
-  PnLBucket,
-  PolymarketConnectionStatus,
   PortfolioStats,
   Position,
-  RegimeState,
   Signal,
   Decision,
   MarketMatch,
   RiskProfile,
-  VenueBreakdown,
+  AutomationState,
+  AuditLogEntry,
 } from "@/types/api";
 
 const API_BASE =
@@ -49,6 +31,22 @@ async function apiFetch<T>(
   return res.json() as Promise<T>;
 }
 
+async function apiPost<T>(
+  path: string,
+  body?: Record<string, unknown>,
+): Promise<T> {
+  const url = new URL(path, API_BASE);
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: body ? { "Content-Type": "application/json" } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+  return res.json() as Promise<T>;
+}
+
+// --- Portfolio ---
+
 export function fetchPortfolioStats() {
   return apiFetch<PortfolioStats>("/api/portfolio/stats");
 }
@@ -60,6 +58,8 @@ export function fetchPositions(status: "open" | "closed", limit = 50) {
   });
 }
 
+// --- Activity (signals + decisions) ---
+
 export function fetchSignals(limit = 20) {
   return apiFetch<Signal[]>("/api/signals", { limit: String(limit) });
 }
@@ -68,82 +68,13 @@ export function fetchDecisions(limit = 20) {
   return apiFetch<Decision[]>("/api/decisions", { limit: String(limit) });
 }
 
-export function fetchEnrichedSignals(
-  limit = 50,
-  filters?: {
-    min_confidence?: number;
-    signal_type?: string;
-    verdict?: string;
-  },
-) {
-  const params: Record<string, string> = { limit: String(limit) };
-  if (filters?.min_confidence) params.min_confidence = String(filters.min_confidence);
-  if (filters?.signal_type) params.signal_type = filters.signal_type;
-  if (filters?.verdict) params.verdict = filters.verdict;
-  return apiFetch<EnrichedSignal[]>("/api/signals/enriched", params);
-}
-
-export function fetchCurrentRegime() {
-  return apiFetch<RegimeState>("/api/regime/current");
-}
+// --- Matches ---
 
 export function fetchMatches(limit = 25) {
   return apiFetch<MarketMatch[]>("/api/matches", { limit: String(limit) });
 }
 
-// --- Execution ---
-
-export function fetchOrders(limit = 50, status?: string) {
-  const params: Record<string, string> = { limit: String(limit) };
-  if (status) params.status = status;
-  return apiFetch<Order[]>("/api/orders", params);
-}
-
-export function fetchFills(limit = 50) {
-  return apiFetch<Fill[]>("/api/fills", { limit: String(limit) });
-}
-
-export function fetchFillsForOrder(orderId: string) {
-  return apiFetch<Fill[]>(`/api/fills/${orderId}`);
-}
-
-export function fetchDecisionReasons(decisionId: number) {
-  return apiFetch<DecisionReasons>(`/api/decisions/${decisionId}/reasons`);
-}
-
-export function fetchExecutionStats() {
-  return apiFetch<ExecutionStats>("/api/execution/stats");
-}
-
-// --- Analytics ---
-
-export function fetchAnalyticsSummary() {
-  return apiFetch<AnalyticsSummary>("/api/analytics/summary");
-}
-
-export function fetchPnLTimeline(days = 90) {
-  return apiFetch<DailyPnL[]>("/api/analytics/pnl-timeline", {
-    days: String(days),
-  });
-}
-
-export function fetchBreakdown() {
-  return apiFetch<{
-    by_category: CategoryBreakdown[];
-    by_venue: VenueBreakdown[];
-    pnl_distribution: PnLBucket[];
-  }>("/api/analytics/breakdown");
-}
-
-export function fetchGuardStats() {
-  return apiFetch<GuardStat[]>("/api/analytics/guard-stats");
-}
-
 // --- Risk Profiles ---
-
-export function fetchCategories() {
-  return apiFetch<CategoryMeta[]>("/api/categories");
-}
 
 export function fetchProfiles() {
   return apiFetch<RiskProfile[]>("/api/profiles");
@@ -178,106 +109,38 @@ export async function activateProfile(
   return res.json() as Promise<RiskProfile>;
 }
 
-// --- Backtest ---
+// --- Automation / Kill Switch ---
 
-export function fetchBacktestDataRange() {
-  return apiFetch<BacktestDataRange>("/api/backtest/data-range");
+export function fetchAutomationState() {
+  return apiFetch<AutomationState>("/api/automation/state");
 }
 
-export async function runBacktest(
-  req: BacktestRequest,
-): Promise<BacktestResult> {
-  const url = new URL("/api/backtest/run", API_BASE);
-  const res = await fetch(url.toString(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(req),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Backtest failed (${res.status}): ${text}`);
-  }
-  return res.json() as Promise<BacktestResult>;
+export function startAutomation() {
+  return apiPost<AutomationState>("/api/automation/start");
 }
 
-// --- Optimizer ---
-
-export async function runOptimization(
-  req: OptimizerRequest,
-): Promise<OptimizerRun> {
-  const url = new URL("/api/backtest/optimize", API_BASE);
-  const res = await fetch(url.toString(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(req),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Optimization failed (${res.status}): ${text}`);
-  }
-  return res.json() as Promise<OptimizerRun>;
+export function pauseAutomation() {
+  return apiPost<AutomationState>("/api/automation/pause");
 }
 
-export function fetchOptimizerProgress(runId: number) {
-  return apiFetch<OptimizerRun>(`/api/backtest/optimize/${runId}/progress`);
+export function triggerKillSwitch(reason = "Manual kill switch") {
+  return apiPost<AutomationState>("/api/automation/kill", { reason });
 }
 
-// --- Polymarket ---
+// --- Audit Logs / Activity ---
 
-export async function connectPolymarket(
-  walletAddress: string,
-  signature: string,
-  message: string,
-  userId: string,
-): Promise<{ connected: boolean; wallet_address: string }> {
-  const url = new URL("/api/polymarket/connect", API_BASE);
-  const res = await fetch(url.toString(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      wallet_address: walletAddress,
-      signature,
-      message,
-      user_id: userId,
-    }),
-  });
-  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
-  return res.json() as Promise<{ connected: boolean; wallet_address: string }>;
+export function fetchAuditLogs(
+  params?: { event_type?: string; entity_type?: string; limit?: number },
+) {
+  const queryParams: Record<string, string> = {};
+  if (params?.event_type) queryParams.event_type = params.event_type;
+  if (params?.entity_type) queryParams.entity_type = params.entity_type;
+  if (params?.limit) queryParams.limit = String(params.limit);
+  return apiFetch<AuditLogEntry[]>("/api/activity", queryParams);
 }
 
-export function fetchPolymarketStatus(userId: string) {
-  return apiFetch<PolymarketConnectionStatus>("/api/polymarket/status", {
-    user_id: userId,
-  });
-}
+// --- Exports ---
 
-export async function storePolymarketCreds(
-  walletAddress: string,
-  apiKey: string,
-  apiSecret: string,
-  passphrase: string,
-  userId: string,
-): Promise<{ stored: boolean }> {
-  const url = new URL("/api/polymarket/credentials", API_BASE);
-  const res = await fetch(url.toString(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      wallet_address: walletAddress,
-      api_key: apiKey,
-      api_secret: apiSecret,
-      passphrase: passphrase,
-      user_id: userId,
-    }),
-  });
-  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
-  return res.json() as Promise<{ stored: boolean }>;
-}
-
-// --- Arb Signals ---
-
-export function fetchArbSignals(limit = 50, minEdge = 0) {
-  const params: Record<string, string> = { limit: String(limit) };
-  if (minEdge > 0) params.min_edge = String(minEdge);
-  return apiFetch<ArbSignal[]>("/api/arb/signals", params);
+export function getTradesCsvUrl(limit = 500) {
+  return `${API_BASE}/api/exports/trades.csv?limit=${limit}`;
 }

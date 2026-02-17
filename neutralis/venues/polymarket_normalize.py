@@ -63,24 +63,11 @@ def normalize_market(raw: dict[str, Any]) -> Optional[NormalizedMarket]:
         except (json.JSONDecodeError, TypeError):
             outcome_prices = None
 
-    # Map prices to YES/NO by checking outcome labels, not position.
-    # Polymarket outcome order is NOT guaranteed — must match by label.
     yes_price = 0.0
     no_price = 0.0
-    if outcome_prices and len(outcome_prices) >= 2 and outcomes:
-        # Build label -> price mapping
-        for i, label in enumerate(outcomes):
-            label_lower = str(label).strip().lower()
-            if label_lower == "yes":
-                yes_price = _safe_float(outcome_prices[i])
-            elif label_lower == "no":
-                no_price = _safe_float(outcome_prices[i])
-
-        # Fallback: if labels aren't "Yes"/"No" (e.g. "Team A"/"Team B"),
-        # treat first outcome as YES, second as NO (common convention)
-        if yes_price == 0.0 and no_price == 0.0:
-            yes_price = _safe_float(outcome_prices[0])
-            no_price = _safe_float(outcome_prices[1])
+    if outcome_prices and len(outcome_prices) >= 2:
+        yes_price = _safe_float(outcome_prices[0])
+        no_price = _safe_float(outcome_prices[1])
 
     # Use bestBid/bestAsk when they indicate real two-sided markets
     best_bid = _safe_float(raw.get("bestBid"))
@@ -103,15 +90,6 @@ def normalize_market(raw: dict[str, Any]) -> Optional[NormalizedMarket]:
     else:
         status = MarketStatus.INACTIVE
 
-    # Extract CLOB token IDs for WebSocket subscription
-    clob_token_ids_raw = raw.get("clobTokenIds")
-    if isinstance(clob_token_ids_raw, str):
-        try:
-            clob_token_ids_raw = json.loads(clob_token_ids_raw)
-        except (json.JSONDecodeError, TypeError):
-            clob_token_ids_raw = None
-    clob_token_ids = tuple(clob_token_ids_raw) if clob_token_ids_raw else ()
-
     return NormalizedMarket(
         ticker=str(ticker),
         event_ticker=raw.get("slug", ""),
@@ -130,5 +108,4 @@ def normalize_market(raw: dict[str, Any]) -> Optional[NormalizedMarket]:
         close_time=_parse_iso_dt(raw.get("endDate")),
         expected_expiration=_parse_iso_dt(raw.get("endDate")),
         venue="polymarket",
-        clob_token_ids=clob_token_ids,
     )

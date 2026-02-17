@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from neutralis.config import MatchingConfig
 from neutralis.core.matcher import MarketPair
-from neutralis.fees import estimate_cross_platform_fee
 from neutralis.logging import get_logger
 from neutralis.models import CrossPlatformMatch, Signal, SignalType, TradeLeg
 
@@ -68,18 +67,7 @@ def scan_cross_platform(
         if gross_edge <= 0:
             continue  # No arb exists
 
-        # Deduct per-venue fees from each leg
-        estimated_fee = estimate_cross_platform_fee(
-            yes_price=favored_yes,
-            yes_venue=yes_venue,
-            no_price=other_no,
-            no_venue=no_venue,
-        )
-        net_edge = gross_edge - estimated_fee
-        if net_edge <= 0:
-            continue  # Not profitable after fees
-
-        edge_pct = (net_edge / combined_cost) * 100.0
+        edge_pct = (gross_edge / combined_cost) * 100.0
 
         xp_match = CrossPlatformMatch(
             kalshi_ticker=k.ticker,
@@ -120,7 +108,7 @@ def scan_cross_platform(
             no_ask=k.no_ask,
             combined_cost=round(combined_cost, 6),
             gross_edge=round(gross_edge, 6),
-            net_edge=round(net_edge, 6),
+            net_edge=round(gross_edge, 6),
             edge_pct=round(edge_pct, 4),
             legs=legs,
             market_snapshot=k,

@@ -25,7 +25,7 @@ class KalshiClient:
         self._cfg = config or KalshiConfig()
         self._http = httpx.Client(
             base_url=self._cfg.base_url,
-            timeout=httpx.Timeout(connect=10.0, read=120.0, write=5.0, pool=10.0),
+            timeout=httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0),
             headers={"Accept": "application/json"},
         )
         self._last_request_ts: float = 0.0
@@ -40,17 +40,7 @@ class KalshiClient:
         self, path: str, params: dict[str, Any] | None = None, *, _retries: int = 0
     ) -> dict[str, Any]:
         self._throttle()
-        try:
-            resp = self._http.get(path, params=params)
-        except httpx.TimeoutException:
-            if _retries < 3:
-                wait = 5.0 * (2**_retries)
-                logger.warning(
-                    "Timeout on %s, retry %d/3 in %.1fs", path, _retries + 1, wait,
-                )
-                time.sleep(wait)
-                return self._get(path, params, _retries=_retries + 1)
-            raise
+        resp = self._http.get(path, params=params)
 
         if resp.status_code == 429:
             retry_after = float(resp.headers.get("Retry-After", "2"))
@@ -79,7 +69,6 @@ class KalshiClient:
         event_ticker: str | None = None,
         series_ticker: str | None = None,
         tickers: list[str] | None = None,
-        mve_filter: str | None = None,
     ) -> tuple[list[dict[str, Any]], Optional[str]]:
         """Fetch a page of markets. Returns (markets, next_cursor)."""
         params: dict[str, Any] = {"statuses": statuses}
@@ -92,8 +81,6 @@ class KalshiClient:
             params["series_ticker"] = series_ticker
         if tickers:
             params["tickers"] = ",".join(tickers)
-        if mve_filter:
-            params["mve_filter"] = mve_filter
 
         data = self._get(self._cfg.markets_path, params)
         markets = data.get("markets", [])
@@ -114,9 +101,7 @@ class KalshiClient:
         cursor: Optional[str] = None
         page = 0
         while True:
-            batch, cursor = self.get_markets(
-                statuses="active", cursor=cursor, mve_filter="exclude",
-            )
+            batch, cursor = self.get_markets(statuses="active", cursor=cursor)
             all_markets.extend(batch)
             page += 1
             if cursor is None:
@@ -125,112 +110,6 @@ class KalshiClient:
                 logger.info("Reached page cap (%d pages), stopping early", max_pages)
                 break
         logger.info("Total active markets fetched: %d (%d pages)", len(all_markets), page)
-        return all_markets
-
-    def get_all_events(self, *, max_pages: int = 200) -> list[dict[str, Any]]:
-        """Page through all events. Returns list of event dicts with category info."""
-        all_events: list[dict[str, Any]] = []
-        cursor: Optional[str] = None
-        page = 0
-        while True:
-            params: dict[str, Any] = {"limit": 200}
-            if cursor:
-                params["cursor"] = cursor
-            data = self._get(self._cfg.events_path, params)
-            batch = data.get("events") or []
-            next_cursor = data.get("cursor") or None
-            all_events.extend(batch)
-            page += 1
-            if not batch or next_cursor is None or page >= max_pages:
-                break
-            cursor = next_cursor
-        logger.info("Fetched %d events (%d pages)", len(all_events), page)
-        return all_events
-
-    def get_series(
-        self, *, category: str | None = None
-    ) -> list[dict[str, Any]]:
-        """Fetch series, optionally filtered by Kalshi category name."""
-        params: dict[str, Any] = {}
-        if category:
-            params["category"] = category
-        data = self._get(self._cfg.series_path, params)
-        series = data.get("series") or []
-        logger.info("Fetched %d series (category=%s)", len(series), category or "all")
-        return series
-
-    def get_markets_by_series(
-        self, series_ticker: str, *, statuses: str = "active",
-    ) -> list[dict[str, Any]]:
-        """Fetch all active markets for a specific series, handling pagination."""
-        all_markets: list[dict[str, Any]] = []
-        cursor: Optional[str] = None
-        while True:
-            batch, cursor = self.get_markets(
-                statuses=statuses, series_ticker=series_ticker, cursor=cursor,
-                mve_filter="exclude",
-            )
-            all_markets.extend(batch)
-            if cursor is None:
-                break
-        return all_markets
-
-    def fetch_priority_series(
-        self, series_tickers: tuple[str, ...] | list[str],
-    ) -> list[dict[str, Any]]:
-        """Fetch all active markets from a list of series tickers.
-
-        Much faster than get_all_active_markets() — typically ~200-500 markets
-        in 8-10 requests vs 50k markets in 50 requests.
-        """
-        all_markets: list[dict[str, Any]] = []
-        seen: set[str] = set()
-        for st in series_tickers:
-            try:
-                batch = self.get_markets_by_series(st)
-                for m in batch:
-                    ticker = m.get("ticker")
-                    if ticker and ticker not in seen:
-                        seen.add(ticker)
-                        all_markets.append(m)
-            except Exception:
-                logger.warning("Failed to fetch series %s, skipping", st, exc_info=True)
-        logger.info(
-            "Priority series fetch: %d markets from %d series",
-            len(all_markets), len(series_tickers),
-        )
-        return all_markets
-
-    def get_markets_updated_since(
-        self, min_updated_ts: int, *, max_pages: int = 20,
-    ) -> list[dict[str, Any]]:
-        """Fetch markets updated since a Unix timestamp.
-
-        NOTE: min_updated_ts is incompatible with the 'statuses' filter
-        on Kalshi's API. Caller must filter by status after fetching.
-        """
-        all_markets: list[dict[str, Any]] = []
-        cursor: Optional[str] = None
-        page = 0
-        while True:
-            params: dict[str, Any] = {
-                "min_updated_ts": min_updated_ts,
-                "limit": self._cfg.default_market_limit,
-            }
-            if cursor:
-                params["cursor"] = cursor
-            data = self._get(self._cfg.markets_path, params)
-            batch = data.get("markets") or []
-            next_cursor = data.get("cursor") or None
-            all_markets.extend(batch)
-            page += 1
-            if next_cursor is None or page >= max_pages:
-                break
-            cursor = next_cursor
-        logger.info(
-            "Fetched %d updated markets since ts=%d (%d pages)",
-            len(all_markets), min_updated_ts, page,
-        )
         return all_markets
 
     def get_market(self, ticker: str) -> dict[str, Any] | None:
