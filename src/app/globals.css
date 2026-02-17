@@ -5,11 +5,11 @@ html {
 }
 
 :root {
-  --titanium-black: #08090c;
-  --titanium-darker: #0e1117;
-  --titanium-border: #22262d;
-  --text-primary: #eceef0;
-  --text-secondary: #a1a8b3;
+  --titanium-black: #050608;
+  --titanium-darker: #0a0d10;
+  --titanium-border: #1a1d21;
+  --text-primary: #e8e9ea;
+  --text-secondary: #9ca3af;
   --silver: #c0c5cb;
 }
 
@@ -36,7 +36,7 @@ body::before {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 100;
   pointer-events: none;
   opacity: 0.03;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
@@ -44,14 +44,14 @@ body::before {
   background-size: 256px 256px;
 }
 
-/* ── Vignette (dashboard-friendly: very subtle edge tint) ── */
+/* ── Vignette ──────────────────────────────────────── */
 body::after {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: 39;
+  z-index: 99;
   pointer-events: none;
-  background: radial-gradient(ellipse at center, transparent 60%, rgba(8,9,12,0.15) 100%);
+  background: radial-gradient(ellipse at center, transparent 25%, rgba(5,6,8,0.5) 55%, #050608 80%);
 }
 
 /* ── Hero center glow ─────────────────────────────── */
@@ -142,36 +142,37 @@ body::after {
 
 /* ── Card panel (solid, no blur) ──────────────────── */
 .card-panel {
-  background: var(--titanium-darker);
-  border: 1px solid var(--titanium-border);
+  background: #0a0d10;
+  border: 1px solid #1a1d21;
   transition: transform 0.3s ease, border-color 0.3s ease;
 }
 
 .card-panel:hover {
   transform: translateY(-2px);
-  border-color: rgba(192, 197, 203, 0.25);
+  border-color: rgba(192, 197, 203, 0.2);
 }
 
-/* ── Card accent border ───────────────────────────── */
-.card-accent {
-  position: relative;
+/* ── Metallic banding ──────────────────────────────── */
+@keyframes metallic-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
 }
 
-.card-accent::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
+.metallic-band {
   background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(192, 197, 203, 0.3),
-    transparent
+    135deg,
+    var(--titanium-black) 0%,
+    var(--titanium-darker) 25%,
+    #0f1215 50%,
+    var(--titanium-darker) 75%,
+    var(--titanium-black) 100%
   );
-  pointer-events: none;
-  border-radius: inherit;
+  background-size: 200% 200%;
+  animation: metallic-shift 10s ease infinite;
 }
 
 /* ── Reduced motion ────────────────────────────────── */
@@ -187,53 +188,6 @@ body::after {
   html {
     scroll-behavior: auto;
   }
-}
-
-/* ── Nav link glow ────────────────────────────────── */
-.nav-link-glow {
-  transition: color 0.25s ease, filter 0.25s ease, text-shadow 0.25s ease;
-}
-.nav-link-glow:hover {
-  text-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
-}
-
-/* ── Headline italic accent ──────────────────────── */
-.headline-italic {
-  position: relative;
-}
-.headline-italic::after {
-  content: "";
-  position: absolute;
-  left: 10%;
-  right: 10%;
-  bottom: -0.1em;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.25),
-    transparent
-  );
-  pointer-events: none;
-}
-
-/* ── Nav spotlight ────────────────────────────────── */
-.nav-spotlight {
-  background:
-    radial-gradient(
-      180px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
-      rgba(255, 255, 255, 0.85) 0%,
-      rgba(255, 255, 255, 0.35) 35%,
-      rgba(255, 255, 255, 0.12) 55%,
-      transparent 70%
-    ),
-    radial-gradient(
-      380px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
-      rgba(255, 255, 255, 0.18) 0%,
-      transparent 60%
-    );
-  filter: blur(2px);
-  mix-blend-mode: screen;
 }
 
 /* ── Focus states ──────────────────────────────────── */

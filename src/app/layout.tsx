@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Italiana, Cormorant_Garamond } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,25 +12,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const italiana = Italiana({
-  variable: "--font-italiana",
-  subsets: ["latin"],
-  weight: "400",
-  display: "swap",
-});
-
-const cormorantGaramond = Cormorant_Garamond({
-  variable: "--font-cormorant",
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  style: ["normal", "italic"],
-  display: "swap",
-});
-
 export const metadata: Metadata = {
-  title: "Neutralis.ai — Systematic edge in prediction markets",
+  title: "Neutralis.ai — Calm, clear AI for thoughtful teams",
   description:
-    "Automated quantitative systems that identify mispriced probabilities, manage portfolio risk, and execute trades across prediction markets.",
+    "Neutralis.ai helps teams make better decisions with balanced, transparent AI. No hype — just clarity.",
 };
 
 export default function RootLayout({
@@ -41,7 +26,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${italiana.variable} ${cormorantGaramond.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
       </body>
