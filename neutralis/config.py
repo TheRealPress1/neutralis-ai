@@ -140,10 +140,13 @@ class MarketFilterConfig:
     full_refresh_interval_sec: float = 300.0
     # Series with known cross-platform overlap (Polymarket counterparts exist)
     priority_series: tuple[str, ...] = (
-        # Soccer leagues
+        # Soccer tournament winners
         "KXPREMIERLEAGUE", "KXUCL", "KXFACUP", "KXLALIGA",
         "KXBUNDESLIGA", "KXSERIEA", "KXLIGUE1",
         "KXEUROPALEAGUE", "KXMLSWINNER",
+        # Soccer match 3-way markets (Team A / Team B / Draw)
+        "KXEPLGAME", "KXBUNDESLIGAGAME", "KXLIGUE1GAME",
+        "KXSERIEAGAME", "KXBRASILEIROGAME", "KXSCOTTISHPREMGAME", "KXUEFAGAME",
         # Tennis
         "KXATPMATCH", "KXWTAMATCH",
         # American sports

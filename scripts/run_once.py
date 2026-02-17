@@ -22,6 +22,7 @@ from neutralis.core.disagreement import compute_disagreement
 from neutralis.core.features import compute_market_features, estimate_costs
 from neutralis.core.matcher import match_markets
 from neutralis.core.scanners import scan_complement_arb
+from neutralis.core.three_way import group_kalshi_three_way, scan_three_way_arb
 from neutralis.core.scoring import score_signal
 from neutralis.guard.decision import evaluate_signal, select_portfolio
 from neutralis.guard.regime import apply_regime_to_pipeline, compute_regime
@@ -48,6 +49,7 @@ class RunStats:
     kalshi_markets: int = 0
     poly_markets: int = 0
     complement_signals: int = 0
+    three_way_signals: int = 0
     cross_platform_signals: int = 0
     matches: int = 0
     decisions_pass: int = 0
@@ -216,6 +218,13 @@ def run_once(run_number: int = 0) -> RunStats:
     logger.info("Step 3a: Running complement arb scanner")
     complement_signals = scan_complement_arb(kalshi_markets, settings.pipeline)
 
+    # Step 3a2: 3-way (Dutch book) arb scan
+    logger.info("Step 3a2: Running 3-way arb scanner")
+    kalshi_by_ticker = {m.ticker: m for m in kalshi_markets}
+    three_way_groups = group_kalshi_three_way(kalshi_by_ticker)
+    use_maker = settings.execution.use_maker_orders
+    three_way_signals = scan_three_way_arb(three_way_groups, settings.pipeline, maker=use_maker)
+
     # Step 3b: Cross-platform matching
     logger.info("Step 3b: Matching markets across venues")
     pairs = match_markets(kalshi_markets, poly_markets, settings.matching)
@@ -225,8 +234,10 @@ def run_once(run_number: int = 0) -> RunStats:
     xp_signals = scan_cross_platform(pairs, settings.matching)
 
     # Alert on signals found
-    if complement_signals or xp_signals:
-        notifier.notify_signals(len(complement_signals), len(xp_signals), len(pairs))
+    if complement_signals or three_way_signals or xp_signals:
+        notifier.notify_signals(
+            len(complement_signals) + len(three_way_signals), len(xp_signals), len(pairs),
+        )
 
     # Step 3d: Orderbook enrichment for complement arb signals
     enriched_markets: dict[str, NormalizedMarket] = {}
@@ -304,6 +315,15 @@ def run_once(run_number: int = 0) -> RunStats:
         # 4a: Score complement arb signals
         for signal in complement_signals:
             market = enriched_markets.get(signal.ticker, signal.market_snapshot)
+            if market is None:
+                continue
+            scored = _score_signal(signal, market, storage)
+            signal_market_pairs.append((scored, market))
+
+        # 4a2: Score 3-way arb signals (use first leg's ticker for market lookup)
+        for signal in three_way_signals:
+            first_leg_ticker = signal.legs[0].ticker if signal.legs else signal.ticker
+            market = kalshi_by_ticker.get(first_leg_ticker) or signal.market_snapshot
             if market is None:
                 continue
             scored = _score_signal(signal, market, storage)
@@ -454,9 +474,10 @@ def run_once(run_number: int = 0) -> RunStats:
 
     elapsed = (time.monotonic() - start) * 1000
     logger.info(
-        "Pipeline complete: %d complement arb, %d cross-platform, %d matches, "
+        "Pipeline complete: %d complement, %d 3-way, %d cross-platform, %d matches, "
         "%d pass (%d selected), %d reject, regime=%s, %.0fms",
         len(complement_signals),
+        len(three_way_signals),
         len(xp_signals),
         len(pairs),
         pass_count,
@@ -472,6 +493,7 @@ def run_once(run_number: int = 0) -> RunStats:
         kalshi_markets=len(kalshi_markets),
         poly_markets=len(poly_markets),
         complement_signals=len(complement_signals),
+        three_way_signals=len(three_way_signals),
         cross_platform_signals=len(xp_signals),
         matches=len(pairs),
         decisions_pass=pass_count,

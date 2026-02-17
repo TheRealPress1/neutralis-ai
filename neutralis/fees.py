@@ -118,3 +118,25 @@ def estimate_cross_platform_fee(
         no_fee = polymarket_fee(no_price, contracts)
 
     return yes_fee + no_fee
+
+
+def estimate_three_way_fee(
+    prices: tuple[float, float, float],
+    venues: tuple[str, str, str] = ("kalshi", "kalshi", "kalshi"),
+    contracts: int = 1,
+    *,
+    maker: bool = False,
+) -> float:
+    """Total fee for a 3-leg Dutch book arb (buy all 3 outcomes).
+
+    Each leg's fee depends on the venue:
+    - Kalshi legs pay the standard parabolic fee (maker or taker)
+    - Polymarket legs are free
+    """
+    total = 0.0
+    for price, venue in zip(prices, venues):
+        if venue == "kalshi":
+            total += kalshi_fee(price, contracts, maker=maker)
+        else:
+            total += polymarket_fee(price, contracts)
+    return total

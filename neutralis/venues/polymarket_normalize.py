@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from neutralis.logging import get_logger
-from neutralis.models import MarketStatus, MarketType, NormalizedMarket
+from neutralis.models import MarketStatus, MarketType, NormalizedMarket, ThreeWayGroup, ThreeWayOutcome
 
 logger = get_logger(__name__)
 
@@ -146,4 +146,91 @@ def normalize_market(raw: dict[str, Any]) -> Optional[NormalizedMarket]:
         expected_expiration=_parse_iso_dt(raw.get("endDate")),
         venue="polymarket",
         clob_token_ids=clob_token_ids,
+    )
+
+
+_DRAW_LABELS = {"draw", "tie", "drawn"}
+
+
+def normalize_three_way_market(raw: dict[str, Any]) -> Optional[ThreeWayGroup]:
+    """Convert a Polymarket market with exactly 3 outcomes into a ThreeWayGroup.
+
+    Polymarket 3-way markets have outcomes like ["Team A Wins", "Team B Wins", "Draw"]
+    with parallel outcomePrices and clobTokenIds arrays.
+    """
+    ticker = raw.get("conditionId") or raw.get("id") or ""
+    if not ticker:
+        return None
+
+    outcomes = raw.get("outcomes")
+    if isinstance(outcomes, str):
+        try:
+            outcomes = json.loads(outcomes)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    if not outcomes or len(outcomes) != 3:
+        return None
+
+    question = raw.get("question", "")
+    if not question:
+        return None
+
+    # Parse prices
+    outcome_prices = raw.get("outcomePrices")
+    if isinstance(outcome_prices, str):
+        try:
+            outcome_prices = json.loads(outcome_prices)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    if not outcome_prices or len(outcome_prices) < 3:
+        return None
+
+    # Parse CLOB token IDs
+    clob_ids_raw = raw.get("clobTokenIds")
+    if isinstance(clob_ids_raw, str):
+        try:
+            clob_ids_raw = json.loads(clob_ids_raw)
+        except (json.JSONDecodeError, TypeError):
+            clob_ids_raw = ["", "", ""]
+    if not clob_ids_raw or len(clob_ids_raw) < 3:
+        clob_ids_raw = ["", "", ""]
+
+    # Status
+    closed = raw.get("closed", False)
+    active = raw.get("active", True)
+    if closed or not active:
+        return None
+
+    # Identify draw vs team outcomes by label
+    draw_idx = None
+    for i, label in enumerate(outcomes):
+        if str(label).strip().lower() in _DRAW_LABELS:
+            draw_idx = i
+            break
+
+    if draw_idx is None:
+        return None  # Can't identify draw — not a match market
+
+    team_indices = [i for i in range(3) if i != draw_idx]
+
+    def _make_outcome(idx: int) -> ThreeWayOutcome:
+        price = _safe_float(outcome_prices[idx])
+        return ThreeWayOutcome(
+            label=str(outcomes[idx]).strip(),
+            ticker=str(ticker),
+            ask=price,
+            bid=price,  # Poly doesn't separate bid/ask per outcome in Gamma
+            venue="polymarket",
+            token_id=str(clob_ids_raw[idx]) if idx < len(clob_ids_raw) else "",
+        )
+
+    return ThreeWayGroup(
+        event_id=raw.get("slug", str(ticker)),
+        venue="polymarket",
+        title=question,
+        outcome_a=_make_outcome(team_indices[0]),
+        outcome_b=_make_outcome(team_indices[1]),
+        outcome_draw=_make_outcome(draw_idx),
+        close_time=_parse_iso_dt(raw.get("endDate")),
+        liquidity=_safe_float(raw.get("liquidity")),
     )

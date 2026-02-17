@@ -29,11 +29,12 @@ from neutralis.config import Settings, WebSocketConfig, load_settings, load_sett
 from neutralis.core.cross_scanner import scan_cross_platform
 from neutralis.core.matcher import MarketPair, match_markets
 from neutralis.core.scanners import scan_complement_arb
+from neutralis.core.three_way import group_kalshi_three_way
 from neutralis.core.scoring import score_signal
 from neutralis.core.features import compute_market_features, estimate_costs
 from neutralis.execution.executor import PaperExecutor
 from neutralis.execution.models import TickContext
-from neutralis.fees import estimate_total_fee, estimate_cross_platform_fee
+from neutralis.fees import estimate_total_fee, estimate_cross_platform_fee, estimate_three_way_fee
 from neutralis.guard.decision import evaluate_signal, select_portfolio
 from neutralis.logging import get_logger
 from neutralis.models import (
@@ -44,6 +45,7 @@ from neutralis.models import (
     NormalizedMarket,
     Signal,
     SignalType,
+    ThreeWayGroup,
     TradeLeg,
 )
 from neutralis.portfolio.manager import PortfolioManager
@@ -91,6 +93,10 @@ class _LiveState:
     poly_to_kalshi: dict[str, str]
     # Settings
     settings: Settings
+    # 3-way match groups: event_ticker -> ThreeWayGroup
+    three_way_kalshi: dict[str, ThreeWayGroup] = field(default_factory=dict)
+    # Reverse lookup: kalshi_ticker -> event_ticker (for WS updates)
+    ticker_to_three_way: dict[str, str] = field(default_factory=dict)
     # Trade flow tracking
     trade_flow: dict[str, TradeFlowStats] = field(default_factory=dict)
     # Signal cooldown: ticker -> monotonic timestamp of last signal dispatch
@@ -326,9 +332,18 @@ class EventEngine:
             xp_pairs[pair.kalshi_market.ticker] = (pair, pair.polymarket_market.ticker)
             poly_to_kalshi[pair.polymarket_market.ticker] = pair.kalshi_market.ticker
 
+        # Group 3-way match markets
+        three_way_groups = group_kalshi_three_way(kalshi_markets)
+        three_way_kalshi: dict[str, ThreeWayGroup] = {}
+        ticker_to_three_way: dict[str, str] = {}
+        for g in three_way_groups:
+            three_way_kalshi[g.event_id] = g
+            for oc in g.outcomes:
+                ticker_to_three_way[oc.ticker] = g.event_id
+
         logger.info(
-            "State built: %d Kalshi, %d Polymarket, %d pairs",
-            len(kalshi_markets), len(poly_markets), len(pairs),
+            "State built: %d Kalshi, %d Polymarket, %d pairs, %d 3-way matches",
+            len(kalshi_markets), len(poly_markets), len(pairs), len(three_way_kalshi),
         )
 
         return _LiveState(
@@ -338,6 +353,8 @@ class EventEngine:
             xp_pairs=xp_pairs,
             poly_to_kalshi=poly_to_kalshi,
             settings=settings,
+            three_way_kalshi=three_way_kalshi,
+            ticker_to_three_way=ticker_to_three_way,
         )
 
     def _build_focus_tickers(self, state: _LiveState) -> set[str]:
@@ -352,6 +369,9 @@ class EventEngine:
 
         # All cross-platform matched tickers (highest priority)
         focus.update(state.xp_pairs.keys())
+
+        # All 3-way match tickers
+        focus.update(state.ticker_to_three_way.keys())
 
         # Near-complement-arb tickers
         for ticker, nm in state.kalshi_markets.items():
@@ -729,6 +749,54 @@ class EventEngine:
                                     yes_venue, no_venue,
                                 )
 
+        # ── Check 3: Three-way (Dutch book) arb ──
+        event_id = state.ticker_to_three_way.get(ticker)
+        if event_id:
+            group = state.three_way_kalshi.get(event_id)
+            if group:
+                # Update the outcome price that changed
+                updated_outcomes = []
+                for oc in group.outcomes:
+                    if oc.ticker == ticker:
+                        updated_outcomes.append(replace(oc, ask=market.yes_ask, bid=market.yes_bid))
+                    else:
+                        updated_outcomes.append(oc)
+
+                # Rebuild group with updated prices
+                group = replace(
+                    group,
+                    outcome_a=updated_outcomes[0],
+                    outcome_b=updated_outcomes[1],
+                    outcome_draw=updated_outcomes[2],
+                )
+                state.three_way_kalshi[event_id] = group
+
+                combined = group.combined_ask
+                if combined < 1.0 and all(oc.ask > 0 for oc in group.outcomes):
+                    gross_edge = 1.0 - combined
+                    use_maker = state.settings.execution.use_maker_orders
+                    prices = tuple(oc.ask for oc in group.outcomes)
+                    venues = tuple(oc.venue for oc in group.outcomes)
+                    fee = estimate_three_way_fee(prices, venues, maker=use_maker)
+                    net_edge = gross_edge - fee
+                    if net_edge > 0:
+                        edge_pct_3w = (net_edge / combined) * 100.0
+                        if edge_pct_3w >= cfg.min_edge_pct:
+                            if not self._signal_on_cooldown(state, event_id, "three_way"):
+                                logger.info(
+                                    "RT 3-way arb: %s A=%.4f B=%.4f D=%.4f combined=%.4f edge=%.2f%%",
+                                    event_id,
+                                    group.outcome_a.ask, group.outcome_b.ask,
+                                    group.outcome_draw.ask, combined, edge_pct_3w,
+                                )
+                                state.signals_detected += 1
+                                loop = asyncio.get_event_loop()
+                                loop.run_in_executor(
+                                    self._executor_pool,
+                                    self._execute_three_way_arb,
+                                    group, net_edge, edge_pct_3w,
+                                )
+
     # ── Execution (runs in thread pool) ────────────────────────────────
 
     def _execute_complement_arb(
@@ -764,6 +832,49 @@ class EventEngine:
             no_ask=market.no_ask,
             combined_cost=round(market.yes_ask + market.no_ask, 6),
             gross_edge=round(1.0 - market.yes_ask - market.no_ask, 6),
+            net_edge=round(net_edge, 6),
+            edge_pct=round(edge_pct, 4),
+            legs=legs,
+            market_snapshot=market,
+        )
+
+        self._score_and_execute(signal, market, settings)
+
+    def _execute_three_way_arb(
+        self, group: ThreeWayGroup, net_edge: float, edge_pct: float,
+    ) -> None:
+        """Score, guard-check, and execute a 3-way Dutch book arb. Runs sync in thread pool."""
+        state = self._state
+        if state is None:
+            return
+
+        settings = state.settings
+        cfg = settings.pipeline
+
+        legs = tuple(
+            TradeLeg(
+                ticker=oc.ticker,
+                side="yes",
+                price_dollars=oc.ask,
+                quantity_dollars=min(cfg.max_position_dollars, group.liquidity / 3),
+                venue=oc.venue,
+            )
+            for oc in group.outcomes
+        )
+
+        # Use the first team market as the snapshot for guard evaluation
+        market = state.kalshi_markets.get(group.outcome_a.ticker)
+        if market is None:
+            return
+
+        signal = Signal(
+            signal_type=SignalType.THREE_WAY_ARB,
+            ticker=group.event_id,
+            event_ticker=group.event_id,
+            yes_ask=group.outcome_a.ask,
+            no_ask=group.outcome_b.ask,
+            combined_cost=round(group.combined_ask, 6),
+            gross_edge=round(1.0 - group.combined_ask, 6),
             net_edge=round(net_edge, 6),
             edge_pct=round(edge_pct, 4),
             legs=legs,
@@ -1444,14 +1555,25 @@ class EventEngine:
             xp_pairs[pair.kalshi_market.ticker] = (pair, pair.polymarket_market.ticker)
             poly_to_kalshi[pair.polymarket_market.ticker] = pair.kalshi_market.ticker
 
+        # Re-group 3-way match markets
+        three_way_groups = group_kalshi_three_way(kalshi_markets)
+        three_way_kalshi: dict[str, ThreeWayGroup] = {}
+        ticker_to_three_way: dict[str, str] = {}
+        for g in three_way_groups:
+            three_way_kalshi[g.event_id] = g
+            for oc in g.outcomes:
+                ticker_to_three_way[oc.ticker] = g.event_id
+
         state.kalshi_markets = kalshi_markets
         state.kalshi_raw = kalshi_raw
         state.xp_pairs = xp_pairs
         state.poly_to_kalshi = poly_to_kalshi
+        state.three_way_kalshi = three_way_kalshi
+        state.ticker_to_three_way = ticker_to_three_way
 
         logger.info(
-            "Kalshi refresh: %d markets, %d cross-platform pairs",
-            len(kalshi_markets), len(xp_pairs),
+            "Kalshi refresh: %d markets, %d cross-platform pairs, %d 3-way groups",
+            len(kalshi_markets), len(xp_pairs), len(three_way_kalshi),
         )
         return state
 
@@ -1576,6 +1698,7 @@ class EventEngine:
             "kalshi_markets": len(state.kalshi_markets) if state else 0,
             "poly_markets": len(state.poly_markets) if state else 0,
             "xp_pairs": len(state.xp_pairs) if state else 0,
+            "three_way_groups": len(state.three_way_kalshi) if state else 0,
             "active_trade_flow_tickers": active_flow,
             "ticker_updates": state.ticker_updates if state else 0,
             "arb_checks": state.arb_checks if state else 0,
