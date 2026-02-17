@@ -231,7 +231,7 @@ def run_once(run_number: int = 0) -> RunStats:
 
     # Step 3c: Cross-platform signal scan
     logger.info("Step 3c: Scanning matched pairs for price discrepancies")
-    xp_signals = scan_cross_platform(pairs, settings.matching)
+    xp_signals = scan_cross_platform(pairs, settings.matching, pipeline_config=settings.pipeline)
 
     # Alert on signals found
     if complement_signals or three_way_signals or xp_signals:

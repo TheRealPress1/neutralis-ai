@@ -87,8 +87,15 @@ def check_time_to_expiry(market: NormalizedMarket, config: PipelineConfig) -> Gu
     )
 
 
-def check_orderbook_depth(market: NormalizedMarket, min_qty: float = 10.0) -> GuardResult:
-    """Check top-of-book depth. Passes through if no orderbook data."""
+def check_orderbook_depth(
+    market: NormalizedMarket,
+    min_qty: float = 10.0,
+    position_size: float | None = None,
+) -> GuardResult:
+    """Check top-of-book depth. Passes through if no orderbook data.
+
+    When position_size is provided, requires depth >= max(min_qty, position_size).
+    """
     if not market.yes_bids and not market.no_bids:
         return GuardResult(
             guard_name="orderbook_depth",
@@ -96,21 +103,22 @@ def check_orderbook_depth(market: NormalizedMarket, min_qty: float = 10.0) -> Gu
             reason="no orderbook data, deferring to liquidity check",
         )
 
+    required = max(min_qty, position_size or 0.0)
     yes_top_qty = market.yes_bids[0].quantity_dollars if market.yes_bids else 0.0
     no_top_qty = market.no_bids[0].quantity_dollars if market.no_bids else 0.0
     min_side = min(yes_top_qty, no_top_qty)
 
-    passed = min_side >= min_qty
+    passed = min_side >= required
     return GuardResult(
         guard_name="orderbook_depth",
         passed=passed,
         reason=(
-            f"min top-of-book qty ${min_side:.2f} >= ${min_qty:.2f}"
+            f"min top-of-book qty ${min_side:.2f} >= ${required:.2f}"
             if passed
-            else f"min top-of-book qty ${min_side:.2f} < ${min_qty:.2f}"
+            else f"min top-of-book qty ${min_side:.2f} < ${required:.2f}"
         ),
         value=min_side,
-        threshold=min_qty,
+        threshold=required,
     )
 
 

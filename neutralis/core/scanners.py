@@ -66,7 +66,8 @@ def scan_complement_arb(
 
         gross_edge = 1.0 - combined_cost
         estimated_fee = estimate_total_fee(m.yes_ask, m.no_ask, venue=m.venue)
-        net_edge = gross_edge - estimated_fee
+        slippage = cfg.slippage_per_leg * 2  # two legs
+        net_edge = gross_edge - estimated_fee - slippage
 
         if net_edge <= 0:
             continue

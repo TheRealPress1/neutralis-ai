@@ -653,11 +653,12 @@ class EventEngine:
                 return
 
         # ── Check 1: Complement arb ──
+        slippage_2 = cfg.slippage_per_leg * 2  # two-leg buffer
         if market.yes_ask > 0 and market.no_ask > 0:
             combined = market.yes_ask + market.no_ask
             if combined < 1.0:
                 fee = estimate_total_fee(market.yes_ask, market.no_ask, venue="kalshi")
-                net_edge = (1.0 - combined) - fee
+                net_edge = (1.0 - combined) - fee - slippage_2
                 if net_edge > 0:
                     edge_pct = (net_edge / combined) * 100.0
                     if edge_pct >= cfg.min_edge_pct:
@@ -703,7 +704,7 @@ class EventEngine:
                             no_price=other_no, no_venue=no_venue,
                             maker=use_maker,
                         )
-                        net_edge = gross_edge - fee
+                        net_edge = gross_edge - fee - slippage_2
                         edge_pct = (net_edge / combined) * 100.0 if combined > 0 else 0.0
 
                         # Record discrepancy observation (rate-limited per pair)
@@ -778,7 +779,8 @@ class EventEngine:
                     prices = tuple(oc.ask for oc in group.outcomes)
                     venues = tuple(oc.venue for oc in group.outcomes)
                     fee = estimate_three_way_fee(prices, venues, maker=use_maker)
-                    net_edge = gross_edge - fee
+                    slippage_3 = cfg.slippage_per_leg * 3  # three legs
+                    net_edge = gross_edge - fee - slippage_3
                     if net_edge > 0:
                         edge_pct_3w = (net_edge / combined) * 100.0
                         if edge_pct_3w >= cfg.min_edge_pct:

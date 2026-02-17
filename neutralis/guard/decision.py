@@ -70,21 +70,21 @@ def evaluate_signal(
         # Adjust config thresholds for this category's risk level
         cfg = resolve_pipeline_config(cfg, category, category_overrides)
 
+    # Preliminary size for depth check and exposure checks (base sizing, no headroom)
+    preliminary_size = compute_size(signal, market, cfg)
+
     # Phase 1: Market-level checks
     market_results: list[GuardResult] = [
         check_min_edge(signal.edge_pct, cfg, cross_platform=signal.cross_platform),
         check_liquidity(market, cfg),
         check_time_to_expiry(market, cfg),
-        check_orderbook_depth(market),
+        check_orderbook_depth(market, position_size=preliminary_size),
     ]
 
     # Phase 2: Portfolio-level checks (only when snapshot provided)
     portfolio_results: list[GuardResult] = []
     if portfolio_snapshot is not None:
         pcfg = portfolio_config or PortfolioConfig()
-
-        # Preliminary size for exposure checks (v1 sizing, no headroom)
-        preliminary_size = compute_size(signal, market, cfg)
 
         portfolio_results = [
             check_open_position_count(portfolio_snapshot, pcfg),

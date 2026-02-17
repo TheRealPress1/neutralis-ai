@@ -51,17 +51,20 @@ def kalshi_fee(
     return kalshi_fee_per_contract(price, maker=maker) * contracts
 
 
+_POLYMARKET_TAKER_RATE = 0.0001  # 0.01% taker fee (Polymarket US, CFTC-regulated)
+
+
 def polymarket_fee(
     price: float,
     contracts: int = 1,
 ) -> float:
-    """Polymarket fee. Zero for standard markets (political, sports, etc.).
+    """Polymarket fee — 0.01% taker fee on all markets.
 
-    15-minute crypto markets have taker fees but we don't trade those.
-    Polymarket US (CFTC-regulated) charges 0.01% — negligible.
+    Negligible for most trades but adds accuracy on tight arbs.
     """
-    # No meaningful fee for the markets we trade
-    return 0.0
+    if price <= 0:
+        return 0.0
+    return round(price * contracts * _POLYMARKET_TAKER_RATE, 6)
 
 
 def estimate_total_fee(

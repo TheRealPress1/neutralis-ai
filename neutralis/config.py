@@ -61,6 +61,7 @@ class PipelineConfig:
     fee_rate: float = 0.07
     max_position_dollars: float = 25.0
     min_xp_edge_pct: float = 0.05  # Cross-platform arb threshold (lower — one side is fee-free)
+    slippage_per_leg: float = 0.005  # $0.005 per leg execution buffer (price movement risk)
 
 
 @dataclass(frozen=True)
