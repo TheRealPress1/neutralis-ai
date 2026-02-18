@@ -38,6 +38,17 @@ export function encrypt(plaintext: string): string {
 }
 
 /**
+ * Safe wrapper: returns encrypted string or null if encryption is unavailable.
+ */
+export function tryEncrypt(plaintext: string): string | null {
+  try {
+    return encrypt(plaintext);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Decrypt a string produced by `encrypt()`.
  */
 export function decrypt(ciphertext: string): string {

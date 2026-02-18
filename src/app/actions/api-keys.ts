@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { encrypt, decrypt } from "@/lib/encryption";
+import { encrypt, decrypt, tryEncrypt } from "@/lib/encryption";
 import { createSign, constants as cryptoConstants } from "crypto";
 import { rateLimit, SENSITIVE_LIMIT, getClientIp } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
@@ -26,15 +26,19 @@ export async function saveApiKeys(keys: ApiKeyData[]) {
   if (!user) return { error: "Not authenticated" };
 
   for (const key of keys) {
+    const encSecret = key.api_secret ? tryEncrypt(key.api_secret) : "";
+    const encPem = key.private_key_pem ? tryEncrypt(key.private_key_pem) : "";
+    if (encSecret === null || encPem === null) {
+      return { error: "Encryption is not configured. Please contact support." };
+    }
+
     const { error } = await supabase.from("user_api_keys").upsert(
       {
         user_id: user.id,
         platform: key.platform,
         api_key_id: key.api_key_id,
-        api_secret: key.api_secret ? encrypt(key.api_secret) : "",
-        private_key_pem: key.private_key_pem
-          ? encrypt(key.private_key_pem)
-          : "",
+        api_secret: encSecret,
+        private_key_pem: encPem,
         is_valid: true,
       },
       { onConflict: "user_id,platform" },
