@@ -18,11 +18,7 @@ export async function getSubscription(): Promise<{
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) {
-    console.log("[getSubscription] No user — returning free");
-    return { tier: "free", isFounder: false, error: "Not authenticated" };
-  }
-  console.log("[getSubscription] User:", user.email);
+  if (!user) return { tier: "free", isFounder: false, error: "Not authenticated" };
 
   const { data, error } = await (supabase as any)
     .from("profiles")
@@ -30,11 +26,7 @@ export async function getSubscription(): Promise<{
     .eq("id", user.id)
     .single();
 
-  if (error) {
-    console.log("[getSubscription] DB error:", error.message);
-    return { tier: "free", isFounder: false, error: error.message };
-  }
-  console.log("[getSubscription] Profile data:", data);
+  if (error) return { tier: "free", isFounder: false, error: error.message };
 
   const isFounder = data?.is_founder === true;
   // Founders always see Pro-level access

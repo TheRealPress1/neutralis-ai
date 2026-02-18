@@ -12,7 +12,6 @@ import ApiKeyManager from "./ApiKeyManager";
 import UpgradeBanner from "./UpgradeBanner";
 import AuthNav from "@/app/components/AuthNav";
 import Link from "next/link";
-import { getSubscription } from "@/app/actions/subscription";
 import { hasAccess, type SubscriptionTier } from "@/lib/subscription";
 
 type NavTab = "dashboard" | "automation" | "activity" | "matches" | "connections" | "settings";
@@ -30,21 +29,19 @@ function secondsAgo(date: Date) {
   return Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
 }
 
-export default function DashboardShell() {
+export default function DashboardShell({
+  initialTier = "free",
+  initialIsFounder = false,
+}: {
+  initialTier?: SubscriptionTier;
+  initialIsFounder?: boolean;
+}) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [elapsed, setElapsed] = useState(0);
   const [activeTab, setActiveTab] = useState<NavTab>("dashboard");
-  const [tier, setTier] = useState<SubscriptionTier>("free");
-  const [isFounder, setIsFounder] = useState(false);
-
-  // Fetch subscription tier
-  useEffect(() => {
-    getSubscription().then((r) => {
-      setTier(r.tier);
-      setIsFounder(r.isFounder);
-    });
-  }, []);
+  const tier = initialTier;
+  const isFounder = initialIsFounder;
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
