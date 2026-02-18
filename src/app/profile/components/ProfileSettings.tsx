@@ -18,6 +18,9 @@ interface Profile {
   id: string;
   email: string;
   full_name: string;
+  first_name: string;
+  last_name: string;
+  date_of_birth: string | null;
   subscription_tier: string;
   created_at: string;
   updated_at: string;
@@ -28,7 +31,9 @@ export default function ProfileSettings() {
   const [loading, setLoading] = useState(true);
 
   // Profile form
-  const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -52,7 +57,9 @@ export default function ProfileSettings() {
       const profileResult = await getProfile();
       if (profileResult.profile) {
         setProfile(profileResult.profile);
-        setFullName(profileResult.profile.full_name);
+        setFirstName(profileResult.profile.first_name ?? "");
+        setLastName(profileResult.profile.last_name ?? "");
+        setDateOfBirth(profileResult.profile.date_of_birth ?? "");
         setEmail(profileResult.profile.email);
       }
       setLoading(false);
@@ -64,7 +71,9 @@ export default function ProfileSettings() {
     setError(null);
     setSaved(false);
     const formData = new FormData();
-    formData.set("full_name", fullName);
+    formData.set("first_name", firstName);
+    formData.set("last_name", lastName);
+    formData.set("date_of_birth", dateOfBirth);
 
     startTransition(async () => {
       const result = await updateProfile(formData);
@@ -209,17 +218,47 @@ export default function ProfileSettings() {
             )}
           </div>
 
-          {/* Full Name */}
+          {/* First Name + Last Name */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+                First Name
+              </label>
+              <input
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className={INPUT_CLASS}
+                placeholder="First name"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+                Last Name
+              </label>
+              <input
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className={INPUT_CLASS}
+                placeholder="Last name"
+                required
+              />
+            </div>
+          </div>
+
+          {/* Date of Birth */}
           <div>
             <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
-              Full Name
+              Date of Birth
+              <span className="ml-1 text-[#6b7280] font-normal">(optional)</span>
             </label>
             <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
+              type="date"
+              value={dateOfBirth}
+              onChange={(e) => setDateOfBirth(e.target.value)}
               className={INPUT_CLASS}
-              placeholder="Enter your full name"
             />
           </div>
 

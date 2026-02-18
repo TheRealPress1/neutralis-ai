@@ -12,7 +12,7 @@ export async function getProfile() {
 
   const { data, error } = await (supabase as any)
     .from("profiles")
-    .select("id, email, full_name, subscription_tier, created_at, updated_at")
+    .select("id, email, full_name, first_name, last_name, date_of_birth, subscription_tier, created_at, updated_at")
     .eq("id", user.id)
     .single();
 
@@ -27,11 +27,19 @@ export async function updateProfile(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
-  const fullName = (formData.get("full_name") as string)?.trim() ?? "";
+  const firstName = (formData.get("first_name") as string)?.trim() ?? "";
+  const lastName = (formData.get("last_name") as string)?.trim() ?? "";
+  const dateOfBirth = (formData.get("date_of_birth") as string)?.trim() || null;
 
-  const { error } = await supabase
+  const { error } = await (supabase as any)
     .from("profiles")
-    .update({ full_name: fullName, updated_at: new Date().toISOString() })
+    .update({
+      first_name: firstName,
+      last_name: lastName,
+      full_name: [firstName, lastName].filter(Boolean).join(" "),
+      date_of_birth: dateOfBirth,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", user.id);
 
   if (error) return { error: error.message };
