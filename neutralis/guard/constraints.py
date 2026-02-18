@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from neutralis.categories import classify_market
-from neutralis.config import PipelineConfig, PortfolioConfig
+from neutralis.config import DirectionalConfig, PipelineConfig, PortfolioConfig
 from neutralis.models import GuardResult, NormalizedMarket, PortfolioSnapshot, Signal
 
 
@@ -305,4 +305,27 @@ def check_category_exposure(
         ),
         value=new_total,
         threshold=cat_max,
+    )
+
+
+# -- Directional strategy guards --
+
+
+def check_min_implied_probability(
+    signal: Signal,
+    min_probability: float = 0.80,
+) -> GuardResult:
+    """Validate a directional signal's implied probability meets the threshold."""
+    prob = signal.implied_probability
+    passed = prob >= min_probability
+    return GuardResult(
+        guard_name="min_implied_probability",
+        passed=passed,
+        reason=(
+            f"implied probability {prob:.2f} >= min {min_probability:.2f}"
+            if passed
+            else f"implied probability {prob:.2f} < min {min_probability:.2f}"
+        ),
+        value=prob,
+        threshold=min_probability,
     )

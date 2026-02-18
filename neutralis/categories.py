@@ -154,6 +154,64 @@ def classify_market(title: str, event_ticker: str = "") -> str:
 
 
 # ---------------------------------------------------------------------------
+# Sports sub-category classifier (for directional strategy)
+# ---------------------------------------------------------------------------
+
+_SPORT_SERIES_PREFIXES: dict[str, str] = {
+    # Tennis
+    "KXATPMATCH": "tennis",
+    "KXWTAMATCH": "tennis",
+    # Soccer
+    "KXEPLGAME": "soccer",
+    "KXBUNDESLIGAGAME": "soccer",
+    "KXLIGUE1GAME": "soccer",
+    "KXSERIEAGAME": "soccer",
+    "KXBRASILEIROGAME": "soccer",
+    "KXSCOTTISHPREMGAME": "soccer",
+    "KXUEFAGAME": "soccer",
+    # Basketball
+    "KXNBA": "basketball",
+}
+
+_SPORT_KEYWORDS: dict[str, re.Pattern[str]] = {
+    "tennis": re.compile(
+        r"tennis|atp|wta|grand slam|australian open|french open|wimbledon|us open",
+        re.IGNORECASE,
+    ),
+    "soccer": re.compile(
+        r"soccer|premier league|champions league|bundesliga|serie a|la liga"
+        r"|ligue 1|europa league|mls |uefa|fa cup|epl",
+        re.IGNORECASE,
+    ),
+    "basketball": re.compile(
+        r"\bnba\b|basketball|nba ",
+        re.IGNORECASE,
+    ),
+}
+
+
+def classify_sport(title: str, event_ticker: str = "") -> str | None:
+    """Classify a market into a sport sub-category.
+
+    Returns "tennis", "soccer", "basketball", or None.
+    Uses Kalshi series prefixes first (fast, exact), then keyword fallback.
+    """
+    # Fast path: match Kalshi series prefix
+    upper_ticker = event_ticker.upper()
+    for prefix, sport in _SPORT_SERIES_PREFIXES.items():
+        if upper_ticker.startswith(prefix):
+            return sport
+
+    # Keyword fallback
+    text = f"{title} {event_ticker}"
+    for sport, pattern in _SPORT_KEYWORDS.items():
+        if pattern.search(text):
+            return sport
+
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Risk multipliers per risk level
 # ---------------------------------------------------------------------------
 

@@ -144,7 +144,7 @@ class PaperExecutor:
             trades.append(trade)
 
             # Upsert position (same VWAP logic as PortfolioManager)
-            self._portfolio._upsert_position(trade)
+            self._portfolio._upsert_position(trade, signal_type=signal.signal_type.value)
 
             # Determine order status
             is_full = abs(fill.size_dollars - order.requested_size_dollars) < 0.01

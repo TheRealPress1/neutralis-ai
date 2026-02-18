@@ -104,6 +104,21 @@ class ExitConfig:
 
 
 @dataclass(frozen=True)
+class DirectionalConfig:
+    enabled: bool = True
+    min_implied_probability: float = 0.80
+    probability_floor: float = 0.60
+    min_liquidity_dollars: float = 50.0
+    max_position_dollars: float = 50.0
+    max_total_exposure_dollars: float = 1000.0
+    max_event_exposure_dollars: float = 100.0
+    max_ticker_exposure_dollars: float = 50.0
+    max_open_positions: int = 30
+    min_time_to_expiry_hours: float = 1.0
+    max_time_to_expiry_hours: float = 168.0  # 7 days
+
+
+@dataclass(frozen=True)
 class ExecutionConfig:
     live_trading_enabled: bool = field(
         default_factory=lambda: os.environ.get("LIVE_TRADING_ENABLED", "").lower()
@@ -239,6 +254,7 @@ class Settings:
     market_filter: MarketFilterConfig = field(default_factory=MarketFilterConfig)
     websocket: WebSocketConfig = field(default_factory=WebSocketConfig)
     polymarket_ws: PolymarketWSConfig = field(default_factory=PolymarketWSConfig)
+    directional: DirectionalConfig = field(default_factory=DirectionalConfig)
 
 
 def load_settings() -> Settings:

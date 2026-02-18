@@ -5,13 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from neutralis.categories import classify_market, is_category_enabled, resolve_pipeline_config
-from neutralis.config import PipelineConfig, PortfolioConfig
+from neutralis.config import DirectionalConfig, PipelineConfig, PortfolioConfig
 from neutralis.guard.constraints import (
     check_category_exposure,
     check_duplicate_position,
     check_event_exposure,
     check_liquidity,
     check_min_edge,
+    check_min_implied_probability,
     check_open_position_count,
     check_orderbook_depth,
     check_ticker_exposure,
@@ -141,6 +142,87 @@ def evaluate_signal(
         sum(1 for r in results if r.passed),
         len(results),
         extra={"signal_id": signal.id},
+    )
+
+    return decision
+
+
+def evaluate_directional_signal(
+    signal: Signal,
+    market: NormalizedMarket,
+    config: DirectionalConfig,
+    portfolio_snapshot: PortfolioSnapshot | None = None,
+) -> Decision:
+    """Run guard checks on a directional signal and produce a Decision.
+
+    Uses DirectionalConfig for sizing and portfolio limits, with an
+    isolated portfolio snapshot (directional positions only).
+    """
+    # Phase 1: Directional-specific checks
+    results: list[GuardResult] = [
+        check_min_implied_probability(signal, config.min_implied_probability),
+        check_duplicate_position(signal, portfolio_snapshot or PortfolioSnapshot()),
+    ]
+
+    # Position sizing — use directional config limits
+    size = min(config.max_position_dollars, market.liquidity * 0.20)
+    if size < 1.0:
+        size = 0.0
+
+    # Phase 2: Portfolio-level checks against directional-only snapshot
+    if portfolio_snapshot is not None:
+        # Build a PortfolioConfig from DirectionalConfig for reuse of existing guards
+        pcfg = PortfolioConfig(
+            max_total_exposure_dollars=config.max_total_exposure_dollars,
+            max_event_exposure_dollars=config.max_event_exposure_dollars,
+            max_ticker_exposure_dollars=config.max_ticker_exposure_dollars,
+            max_open_positions=config.max_open_positions,
+        )
+        results.extend([
+            check_open_position_count(portfolio_snapshot, pcfg),
+            check_total_exposure(size, portfolio_snapshot, pcfg),
+            check_event_exposure(size, signal.event_ticker, portfolio_snapshot, pcfg),
+            check_ticker_exposure(size, signal.ticker, portfolio_snapshot, pcfg),
+        ])
+
+        # Clamp size to headroom
+        total_headroom = config.max_total_exposure_dollars - portfolio_snapshot.total_exposure_dollars
+        size = min(size, max(total_headroom, 0.0))
+
+        event_current = dict(portfolio_snapshot.event_exposure).get(signal.event_ticker, 0.0)
+        event_headroom = config.max_event_exposure_dollars - event_current
+        size = min(size, max(event_headroom, 0.0))
+
+        ticker_current = sum(
+            p.size_dollars for p in portfolio_snapshot.positions if p.ticker == signal.ticker
+        )
+        ticker_headroom = config.max_ticker_exposure_dollars - ticker_current
+        size = min(size, max(ticker_headroom, 0.0))
+
+    if size < 1.0:
+        size = 0.0
+
+    all_results = tuple(results)
+    all_passed = all(r.passed for r in all_results)
+
+    if all_passed and size > 0:
+        verdict = DecisionVerdict.PASS
+        suggested_size = round(size, 2)
+    else:
+        verdict = DecisionVerdict.REJECT
+        suggested_size = 0.0
+
+    decision = Decision(
+        signal_id=signal.id,
+        verdict=verdict,
+        guard_results=all_results,
+        suggested_size_dollars=suggested_size,
+    )
+
+    logger.info(
+        "Directional decision: signal=%s verdict=%s size=$%.2f guards=%d/%d passed",
+        signal.id, verdict.value, suggested_size,
+        sum(1 for r in all_results if r.passed), len(all_results),
     )
 
     return decision

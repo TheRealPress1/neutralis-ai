@@ -140,14 +140,16 @@ class PostgresStorage:
                     gross_edge, net_edge, edge_pct,
                     snapshot_id, created_at,
                     confidence_score, time_to_resolution_days,
-                    roi_per_day, features_json
+                    roi_per_day, features_json,
+                    implied_probability, entry_side, probability_floor
                 ) VALUES (
                     %(id)s, %(signal_type)s, %(ticker)s, %(event_ticker)s,
                     %(yes_ask)s, %(no_ask)s, %(combined_cost)s,
                     %(gross_edge)s, %(net_edge)s, %(edge_pct)s,
                     %(snapshot_id)s, %(created_at)s,
                     %(confidence_score)s, %(time_to_resolution_days)s,
-                    %(roi_per_day)s, %(features_json)s::jsonb
+                    %(roi_per_day)s, %(features_json)s::jsonb,
+                    %(implied_probability)s, %(entry_side)s, %(probability_floor)s
                 )
                 """,
                 {
@@ -167,6 +169,9 @@ class PostgresStorage:
                     "time_to_resolution_days": signal.time_to_resolution_days,
                     "roi_per_day": signal.roi_per_day,
                     "features_json": features_json_str,
+                    "implied_probability": signal.implied_probability or None,
+                    "entry_side": signal.entry_side or None,
+                    "probability_floor": signal.probability_floor or None,
                 },
             )
         conn.commit()
@@ -318,7 +323,7 @@ class PostgresStorage:
         "id, ticker, event_ticker, venue, side, status, "
         "entry_price, size_dollars, quantity, "
         "realized_pnl, unrealized_pnl, trade_count, "
-        "opened_at, closed_at, category, exit_reason, exit_price"
+        "opened_at, closed_at, category, exit_reason, exit_price, signal_type"
     )
 
     @staticmethod
@@ -341,6 +346,7 @@ class PostgresStorage:
             category=row[14] if len(row) > 14 else "other",
             exit_reason=row[15] if len(row) > 15 else None,
             exit_price=float(row[16]) if len(row) > 16 and row[16] is not None else None,
+            signal_type=row[17] if len(row) > 17 and row[17] is not None else "",
         )
 
     def save_trade(self, trade: Trade) -> str:
@@ -389,13 +395,15 @@ class PostgresStorage:
                     id, ticker, event_ticker, venue, side, status,
                     entry_price, size_dollars, quantity,
                     realized_pnl, unrealized_pnl, trade_count,
-                    opened_at, closed_at, category, exit_reason, exit_price
+                    opened_at, closed_at, category, exit_reason, exit_price,
+                    signal_type
                 ) VALUES (
                     %(id)s, %(ticker)s, %(event_ticker)s, %(venue)s, %(side)s, %(status)s,
                     %(entry_price)s, %(size_dollars)s, %(quantity)s,
                     %(realized_pnl)s, %(unrealized_pnl)s, %(trade_count)s,
                     %(opened_at)s, %(closed_at)s, %(category)s,
-                    %(exit_reason)s, %(exit_price)s
+                    %(exit_reason)s, %(exit_price)s,
+                    %(signal_type)s
                 )
                 """,
                 {
@@ -416,6 +424,7 @@ class PostgresStorage:
                     "category": position.category,
                     "exit_reason": position.exit_reason,
                     "exit_price": position.exit_price,
+                    "signal_type": position.signal_type,
                 },
             )
         conn.commit()
@@ -554,6 +563,19 @@ class PostgresStorage:
                 f"SELECT {self._POSITION_COLS} FROM positions "
                 "WHERE ticker = %(ticker)s AND status = 'open'",
                 {"ticker": ticker},
+            )
+            rows = cur.fetchall()
+        return [self._row_to_position(row) for row in rows]
+
+    def get_open_positions_by_signal_type(self, signal_type: str) -> list[Position]:
+        """Return all open positions for a specific signal type."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT {self._POSITION_COLS} FROM positions "
+                "WHERE signal_type = %(signal_type)s AND status = 'open' "
+                "ORDER BY opened_at",
+                {"signal_type": signal_type},
             )
             rows = cur.fetchall()
         return [self._row_to_position(row) for row in rows]
