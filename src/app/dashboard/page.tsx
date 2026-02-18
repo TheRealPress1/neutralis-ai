@@ -32,5 +32,22 @@ export default async function DashboardPage() {
     ? "pro"
     : ((profile?.subscription_tier as SubscriptionTier) ?? "free");
 
-  return <DashboardShell initialTier={tier} initialIsFounder={isFounder} />;
+  // Check if user has any exchange keys configured
+  const { data: apiKeys } = await supabase
+    .from("user_api_keys")
+    .select("platform")
+    .eq("user_id", user.id);
+
+  const hasApiKeys = (apiKeys ?? []).some(
+    (k: { platform: string }) =>
+      k.platform === "kalshi" || k.platform === "polymarket",
+  );
+
+  return (
+    <DashboardShell
+      initialTier={tier}
+      initialIsFounder={isFounder}
+      initialHasApiKeys={hasApiKeys}
+    />
+  );
 }

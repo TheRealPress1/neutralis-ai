@@ -14,8 +14,26 @@ export async function GET(request: Request) {
       // Recovery sessions: send user to reset-password page
       const isRecovery = data.session?.user?.recovery_sent_at &&
         Date.now() - new Date(data.session.user.recovery_sent_at).getTime() < 600_000;
-      const destination = isRecovery ? "/reset-password" : next;
-      return NextResponse.redirect(`${origin}${destination}`);
+
+      if (isRecovery) {
+        return NextResponse.redirect(`${origin}/reset-password`);
+      }
+
+      // Check onboarding status — redirect new users to onboarding
+      const userId = data.session?.user?.id;
+      if (userId) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("onboarding_completed_at")
+          .eq("id", userId)
+          .single();
+
+        if (!profile?.onboarding_completed_at) {
+          return NextResponse.redirect(`${origin}/onboarding`);
+        }
+      }
+
+      return NextResponse.redirect(`${origin}${next}`);
     }
   }
 

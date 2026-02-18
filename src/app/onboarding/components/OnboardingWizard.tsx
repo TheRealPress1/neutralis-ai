@@ -1,0 +1,377 @@
+"use client";
+
+import { useState, useTransition, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { saveApiKeys } from "@/app/actions/api-keys";
+import { completeOnboarding } from "@/app/actions/auth";
+
+const INPUT_CLASS =
+  "w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors";
+
+const FEATURES = [
+  {
+    title: "Cross-platform scanning",
+    description:
+      "Monitors Kalshi and Polymarket in real-time for pricing discrepancies across matched markets.",
+  },
+  {
+    title: "Risk-managed evaluation",
+    description:
+      "Every opportunity is scored against configurable risk parameters before a trade is considered.",
+  },
+  {
+    title: "Automated execution",
+    description:
+      "Executes hedged trades across both exchanges with position sizing, stop-losses, and take-profits.",
+  },
+];
+
+export default function OnboardingWizard({
+  firstName,
+}: {
+  firstName?: string;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [step, setStep] = useState<1 | 2>(1);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Kalshi
+  const [kalshiKeyId, setKalshiKeyId] = useState("");
+  const [kalshiPem, setKalshiPem] = useState("");
+
+  // Polymarket
+  const [polyKey, setPolyKey] = useState("");
+  const [polySecret, setPolySecret] = useState("");
+  const [polyPassphrase, setPolyPassphrase] = useState("");
+
+  function handleSkip() {
+    startTransition(async () => {
+      await completeOnboarding();
+      router.push("/dashboard");
+    });
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    setKalshiPem(text);
+  }
+
+  function handleSave() {
+    setError(null);
+
+    const keys: Parameters<typeof saveApiKeys>[0] = [];
+
+    if (kalshiKeyId || kalshiPem) {
+      if (!kalshiKeyId || !kalshiPem) {
+        setError("Kalshi requires both an API Key ID and a Private Key.");
+        return;
+      }
+      keys.push({
+        platform: "kalshi",
+        api_key_id: kalshiKeyId.trim(),
+        api_secret: "",
+        private_key_pem: kalshiPem.trim(),
+      });
+    }
+
+    if (polyKey || polySecret || polyPassphrase) {
+      if (!polyKey || !polySecret || !polyPassphrase) {
+        setError(
+          "Polymarket requires an API Key, API Secret, and Passphrase.",
+        );
+        return;
+      }
+      keys.push({
+        platform: "polymarket",
+        api_key_id: polyKey.trim(),
+        api_secret: polySecret.trim(),
+        private_key_pem: polyPassphrase.trim(),
+      });
+    }
+
+    startTransition(async () => {
+      if (keys.length > 0) {
+        const result = await saveApiKeys(keys);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+      }
+      await completeOnboarding();
+      router.push("/dashboard");
+    });
+  }
+
+  /* ── Step indicator ─────────────────────────────────────────────── */
+
+  const stepIndicator = (
+    <div className="flex items-center justify-center gap-2 mb-10">
+      <span
+        className={`h-2 w-2 rounded-full transition-colors ${
+          step >= 1 ? "bg-[#e8e9ea]" : "bg-[#2a2d31]"
+        }`}
+      />
+      <span
+        className={`h-2 w-2 rounded-full transition-colors ${
+          step >= 2 ? "bg-[#e8e9ea]" : "bg-[#2a2d31]"
+        }`}
+      />
+    </div>
+  );
+
+  /* ── Step 1: Welcome ────────────────────────────────────────────── */
+
+  if (step === 1) {
+    return (
+      <div>
+        {stepIndicator}
+        <div className="text-center mb-10">
+          <h1 className="font-[family-name:var(--font-italiana)] text-3xl font-normal tracking-[0.06em]">
+            {firstName ? `Welcome, ${firstName}` : "Welcome to Neutralis"}
+          </h1>
+          <p className="mt-3 text-[#9ca3af]">
+            Here&apos;s what the platform does for you.
+          </p>
+        </div>
+
+        <div className="space-y-4 mb-10">
+          {FEATURES.map((f, i) => (
+            <div
+              key={i}
+              className="card-panel rounded-xl px-5 py-4 flex items-start gap-4"
+            >
+              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#1a1d21] text-xs font-medium text-[#9ca3af]">
+                {i + 1}
+              </span>
+              <div>
+                <p className="text-sm font-medium text-[#eceef0]">
+                  {f.title}
+                </p>
+                <p className="mt-0.5 text-xs text-[#9ca3af]">
+                  {f.description}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className="text-center text-sm text-[#9ca3af] mb-8">
+          To get started, connect your exchange API keys.
+          <br />
+          You can always do this later from the Connections tab.
+        </p>
+
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={handleSkip}
+            disabled={isPending}
+            className="rounded-full border border-[#2a2d31] px-6 py-3 text-sm text-[#9ca3af] hover:text-[#e8e9ea] hover:border-[#e8e9ea]/40 transition-colors disabled:opacity-50"
+          >
+            {isPending ? "Redirecting..." : "Skip for now"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setStep(2)}
+            className="btn-sheen btn-pill bg-[#e8e9ea] px-6 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb]"
+          >
+            Get started
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Step 2: Connect Keys ───────────────────────────────────────── */
+
+  return (
+    <div>
+      {stepIndicator}
+      <div className="text-center mb-8">
+        <h1 className="font-[family-name:var(--font-italiana)] text-3xl font-normal tracking-[0.06em]">
+          Connect your accounts
+        </h1>
+        <p className="mt-3 text-[#9ca3af]">
+          Link your exchange API keys so Neutralis can monitor and execute
+          trades.
+        </p>
+      </div>
+
+      <div className="space-y-8">
+        {error && (
+          <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+            {error}
+          </div>
+        )}
+
+        {/* Kalshi */}
+        <div className="card-panel card-accent rounded-xl p-6">
+          <h2 className="text-lg font-semibold mb-1">Kalshi</h2>
+          <p className="text-sm text-[#9ca3af] mb-5">
+            Generate an API key at{" "}
+            <a
+              href="https://kalshi.com/account/api"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#e8e9ea] underline underline-offset-2 hover:text-white"
+            >
+              kalshi.com/account/api
+            </a>
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor="kalshi-key-id"
+                className="block text-sm font-medium mb-2 text-[#e8e9ea]"
+              >
+                API Key ID
+              </label>
+              <input
+                id="kalshi-key-id"
+                type="text"
+                value={kalshiKeyId}
+                onChange={(e) => setKalshiKeyId(e.target.value)}
+                className={INPUT_CLASS}
+                placeholder="e.g. 6cd6375f-c6a7-440a-9f6f-c41c3bc68ff0"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="kalshi-pem"
+                className="block text-sm font-medium mb-2 text-[#e8e9ea]"
+              >
+                RSA Private Key (PEM)
+              </label>
+              <textarea
+                id="kalshi-pem"
+                value={kalshiPem}
+                onChange={(e) => setKalshiPem(e.target.value)}
+                rows={5}
+                className={`${INPUT_CLASS} font-mono text-xs`}
+                placeholder={"-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"}
+              />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pem,.key,.txt"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="mt-2 text-xs text-[#9ca3af] hover:text-[#e8e9ea] transition-colors underline underline-offset-2"
+              >
+                or upload a .pem file
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Polymarket */}
+        <div className="card-panel card-accent rounded-xl p-6">
+          <h2 className="text-lg font-semibold mb-1">Polymarket</h2>
+          <p className="text-sm text-[#9ca3af] mb-5">
+            Get your CLOB credentials from{" "}
+            <a
+              href="https://polymarket.com/settings?tab=builder"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#e8e9ea] underline underline-offset-2 hover:text-white"
+            >
+              polymarket.com &rarr; Profile &rarr; Builders
+            </a>
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor="poly-key"
+                className="block text-sm font-medium mb-2 text-[#e8e9ea]"
+              >
+                API Key
+              </label>
+              <input
+                id="poly-key"
+                type="text"
+                value={polyKey}
+                onChange={(e) => setPolyKey(e.target.value)}
+                className={INPUT_CLASS}
+                placeholder="Your Polymarket CLOB API key"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="poly-secret"
+                className="block text-sm font-medium mb-2 text-[#e8e9ea]"
+              >
+                API Secret
+              </label>
+              <input
+                id="poly-secret"
+                type="password"
+                value={polySecret}
+                onChange={(e) => setPolySecret(e.target.value)}
+                className={INPUT_CLASS}
+                placeholder="Your Polymarket API secret"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="poly-passphrase"
+                className="block text-sm font-medium mb-2 text-[#e8e9ea]"
+              >
+                Passphrase
+              </label>
+              <input
+                id="poly-passphrase"
+                type="password"
+                value={polyPassphrase}
+                onChange={(e) => setPolyPassphrase(e.target.value)}
+                className={INPUT_CLASS}
+                placeholder="Your Polymarket CLOB passphrase"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center justify-between pt-2">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className="text-sm text-[#9ca3af] hover:text-[#e8e9ea] transition-colors"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={handleSkip}
+              disabled={isPending}
+              className="rounded-full border border-[#2a2d31] px-6 py-3 text-sm text-[#9ca3af] hover:text-[#e8e9ea] hover:border-[#e8e9ea]/40 transition-colors disabled:opacity-50"
+            >
+              {isPending ? "Redirecting..." : "Skip for now"}
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isPending}
+            className="btn-sheen btn-pill bg-[#e8e9ea] px-6 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isPending ? "Saving..." : "Save & continue"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

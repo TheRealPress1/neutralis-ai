@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import OnboardingForm from "./components/OnboardingForm";
+import OnboardingWizard from "./components/OnboardingWizard";
 
 export const metadata: Metadata = {
-  title: "Connect Your Accounts | Neutralis.ai",
-  description: "Connect your Kalshi and Polymarket accounts to get started",
+  title: "Get Started | Neutralis.ai",
+  description: "Set up your Neutralis.ai account",
 };
 
 export default async function OnboardingPage() {
@@ -18,19 +18,21 @@ export default async function OnboardingPage() {
     redirect("/login?redirect=/onboarding");
   }
 
+  // If already completed onboarding, go to dashboard
+  const { data: profile } = await (supabase as any)
+    .from("profiles")
+    .select("onboarding_completed_at, first_name")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.onboarding_completed_at) {
+    redirect("/dashboard");
+  }
+
   return (
     <div className="min-h-screen bg-[#050608] text-[#e8e9ea] flex items-center justify-center">
       <div className="w-full max-w-2xl px-6 py-16">
-        <div className="text-center mb-10">
-          <h1 className="text-3xl font-semibold mb-2">
-            Connect your accounts
-          </h1>
-          <p className="text-[#9ca3af]">
-            Link your exchange API keys so Neutralis can monitor and execute
-            trades. You can skip this and configure later in Settings.
-          </p>
-        </div>
-        <OnboardingForm />
+        <OnboardingWizard firstName={profile?.first_name ?? ""} />
       </div>
     </div>
   );

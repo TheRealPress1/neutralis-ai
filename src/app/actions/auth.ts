@@ -41,7 +41,7 @@ export async function signUp(formData: FormData) {
     email,
     password,
     options: {
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/dashboard`,
+      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/onboarding`,
       data: { first_name: firstName, last_name: lastName },
     },
   });
@@ -76,7 +76,7 @@ export async function signIn(formData: FormData) {
     return { error: "Email and password are required" };
   }
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data: signInData, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
@@ -88,7 +88,27 @@ export async function signIn(formData: FormData) {
 
   logAudit("auth.signin", { details: { email } });
   revalidatePath("/", "layout");
-  redirect(redirectTo || "/dashboard");
+
+  // If a specific redirect was requested (not just /dashboard), honor it
+  if (redirectTo && redirectTo !== "/dashboard") {
+    redirect(redirectTo);
+  }
+
+  // Check onboarding status — redirect new users to onboarding
+  const userId = signInData.user?.id;
+  if (userId) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("onboarding_completed_at")
+      .eq("id", userId)
+      .single();
+
+    if (!profile?.onboarding_completed_at) {
+      redirect("/onboarding");
+    }
+  }
+
+  redirect("/dashboard");
 }
 
 export async function signOut() {
@@ -157,4 +177,26 @@ export async function resetPassword(formData: FormData) {
   logAudit("auth.password_reset");
   revalidatePath("/", "layout");
   redirect("/dashboard");
+}
+
+export async function completeOnboarding() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      onboarding_completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", user.id);
+
+  if (error) return { error: error.message };
+
+  logAudit("onboarding.completed", { entityType: "profile" });
+  revalidatePath("/", "layout");
+  return { success: true };
 }

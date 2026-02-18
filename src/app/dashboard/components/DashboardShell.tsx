@@ -9,6 +9,7 @@ import MatchesTable from "./MatchesTable";
 import SettingsPage from "./SettingsPage";
 import AutomationPanel from "./AutomationPanel";
 import ActivityLog from "./ActivityLog";
+import SetupBanner from "./SetupBanner";
 import ApiKeyManager from "./ApiKeyManager";
 import UpgradeBanner from "./UpgradeBanner";
 import AuthNav from "@/app/components/AuthNav";
@@ -33,9 +34,11 @@ function secondsAgo(date: Date) {
 export default function DashboardShell({
   initialTier = "free",
   initialIsFounder = false,
+  initialHasApiKeys = true,
 }: {
   initialTier?: SubscriptionTier;
   initialIsFounder?: boolean;
+  initialHasApiKeys?: boolean;
 }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
@@ -109,6 +112,11 @@ export default function DashboardShell({
       <main className="mx-auto max-w-6xl px-6 pt-20 pb-16">
         {activeTab === "dashboard" && (
           <>
+            {!initialHasApiKeys && (
+              <section className="mb-4">
+                <SetupBanner onNavigate={setActiveTab} />
+              </section>
+            )}
             <section>
               <BalanceBar refreshKey={refreshKey} onNavigate={setActiveTab} />
             </section>
