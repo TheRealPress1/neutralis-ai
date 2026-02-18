@@ -3,7 +3,21 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-export type SubscriptionTier = "free" | "starter" | "pro";
+export type SubscriptionTier = "free" | "starter" | "pro" | "founder";
+
+const TIER_RANK: Record<SubscriptionTier, number> = {
+  free: 0,
+  starter: 1,
+  pro: 2,
+  founder: 99,
+};
+
+export function hasAccess(
+  userTier: SubscriptionTier,
+  required: SubscriptionTier,
+): boolean {
+  return TIER_RANK[userTier] >= TIER_RANK[required];
+}
 
 export async function getSubscription(): Promise<{
   tier: SubscriptionTier;
@@ -32,7 +46,7 @@ export async function selectPlan(tier: SubscriptionTier) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
-  if (!["free", "starter", "pro"].includes(tier)) {
+  if (!["free", "starter", "pro", "founder"].includes(tier)) {
     return { error: "Invalid plan" };
   }
 

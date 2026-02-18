@@ -9,4 +9,4 @@ ALTER TABLE profiles
 
 ALTER TABLE profiles
   ADD CONSTRAINT profiles_subscription_tier_check
-  CHECK (subscription_tier IN ('free', 'starter', 'pro'));
+  CHECK (subscription_tier IN ('free', 'starter', 'pro', 'founder'));

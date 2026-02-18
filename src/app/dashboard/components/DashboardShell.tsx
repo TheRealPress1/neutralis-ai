@@ -14,6 +14,7 @@ import AuthNav from "@/app/components/AuthNav";
 import Link from "next/link";
 import {
   getSubscription,
+  hasAccess,
   type SubscriptionTier,
 } from "@/app/actions/subscription";
 
@@ -121,7 +122,7 @@ export default function DashboardShell() {
 
         {activeTab === "automation" && (
           <section className="mt-2">
-            {tier === "free" ? (
+            {!hasAccess(tier, "starter") ? (
               <UpgradeBanner
                 feature="Automated execution"
                 requiredTier="starter"
