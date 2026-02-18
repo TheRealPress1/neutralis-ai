@@ -398,3 +398,153 @@ export async function fetchBalances(): Promise<ExchangeBalances> {
 
   return { kalshi, polymarket };
 }
+
+/* ── Live exchange positions ──────────────────────────────────────── */
+
+export interface ExchangePosition {
+  ticker: string;
+  venue: "kalshi" | "polymarket";
+  side: string;
+  quantity: number;
+  market_value: number;
+  avg_price: number;
+}
+
+export interface LivePositions {
+  kalshi: ExchangePosition[];
+  polymarket: ExchangePosition[];
+}
+
+function signKalshiRequest(keyId: string, pem: string, method: string, path: string) {
+  const timestampMs = Date.now().toString();
+  const message = timestampMs + method + path;
+  const sign = createSign("SHA256");
+  sign.update(message);
+  const signature = sign.sign(
+    {
+      key: pem,
+      padding: cryptoConstants.RSA_PKCS1_PSS_PADDING,
+      saltLength: cryptoConstants.RSA_PSS_SALTLEN_MAX_SIGN,
+    },
+    "base64",
+  );
+  return {
+    "KALSHI-ACCESS-KEY": keyId,
+    "KALSHI-ACCESS-TIMESTAMP": timestampMs,
+    "KALSHI-ACCESS-SIGNATURE": signature,
+  };
+}
+
+async function fetchKalshiPositions(
+  keyId: string,
+  pem: string,
+): Promise<ExchangePosition[]> {
+  try {
+    const path = "/trade-api/v2/portfolio/positions";
+    const headers = signKalshiRequest(keyId, pem, "GET", path);
+
+    const res = await fetch(`${KALSHI_BASE}${path}?limit=200`, { headers });
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    const positions = data.market_positions ?? [];
+
+    return positions
+      .filter((p: any) => (p.position ?? 0) !== 0)
+      .map((p: any) => ({
+        ticker: p.ticker ?? "",
+        venue: "kalshi" as const,
+        side: (p.position ?? 0) > 0 ? "yes" : "no",
+        quantity: Math.abs(p.position ?? 0),
+        market_value: (p.market_exposure ?? 0) / 100,
+        avg_price: (p.total_traded ?? 0) !== 0
+          ? Math.abs((p.total_traded ?? 0) / (p.position ?? 1)) / 100
+          : 0,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+async function fetchPolymarketPositions(
+  apiKey: string,
+  secret: string,
+  passphrase: string,
+  walletAddress: string,
+): Promise<ExchangePosition[]> {
+  try {
+    if (!apiKey || !secret || !passphrase || !walletAddress) return [];
+
+    const { createHmac } = await import("crypto");
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const reqPath = "/positions";
+    const hmac = createHmac("sha256", Buffer.from(secret, "base64"));
+    hmac.update(timestamp + "GET" + reqPath);
+    const sig = hmac.digest("base64");
+
+    const res = await fetch(`https://clob.polymarket.com${reqPath}`, {
+      headers: {
+        "POLY-ADDRESS": walletAddress,
+        "POLY-SIGNATURE": sig,
+        "POLY-TIMESTAMP": timestamp,
+        "POLY-API-KEY": apiKey,
+        "POLY-PASSPHRASE": passphrase,
+      },
+    });
+
+    if (!res.ok) return [];
+
+    const positions: any[] = await res.json();
+
+    return positions
+      .filter((p: any) => parseFloat(p.size ?? "0") > 0)
+      .map((p: any) => ({
+        ticker: p.asset_id ?? p.token_id ?? "",
+        venue: "polymarket" as const,
+        side: p.side === "BUY" ? "yes" : "no",
+        quantity: parseFloat(p.size ?? "0"),
+        market_value: parseFloat(p.size ?? "0") * parseFloat(p.avg_price ?? "0"),
+        avg_price: parseFloat(p.avg_price ?? "0"),
+      }));
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchLivePositions(): Promise<LivePositions> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { kalshi: [], polymarket: [] };
+
+  const { data: keys } = await supabase
+    .from("user_api_keys")
+    .select("platform, api_key_id, api_secret, private_key_pem")
+    .eq("user_id", user.id);
+
+  if (!keys || keys.length === 0) return { kalshi: [], polymarket: [] };
+
+  const kalshiRow = keys.find((k) => k.platform === "kalshi");
+  const polyRow = keys.find((k) => k.platform === "polymarket");
+  const walletRow = keys.find((k) => k.platform === "polymarket_wallet");
+
+  const [kalshi, polymarket] = await Promise.all([
+    kalshiRow
+      ? fetchKalshiPositions(
+          kalshiRow.api_key_id,
+          tryDecrypt(kalshiRow.private_key_pem),
+        )
+      : [],
+    polyRow && walletRow
+      ? fetchPolymarketPositions(
+          polyRow.api_key_id,
+          tryDecrypt(polyRow.api_secret),
+          tryDecrypt(polyRow.private_key_pem),
+          walletRow.api_key_id,
+        )
+      : [],
+  ]);
+
+  return { kalshi, polymarket };
+}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Position } from "@/types/api";
 import { fetchPositions } from "@/lib/api";
+import { fetchLivePositions, type ExchangePosition } from "@/app/actions/api-keys";
 
 function fmt(n: number, d = 2) {
   return n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -16,23 +17,39 @@ function pnlColor(v: number) {
 
 export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
   const [tab, setTab] = useState<"open" | "closed">("open");
-  const [positions, setPositions] = useState<Position[]>([]);
+  const [livePositions, setLivePositions] = useState<ExchangePosition[]>([]);
+  const [closedPositions, setClosedPositions] = useState<Position[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    function load() {
+    async function load() {
       setLoading(true);
-      fetchPositions(tab)
-        .then((d) => { if (!cancelled) setPositions(d); })
-        .catch(() => { if (!cancelled) setPositions([]); })
-        .finally(() => { if (!cancelled) setLoading(false); });
+      try {
+        if (tab === "open") {
+          const live = await fetchLivePositions();
+          if (!cancelled) {
+            setLivePositions([...live.kalshi, ...live.polymarket]);
+          }
+        } else {
+          const closed = await fetchPositions("closed");
+          if (!cancelled) setClosedPositions(closed);
+        }
+      } catch {
+        if (!cancelled) {
+          if (tab === "open") setLivePositions([]);
+          else setClosedPositions([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
     load();
     return () => { cancelled = true; };
   }, [refreshKey, tab]);
 
   const isOpen = tab === "open";
+  const isEmpty = isOpen ? livePositions.length === 0 : closedPositions.length === 0;
 
   return (
     <div className="card-panel rounded-xl">
@@ -66,10 +83,10 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
               <th className="px-5 py-3 font-medium">Ticker</th>
               <th className="px-5 py-3 font-medium">Venue</th>
               <th className="px-5 py-3 font-medium">Side</th>
-              <th className="px-5 py-3 font-medium text-right">Entry</th>
-              <th className="px-5 py-3 font-medium text-right">Size</th>
+              <th className="px-5 py-3 font-medium text-right">{isOpen ? "Avg Price" : "Entry"}</th>
+              <th className="px-5 py-3 font-medium text-right">{isOpen ? "Qty" : "Size"}</th>
               <th className="px-5 py-3 font-medium text-right">
-                {isOpen ? "Unreal. P&L" : "Real. P&L"}
+                {isOpen ? "Value" : "Real. P&L"}
               </th>
             </tr>
           </thead>
@@ -84,7 +101,7 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
                   ))}
                 </tr>
               ))
-            ) : positions.length === 0 ? (
+            ) : isEmpty ? (
               <tr>
                 <td colSpan={6} className="px-5 py-16 text-center">
                   <div className="flex flex-col items-center">
@@ -93,13 +110,40 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
                     </svg>
                     <p className="text-sm text-[#9ca3af]">No {tab} positions</p>
                     <p className="mt-1 text-xs text-[#3b3f46]">
-                      {tab === "open" ? "Positions will appear here when the system opens trades." : "Closed positions will be shown here."}
+                      {tab === "open"
+                        ? "Connect your exchange keys to see live positions."
+                        : "Closed positions will be shown here."}
                     </p>
                   </div>
                 </td>
               </tr>
+            ) : isOpen ? (
+              livePositions.map((p, i) => (
+                <tr key={`${p.venue}-${p.ticker}-${i}`} className="border-t border-[#1a1d21] transition-colors hover:bg-white/[0.02]">
+                  <td className="px-5 py-3 font-mono text-xs">{p.ticker}</td>
+                  <td className="px-5 py-3">
+                    <span className="rounded border border-[#1a1d21] bg-[#0a0d10] px-2 py-0.5 text-xs uppercase">
+                      {p.venue}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3">
+                    <span className={p.side === "yes" ? "text-emerald-400" : "text-red-400"}>
+                      {p.side.toUpperCase()}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-right font-mono">
+                    ${fmt(p.avg_price, 4)}
+                  </td>
+                  <td className="px-5 py-3 text-right font-mono">
+                    {p.quantity}
+                  </td>
+                  <td className="px-5 py-3 text-right font-mono text-[#e8e9ea]">
+                    ${fmt(p.market_value)}
+                  </td>
+                </tr>
+              ))
             ) : (
-              positions.map((p) => (
+              closedPositions.map((p) => (
                 <tr key={p.id} className="border-t border-[#1a1d21] transition-colors hover:bg-white/[0.02]">
                   <td className="px-5 py-3 font-mono text-xs">{p.ticker}</td>
                   <td className="px-5 py-3">
@@ -123,13 +167,9 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
                     ${fmt(p.size_dollars)}
                   </td>
                   <td
-                    className={`px-5 py-3 text-right font-mono ${pnlColor(
-                      isOpen ? p.unrealized_pnl : p.realized_pnl,
-                    )}`}
+                    className={`px-5 py-3 text-right font-mono ${pnlColor(p.realized_pnl)}`}
                   >
-                    {isOpen
-                      ? `$${fmt(p.unrealized_pnl)}`
-                      : `$${fmt(p.realized_pnl)}`}
+                    ${fmt(p.realized_pnl)}
                   </td>
                 </tr>
               ))
