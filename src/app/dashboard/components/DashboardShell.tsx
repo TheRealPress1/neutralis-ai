@@ -92,6 +92,14 @@ export default function DashboardShell({
                   {item.label}
                 </button>
               ))}
+              {!hasAccess(tier, "starter") && (
+                <Link
+                  href="/pricing"
+                  className="ml-2 rounded-md bg-[#e8e9ea] px-3 py-1.5 text-xs font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb]"
+                >
+                  Upgrade
+                </Link>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-3">
