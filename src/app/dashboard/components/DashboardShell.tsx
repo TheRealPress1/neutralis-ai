@@ -9,8 +9,13 @@ import SettingsPage from "./SettingsPage";
 import AutomationPanel from "./AutomationPanel";
 import ActivityLog from "./ActivityLog";
 import ApiKeyManager from "./ApiKeyManager";
+import UpgradeBanner from "./UpgradeBanner";
 import AuthNav from "@/app/components/AuthNav";
 import Link from "next/link";
+import {
+  getSubscription,
+  type SubscriptionTier,
+} from "@/app/actions/subscription";
 
 type NavTab = "dashboard" | "automation" | "activity" | "matches" | "connections" | "settings";
 
@@ -32,6 +37,12 @@ export default function DashboardShell() {
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [elapsed, setElapsed] = useState(0);
   const [activeTab, setActiveTab] = useState<NavTab>("dashboard");
+  const [tier, setTier] = useState<SubscriptionTier>("free");
+
+  // Fetch subscription tier
+  useEffect(() => {
+    getSubscription().then((r) => setTier(r.tier));
+  }, []);
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
@@ -110,7 +121,14 @@ export default function DashboardShell() {
 
         {activeTab === "automation" && (
           <section className="mt-2">
-            <AutomationPanel refreshKey={refreshKey} />
+            {tier === "free" ? (
+              <UpgradeBanner
+                feature="Automated execution"
+                requiredTier="starter"
+              />
+            ) : (
+              <AutomationPanel refreshKey={refreshKey} />
+            )}
           </section>
         )}
 
@@ -134,7 +152,7 @@ export default function DashboardShell() {
 
         {activeTab === "settings" && (
           <section className="mt-2">
-            <SettingsPage />
+            <SettingsPage tier={tier} />
           </section>
         )}
       </main>

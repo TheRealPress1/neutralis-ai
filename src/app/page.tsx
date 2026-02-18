@@ -93,6 +93,114 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* ── Pricing ─────────────────────────────────────────── */}
+      <section id="pricing" className="border-t border-[#1a1d21] py-24">
+        <div className="mx-auto max-w-5xl px-6">
+          <h2 className="text-center text-3xl font-[family-name:var(--font-italiana)] font-normal uppercase tracking-[0.08em]">
+            Simple pricing
+          </h2>
+          <p className="mt-4 text-center text-[#9ca3af]">
+            Start free. Upgrade when you&apos;re ready to trade.
+          </p>
+          <div className="mt-14 grid gap-6 md:grid-cols-3">
+            {/* Free */}
+            <div className="rounded-xl border border-[#1a1d21] bg-[#0a0c0f] p-6 flex flex-col">
+              <h3 className="text-lg font-medium">Free</h3>
+              <div className="mt-2 flex items-baseline gap-1">
+                <span className="text-3xl font-semibold">$0</span>
+              </div>
+              <p className="mt-2 text-sm text-[#9ca3af]">
+                Explore signals and matched pairs.
+              </p>
+              <ul className="mt-5 space-y-2 text-sm text-[#c8ccd2] flex-1">
+                <li className="flex items-center gap-2">
+                  <span className="text-emerald-400">&#10003;</span> Live signals & matched pairs
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-emerald-400">&#10003;</span> Market explorer
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-emerald-400">&#10003;</span> Basic analytics
+                </li>
+              </ul>
+              <Link
+                href={signedIn ? "/dashboard" : "/signup"}
+                className="mt-6 block rounded-lg border border-[#1a1d21] px-4 py-2.5 text-center text-sm font-medium transition-colors hover:border-[#e8e9ea]/30 hover:bg-[#1a1d21]"
+              >
+                {signedIn ? "Go to Dashboard" : "Get started"}
+              </Link>
+            </div>
+
+            {/* Starter */}
+            <div className="relative rounded-xl border border-[#e8e9ea]/30 bg-[#0a0c0f] p-6 flex flex-col">
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#e8e9ea] px-3 py-0.5 text-xs font-medium text-[#050608]">
+                Most popular
+              </span>
+              <h3 className="text-lg font-medium">Starter</h3>
+              <div className="mt-2 flex items-baseline gap-1">
+                <span className="text-3xl font-semibold">$9.99</span>
+                <span className="text-sm text-[#9ca3af]">/mo</span>
+              </div>
+              <p className="mt-2 text-sm text-[#9ca3af]">
+                Automated execution with risk guards.
+              </p>
+              <ul className="mt-5 space-y-2 text-sm text-[#c8ccd2] flex-1">
+                <li className="flex items-center gap-2">
+                  <span className="text-emerald-400">&#10003;</span> Everything in Free
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-emerald-400">&#10003;</span> Automated trade execution
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-emerald-400">&#10003;</span> Basic risk configuration
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-emerald-400">&#10003;</span> 20% performance fee
+                </li>
+              </ul>
+              <Link
+                href="/pricing"
+                className="mt-6 block rounded-lg bg-[#e8e9ea] px-4 py-2.5 text-center text-sm font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb]"
+              >
+                Upgrade to Starter
+              </Link>
+            </div>
+
+            {/* Pro */}
+            <div className="rounded-xl border border-[#1a1d21] bg-[#0a0c0f] p-6 flex flex-col">
+              <h3 className="text-lg font-medium">Pro</h3>
+              <div className="mt-2 flex items-baseline gap-1">
+                <span className="text-3xl font-semibold">$19.99</span>
+                <span className="text-sm text-[#9ca3af]">/mo</span>
+              </div>
+              <p className="mt-2 text-sm text-[#9ca3af]">
+                Full control with maker orders and lower fees.
+              </p>
+              <ul className="mt-5 space-y-2 text-sm text-[#c8ccd2] flex-1">
+                <li className="flex items-center gap-2">
+                  <span className="text-emerald-400">&#10003;</span> Everything in Starter
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-emerald-400">&#10003;</span> Maker orders (4x cheaper)
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-emerald-400">&#10003;</span> Full risk customization
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-emerald-400">&#10003;</span> 10% performance fee
+                </li>
+              </ul>
+              <Link
+                href="/pricing"
+                className="mt-6 block rounded-lg border border-[#1a1d21] px-4 py-2.5 text-center text-sm font-medium transition-colors hover:border-[#e8e9ea]/30 hover:bg-[#1a1d21]"
+              >
+                Upgrade to Pro
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── Footer ──────────────────────────────────────────── */}
       <footer className="border-t border-[#1a1d21] py-10">
         <div className="mx-auto flex max-w-5xl flex-col items-center gap-4 px-6 text-sm text-[#9ca3af] sm:flex-row sm:justify-between">

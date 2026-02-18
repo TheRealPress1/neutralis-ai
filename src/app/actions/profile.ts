@@ -10,9 +10,9 @@ export async function getProfile() {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated", profile: null };
 
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from("profiles")
-    .select("id, email, full_name, created_at, updated_at")
+    .select("id, email, full_name, subscription_tier, created_at, updated_at")
     .eq("id", user.id)
     .single();
 

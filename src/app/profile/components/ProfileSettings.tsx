@@ -7,6 +7,7 @@ import {
   updateEmail,
   changePassword,
 } from "@/app/actions/profile";
+import Link from "next/link";
 
 const INPUT_CLASS =
   "w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors text-sm";
@@ -15,6 +16,7 @@ interface Profile {
   id: string;
   email: string;
   full_name: string;
+  subscription_tier: string;
   created_at: string;
   updated_at: string;
 }
@@ -244,6 +246,31 @@ export default function ProfileSettings() {
               {isPending ? "Saving..." : "Save changes"}
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Current Plan */}
+      <div className="rounded-xl border border-[#22262d] bg-[#0e1117] p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="font-medium text-[#eceef0]">Current Plan</h2>
+          <Link
+            href="/pricing"
+            className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors"
+          >
+            Manage plan
+          </Link>
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <span className="rounded-full bg-[#1a1d21] border border-[#22262d] px-3 py-1 text-sm font-medium text-[#eceef0] capitalize">
+            {profile?.subscription_tier ?? "free"}
+          </span>
+          <span className="text-sm text-[#9ca3af]">
+            {profile?.subscription_tier === "pro"
+              ? "$19.99/mo"
+              : profile?.subscription_tier === "starter"
+                ? "$9.99/mo"
+                : "Free"}
+          </span>
         </div>
       </div>
 
