@@ -43,7 +43,7 @@ export default function ConnectionsPanel() {
             <p className="text-xs text-[#9ca3af] mt-0.5">
               {polyConnected
                 ? "CLOB API credentials configured"
-                : "Configure credentials in Connections tab"}
+                : "Not configured — add credentials in Onboarding"}
             </p>
           </div>
           {loading ? (

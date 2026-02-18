@@ -1,4 +1,5 @@
 import WaitlistForm from "./waitlist-form";
+import AuthNav from "./components/AuthNav";
 
 const outputs = [
   {
@@ -87,12 +88,9 @@ export default function Home() {
               </a>
             </li>
           </ul>
-          <a
-            href="#waitlist"
-            className="btn-sheen btn-pill bg-[#e8e9ea] px-5 py-2 text-sm font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb]"
-          >
-            Request access
-          </a>
+          <ul className="flex items-center gap-4">
+            <AuthNav />
+          </ul>
         </div>
       </nav>
 

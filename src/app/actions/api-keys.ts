@@ -72,6 +72,29 @@ export async function getApiKeys() {
   return { keys: decrypted };
 }
 
+export async function saveWalletAddress(address: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { error } = await (supabase as any).from("user_api_keys").upsert(
+    {
+      user_id: user.id,
+      platform: "polymarket_wallet",
+      api_key_id: address,
+      api_secret: "",
+      private_key_pem: "",
+      is_valid: true,
+    },
+    { onConflict: "user_id,platform" },
+  );
+
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
 export async function deleteApiKey(platform: string) {
   const supabase = await createClient();
   const {

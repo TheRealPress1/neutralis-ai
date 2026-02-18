@@ -5,9 +5,10 @@ import StatsBar from "./StatsBar";
 import PositionsTable from "./PositionsTable";
 import ActivityFeed from "./ActivityFeed";
 import MatchesTable from "./MatchesTable";
-import RiskProfileEditor from "./RiskProfileEditor";
+import SettingsPage from "./SettingsPage";
 import AutomationPanel from "./AutomationPanel";
 import ActivityLog from "./ActivityLog";
+import AuthNav from "@/app/components/AuthNav";
 
 type NavTab = "dashboard" | "automation" | "activity" | "matches" | "settings";
 
@@ -85,6 +86,7 @@ export default function DashboardShell() {
             >
               Refresh
             </button>
+            <AuthNav />
           </div>
         </div>
       </nav>
@@ -123,7 +125,7 @@ export default function DashboardShell() {
 
         {activeTab === "settings" && (
           <section className="mt-2">
-            <RiskProfileEditor />
+            <SettingsPage />
           </section>
         )}
       </main>
