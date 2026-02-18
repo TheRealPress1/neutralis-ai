@@ -108,18 +108,18 @@ export default function DashboardShell({
                 target="_blank"
                 rel="noopener noreferrer"
                 title="Kalshi"
-                className="flex h-6 w-6 items-center justify-center rounded opacity-50 transition-opacity hover:opacity-100"
+                className="flex h-7 w-7 items-center justify-center rounded opacity-70 transition-opacity hover:opacity-100"
               >
-                <img src="/kalshi-icon.png" alt="Kalshi" className="h-4 w-4" />
+                <img src="/kalshi-icon.png" alt="Kalshi" className="h-5 w-5" />
               </a>
               <a
                 href="https://polymarket.com/portfolio"
                 target="_blank"
                 rel="noopener noreferrer"
                 title="Polymarket"
-                className="flex h-6 w-6 items-center justify-center rounded opacity-50 transition-opacity hover:opacity-100"
+                className="flex h-7 w-7 items-center justify-center rounded opacity-70 transition-opacity hover:opacity-100"
               >
-                <img src="/polymarket-icon.svg" alt="Polymarket" className="h-4 w-4" />
+                <img src="/polymarket-icon.svg" alt="Polymarket" className="h-5 w-5" />
               </a>
             </div>
           </div>
