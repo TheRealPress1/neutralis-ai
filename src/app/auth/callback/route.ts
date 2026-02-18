@@ -8,10 +8,14 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      // Recovery sessions: send user to reset-password page
+      const isRecovery = data.session?.user?.recovery_sent_at &&
+        Date.now() - new Date(data.session.user.recovery_sent_at).getTime() < 600_000;
+      const destination = isRecovery ? "/reset-password" : next;
+      return NextResponse.redirect(`${origin}${destination}`);
     }
   }
 
