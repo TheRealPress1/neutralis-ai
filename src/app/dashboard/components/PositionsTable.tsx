@@ -82,7 +82,7 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
             <tr className="text-xs uppercase tracking-wider text-[#9ca3af]">
               <th className="px-5 py-3 font-medium">Ticker</th>
               <th className="px-5 py-3 font-medium">Venue</th>
-              <th className="px-5 py-3 font-medium">Side</th>
+              <th className="px-5 py-3 font-medium">Outcome</th>
               <th className="px-5 py-3 font-medium text-right">{isOpen ? "Avg Price" : "Entry"}</th>
               <th className="px-5 py-3 font-medium text-right">{isOpen ? "Qty" : "Size"}</th>
               <th className="px-5 py-3 font-medium text-right">
@@ -127,8 +127,12 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
                     </span>
                   </td>
                   <td className="px-5 py-3">
-                    <span className={p.side === "yes" ? "text-emerald-400" : "text-red-400"}>
-                      {p.side.toUpperCase()}
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      p.side === "yes"
+                        ? "bg-emerald-400/10 text-emerald-400"
+                        : "bg-red-400/10 text-red-400"
+                    }`}>
+                      {p.side === "yes" ? "Yes" : "No"}
                     </span>
                   </td>
                   <td className="px-5 py-3 text-right font-mono">
@@ -152,12 +156,12 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
                     </span>
                   </td>
                   <td className="px-5 py-3">
-                    <span
-                      className={
-                        p.side === "buy_yes" ? "text-emerald-400" : "text-red-400"
-                      }
-                    >
-                      {p.side === "buy_yes" ? "YES" : "NO"}
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      p.side === "buy_yes"
+                        ? "bg-emerald-400/10 text-emerald-400"
+                        : "bg-red-400/10 text-red-400"
+                    }`}>
+                      {p.side === "buy_yes" ? "Yes" : "No"}
                     </span>
                   </td>
                   <td className="px-5 py-3 text-right font-mono">
