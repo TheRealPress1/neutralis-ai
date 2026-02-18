@@ -1,23 +1,45 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { signIn } from "@/app/actions/auth";
+import { forgotPassword } from "@/app/actions/auth";
 import Link from "next/link";
 
-export default function LoginForm({ redirect }: { redirect?: string }) {
+export default function ForgotPasswordForm() {
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   async function handleSubmit(formData: FormData) {
     setError(null);
-    formData.append("redirect", redirect || "/dashboard");
+    setSuccess(false);
 
     startTransition(async () => {
-      const result = await signIn(formData);
+      const result = await forgotPassword(formData);
       if (result?.error) {
         setError(result.error);
+      } else if (result?.success) {
+        setSuccess(true);
       }
     });
+  }
+
+  if (success) {
+    return (
+      <div className="card-panel card-accent rounded-xl p-8">
+        <div className="rounded-lg bg-green-500/10 border border-green-500/20 px-4 py-3 text-sm text-green-400 mb-6">
+          Check your email for a password reset link. It may take a minute to
+          arrive.
+        </div>
+        <div className="text-center text-sm text-[#9ca3af]">
+          <Link
+            href="/login"
+            className="text-[#e8e9ea] hover:text-white transition-colors font-medium"
+          >
+            Back to login
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -47,48 +69,21 @@ export default function LoginForm({ redirect }: { redirect?: string }) {
           />
         </div>
 
-        <div>
-          <label
-            htmlFor="password"
-            className="block text-sm font-medium mb-2 text-[#e8e9ea]"
-          >
-            Password
-          </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            className="w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors"
-            placeholder="••••••••"
-          />
-        </div>
-
-        <div className="flex justify-end">
-          <Link
-            href="/forgot-password"
-            className="text-sm text-[#9ca3af] hover:text-[#e8e9ea] transition-colors"
-          >
-            Forgot password?
-          </Link>
-        </div>
-
         <button
           type="submit"
           disabled={isPending}
           className="w-full btn-sheen btn-pill bg-[#e8e9ea] px-6 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb] disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isPending ? "Signing in..." : "Sign in"}
+          {isPending ? "Sending..." : "Send reset link"}
         </button>
 
         <div className="text-center text-sm text-[#9ca3af]">
-          Don't have an account?{" "}
+          Remember your password?{" "}
           <Link
-            href="/signup"
+            href="/login"
             className="text-[#e8e9ea] hover:text-white transition-colors font-medium"
           >
-            Sign up
+            Sign in
           </Link>
         </div>
       </form>

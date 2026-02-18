@@ -1,19 +1,17 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { signIn } from "@/app/actions/auth";
-import Link from "next/link";
+import { resetPassword } from "@/app/actions/auth";
 
-export default function LoginForm({ redirect }: { redirect?: string }) {
+export default function ResetPasswordForm() {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   async function handleSubmit(formData: FormData) {
     setError(null);
-    formData.append("redirect", redirect || "/dashboard");
 
     startTransition(async () => {
-      const result = await signIn(formData);
+      const result = await resetPassword(formData);
       if (result?.error) {
         setError(result.error);
       }
@@ -31,47 +29,40 @@ export default function LoginForm({ redirect }: { redirect?: string }) {
 
         <div>
           <label
-            htmlFor="email"
-            className="block text-sm font-medium mb-2 text-[#e8e9ea]"
-          >
-            Email
-          </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            className="w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors"
-            placeholder="you@example.com"
-          />
-        </div>
-
-        <div>
-          <label
             htmlFor="password"
             className="block text-sm font-medium mb-2 text-[#e8e9ea]"
           >
-            Password
+            New password
           </label>
           <input
             id="password"
             name="password"
             type="password"
-            autoComplete="current-password"
+            autoComplete="new-password"
             required
+            minLength={8}
             className="w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors"
-            placeholder="••••••••"
+            placeholder="At least 8 characters"
           />
         </div>
 
-        <div className="flex justify-end">
-          <Link
-            href="/forgot-password"
-            className="text-sm text-[#9ca3af] hover:text-[#e8e9ea] transition-colors"
+        <div>
+          <label
+            htmlFor="confirmPassword"
+            className="block text-sm font-medium mb-2 text-[#e8e9ea]"
           >
-            Forgot password?
-          </Link>
+            Confirm new password
+          </label>
+          <input
+            id="confirmPassword"
+            name="confirmPassword"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={8}
+            className="w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors"
+            placeholder="Confirm your password"
+          />
         </div>
 
         <button
@@ -79,18 +70,8 @@ export default function LoginForm({ redirect }: { redirect?: string }) {
           disabled={isPending}
           className="w-full btn-sheen btn-pill bg-[#e8e9ea] px-6 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb] disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isPending ? "Signing in..." : "Sign in"}
+          {isPending ? "Updating..." : "Update password"}
         </button>
-
-        <div className="text-center text-sm text-[#9ca3af]">
-          Don't have an account?{" "}
-          <Link
-            href="/signup"
-            className="text-[#e8e9ea] hover:text-white transition-colors font-medium"
-          >
-            Sign up
-          </Link>
-        </div>
       </form>
     </div>
   );
