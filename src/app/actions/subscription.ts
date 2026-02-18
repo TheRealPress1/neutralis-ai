@@ -252,6 +252,102 @@ export async function generateAccessCode(): Promise<{
   return { code };
 }
 
+// ── List access codes (founder-only) ─────────────────────────────
+
+export interface AccessCodeRow {
+  id: string;
+  code: string;
+  created_at: string;
+  redeemed_at: string | null;
+  redeemed_by_email: string | null;
+}
+
+export async function listAccessCodes(): Promise<{
+  codes?: AccessCodeRow[];
+  error?: string;
+}> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: profile } = await (supabase as any)
+    .from("profiles")
+    .select("is_founder")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile?.is_founder) return { error: "Unauthorized" };
+
+  const { data, error } = await (supabase as any)
+    .from("access_codes")
+    .select("id, code, created_at, redeemed_at, redeemed_by")
+    .eq("created_by", user.id)
+    .order("created_at", { ascending: false });
+
+  if (error) return { error: error.message };
+
+  // Look up redeemer emails
+  const redeemerIds = (data ?? [])
+    .map((r: any) => r.redeemed_by)
+    .filter(Boolean);
+
+  let emailMap: Record<string, string> = {};
+  if (redeemerIds.length > 0) {
+    const { data: profiles } = await (supabase as any)
+      .from("profiles")
+      .select("id, email")
+      .in("id", redeemerIds);
+    for (const p of profiles ?? []) {
+      emailMap[p.id] = p.email;
+    }
+  }
+
+  const codes: AccessCodeRow[] = (data ?? []).map((r: any) => ({
+    id: r.id,
+    code: r.code,
+    created_at: r.created_at,
+    redeemed_at: r.redeemed_at,
+    redeemed_by_email: r.redeemed_by ? (emailMap[r.redeemed_by] ?? "Unknown") : null,
+  }));
+
+  return { codes };
+}
+
+// ── Delete access code (founder-only) ────────────────────────────
+
+export async function deleteAccessCode(codeId: string): Promise<{
+  success?: boolean;
+  error?: string;
+}> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: profile } = await (supabase as any)
+    .from("profiles")
+    .select("is_founder")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile?.is_founder) return { error: "Unauthorized" };
+
+  // Only allow deleting codes the founder created
+  const { error } = await (supabase as any)
+    .from("access_codes")
+    .delete()
+    .eq("id", codeId)
+    .eq("created_by", user.id);
+
+  if (error) return { error: error.message };
+
+  logAudit("subscription.code_deleted", { entityType: "access_code", entityId: codeId });
+  return { success: true };
+}
+
 // ── Access code redemption ─────────────────────────────────────────
 
 export async function redeemAccessCode(code: string): Promise<{
