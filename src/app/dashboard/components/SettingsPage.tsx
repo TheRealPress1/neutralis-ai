@@ -2,16 +2,9 @@
 
 import RiskProfileEditor from "./RiskProfileEditor";
 import UpgradeBanner from "./UpgradeBanner";
-import AccessCodeGenerator from "./AccessCodeGenerator";
 import { hasAccess, type SubscriptionTier } from "@/lib/subscription";
 
-export default function SettingsPage({
-  tier,
-  isFounder,
-}: {
-  tier: SubscriptionTier;
-  isFounder: boolean;
-}) {
+export default function SettingsPage({ tier }: { tier: SubscriptionTier }) {
   return (
     <div className="space-y-8">
       {!hasAccess(tier, "starter") ? (
@@ -22,8 +15,6 @@ export default function SettingsPage({
       ) : (
         <RiskProfileEditor />
       )}
-
-      {isFounder && <AccessCodeGenerator />}
     </div>
   );
 }

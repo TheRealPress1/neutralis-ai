@@ -12,13 +12,14 @@ import ActivityLog from "./ActivityLog";
 import SetupBanner from "./SetupBanner";
 import ApiKeyManager from "./ApiKeyManager";
 import UpgradeBanner from "./UpgradeBanner";
+import AccessCodeGenerator from "./AccessCodeGenerator";
 import AuthNav from "@/app/components/AuthNav";
 import Link from "next/link";
 import { hasAccess, type SubscriptionTier } from "@/lib/subscription";
 
-type NavTab = "dashboard" | "automation" | "activity" | "matches" | "connections" | "settings";
+type NavTab = "dashboard" | "automation" | "activity" | "matches" | "connections" | "settings" | "founder";
 
-const NAV_ITEMS: { id: NavTab; label: string }[] = [
+const BASE_NAV_ITEMS: { id: NavTab; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
   { id: "automation", label: "Automation" },
   { id: "activity", label: "Activity" },
@@ -78,7 +79,7 @@ export default function DashboardShell({
             </Link>
             {/* Tab navigation */}
             <div className="flex items-center gap-1">
-              {NAV_ITEMS.map((item) => (
+              {[...BASE_NAV_ITEMS, ...(isFounder ? [{ id: "founder" as NavTab, label: "Founder Tools" }] : [])].map((item) => (
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
@@ -163,7 +164,13 @@ export default function DashboardShell({
 
         {activeTab === "settings" && (
           <section className="mt-2">
-            <SettingsPage tier={tier} isFounder={isFounder} />
+            <SettingsPage tier={tier} />
+          </section>
+        )}
+
+        {activeTab === "founder" && isFounder && (
+          <section className="mt-2">
+            <AccessCodeGenerator />
           </section>
         )}
       </main>
