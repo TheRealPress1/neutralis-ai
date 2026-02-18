@@ -272,3 +272,125 @@ export async function testConnection(
   });
   return result;
 }
+
+/* ── Exchange balances ─────────────────────────────────────────────── */
+
+export interface ExchangeBalances {
+  kalshi: { balance: number; portfolio_value: number } | null;
+  polymarket: { balance: number } | null;
+}
+
+async function fetchKalshiBalance(
+  keyId: string,
+  pem: string,
+): Promise<{ balance: number; portfolio_value: number } | null> {
+  try {
+    const timestampMs = Date.now().toString();
+    const path = "/trade-api/v2/portfolio/balance";
+    const message = timestampMs + "GET" + path;
+
+    const sign = createSign("SHA256");
+    sign.update(message);
+    const signature = sign.sign(
+      {
+        key: pem,
+        padding: cryptoConstants.RSA_PKCS1_PSS_PADDING,
+        saltLength: cryptoConstants.RSA_PSS_SALTLEN_MAX_SIGN,
+      },
+      "base64",
+    );
+
+    const res = await fetch(`${KALSHI_BASE}${path}`, {
+      headers: {
+        "KALSHI-ACCESS-KEY": keyId,
+        "KALSHI-ACCESS-TIMESTAMP": timestampMs,
+        "KALSHI-ACCESS-SIGNATURE": signature,
+      },
+    });
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    return {
+      balance: (data.balance ?? 0) / 100,
+      portfolio_value: (data.portfolio_value ?? 0) / 100,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchPolymarketBalance(
+  apiKey: string,
+  secret: string,
+  passphrase: string,
+  walletAddress: string,
+): Promise<{ balance: number } | null> {
+  try {
+    if (!apiKey || !secret || !passphrase || !walletAddress) return null;
+
+    const { createHmac } = await import("crypto");
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const hmac = createHmac("sha256", Buffer.from(secret, "base64"));
+    hmac.update(timestamp + "GET" + "/balance-allowance");
+    const sig = hmac.digest("base64");
+
+    const res = await fetch("https://clob.polymarket.com/balance-allowance", {
+      headers: {
+        "POLY-ADDRESS": walletAddress,
+        "POLY-SIGNATURE": sig,
+        "POLY-TIMESTAMP": timestamp,
+        "POLY-API-KEY": apiKey,
+        "POLY-PASSPHRASE": passphrase,
+      },
+    });
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    // Balance is returned as a string in USDC (6 decimals)
+    const bal = typeof data.balance === "string" ? parseFloat(data.balance) : (data.balance ?? 0);
+    return { balance: bal };
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchBalances(): Promise<ExchangeBalances> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { kalshi: null, polymarket: null };
+
+  const { data: keys } = await supabase
+    .from("user_api_keys")
+    .select("platform, api_key_id, api_secret, private_key_pem")
+    .eq("user_id", user.id);
+
+  if (!keys || keys.length === 0) return { kalshi: null, polymarket: null };
+
+  const kalshiRow = keys.find((k) => k.platform === "kalshi");
+  const polyRow = keys.find((k) => k.platform === "polymarket");
+  const walletRow = keys.find((k) => k.platform === "polymarket_wallet");
+
+  // Fetch both in parallel
+  const [kalshi, polymarket] = await Promise.all([
+    kalshiRow
+      ? fetchKalshiBalance(
+          kalshiRow.api_key_id,
+          tryDecrypt(kalshiRow.private_key_pem),
+        )
+      : null,
+    polyRow && walletRow
+      ? fetchPolymarketBalance(
+          polyRow.api_key_id,
+          tryDecrypt(polyRow.api_secret),
+          tryDecrypt(polyRow.private_key_pem),
+          walletRow.api_key_id,
+        )
+      : null,
+  ]);
+
+  return { kalshi, polymarket };
+}

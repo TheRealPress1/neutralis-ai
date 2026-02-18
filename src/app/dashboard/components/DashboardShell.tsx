@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import BalanceBar from "./BalanceBar";
 import StatsBar from "./StatsBar";
 import PositionsTable from "./PositionsTable";
 import ActivityFeed from "./ActivityFeed";
@@ -109,6 +110,9 @@ export default function DashboardShell({
         {activeTab === "dashboard" && (
           <>
             <section>
+              <BalanceBar refreshKey={refreshKey} onNavigate={setActiveTab} />
+            </section>
+            <section className="mt-4">
               <StatsBar refreshKey={refreshKey} />
             </section>
             <section className="mt-6 grid gap-6 lg:grid-cols-2">
