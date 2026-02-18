@@ -1,5 +1,6 @@
 import Navbar from "./navbar";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
 
 const features = [
   {
@@ -25,7 +26,10 @@ const features = [
 ];
 
 
-export default function Home() {
+export default async function Home() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const signedIn = !!user;
   return (
     <div className="min-h-screen bg-[#050608] text-[#e8e9ea]">
       {/* ── Nav ────────────────────────────────────────────── */}
@@ -52,10 +56,10 @@ export default function Home() {
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Link
-              href="/signup"
+              href={signedIn ? "/dashboard" : "/signup"}
               className="btn-sheen btn-pill inline-flex bg-[#e8e9ea] px-7 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb]"
             >
-              Get started
+              {signedIn ? "Go to Dashboard" : "Get started"}
             </Link>
             <Link
               href="/docs"
