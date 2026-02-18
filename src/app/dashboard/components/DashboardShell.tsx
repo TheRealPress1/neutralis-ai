@@ -100,6 +100,25 @@ export default function DashboardShell({
                   Upgrade
                 </Link>
               )}
+
+              {/* External exchange links */}
+              <span className="mx-1.5 h-4 w-px bg-[#1a1d21]" />
+              <a
+                href="https://kalshi.com/portfolio"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-md px-2 py-1.5 text-xs text-[#6b7280] transition-colors hover:text-[#e8e9ea]"
+              >
+                Kalshi
+              </a>
+              <a
+                href="https://polymarket.com/portfolio"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-md px-2 py-1.5 text-xs text-[#6b7280] transition-colors hover:text-[#e8e9ea]"
+              >
+                Polymarket
+              </a>
             </div>
           </div>
           <div className="flex items-center gap-3">
