@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import AuthNav from "@/app/components/AuthNav";
 import PricingCards from "./components/PricingCards";
 import RedeemCode from "./components/RedeemCode";
 
@@ -82,31 +83,9 @@ export default async function PricingPage() {
           >
             Neutralis.ai
           </Link>
-          <div className="flex items-center gap-4 text-sm">
-            {user ? (
-              <Link
-                href="/dashboard"
-                className="text-[#9ca3af] hover:text-[#e8e9ea] transition-colors"
-              >
-                Dashboard
-              </Link>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="text-[#9ca3af] hover:text-[#e8e9ea] transition-colors"
-                >
-                  Sign in
-                </Link>
-                <Link
-                  href="/signup"
-                  className="rounded-lg bg-[#e8e9ea] px-4 py-2 text-sm font-medium text-[#050608] hover:bg-[#c0c5cb] transition-colors"
-                >
-                  Sign up
-                </Link>
-              </>
-            )}
-          </div>
+          <ul className="flex items-center gap-4 text-sm">
+            <AuthNav />
+          </ul>
         </div>
       </nav>
 
