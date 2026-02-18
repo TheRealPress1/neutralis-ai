@@ -1619,3 +1619,121 @@ class PostgresStorage:
             except (ValueError, TypeError):
                 continue
         return markets
+
+    # ── Automation state ────────────────────────────────────────────
+
+    def _row_to_automation_state(self, row: tuple) -> dict:
+        """Convert a raw automation_state DB row to a dict."""
+        return {
+            "id": row[0],
+            "status": row[1],
+            "kill_switch": row[2],
+            "killed_reason": row[3],
+            "started_at": row[4].isoformat() if row[4] else None,
+            "paused_at": row[5].isoformat() if row[5] else None,
+            "killed_at": row[6].isoformat() if row[6] else None,
+            "daily_loss_dollars": float(row[7]),
+            "daily_loss_reset_at": row[8].isoformat() if row[8] else None,
+            "peak_portfolio_value": float(row[9]),
+            "max_drawdown_dollars": float(row[10]),
+            "updated_at": row[11].isoformat() if row[11] else None,
+        }
+
+    _AUTOMATION_COLS = """
+        id, status, kill_switch, killed_reason,
+        started_at, paused_at, killed_at,
+        daily_loss_dollars, daily_loss_reset_at,
+        peak_portfolio_value, max_drawdown_dollars,
+        updated_at
+    """
+
+    def get_automation_state(self) -> dict | None:
+        """Return the singleton automation state row, or None."""
+        conn = self._ensure_connected()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"SELECT {self._AUTOMATION_COLS} FROM automation_state ORDER BY id LIMIT 1"
+                )
+                row = cur.fetchone()
+            conn.commit()
+        except Exception:
+            self._safe_rollback()
+            return None
+        if row is None:
+            return None
+        return self._row_to_automation_state(row)
+
+    def update_automation_state(
+        self,
+        status: str,
+        reason: str | None = None,
+    ) -> dict:
+        """Update the singleton automation state and return the updated row."""
+        conn = self._ensure_connected()
+
+        set_parts = ["status = %(status)s", "updated_at = NOW()"]
+        params: dict = {"status": status}
+
+        if status == "running":
+            set_parts += [
+                "started_at = NOW()", "paused_at = NULL",
+                "killed_at = NULL", "kill_switch = FALSE", "killed_reason = NULL",
+            ]
+        elif status == "paused":
+            set_parts.append("paused_at = NOW()")
+        elif status == "killed":
+            set_parts += [
+                "killed_at = NOW()", "kill_switch = TRUE",
+                "killed_reason = %(reason)s",
+            ]
+            params["reason"] = reason
+
+        sql = f"""
+            UPDATE automation_state
+            SET {', '.join(set_parts)}
+            WHERE id = (SELECT id FROM automation_state ORDER BY id LIMIT 1)
+            RETURNING {self._AUTOMATION_COLS}
+        """
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                row = cur.fetchone()
+            conn.commit()
+        except Exception:
+            self._safe_rollback()
+            raise
+
+        if row is None:
+            raise ValueError("No automation_state row found")
+        return self._row_to_automation_state(row)
+
+    def update_automation_metrics(
+        self,
+        daily_loss: float,
+        peak_value: float,
+        max_drawdown: float,
+    ) -> None:
+        """Update the risk metrics on the automation state row."""
+        conn = self._ensure_connected()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE automation_state
+                    SET daily_loss_dollars = %(daily_loss)s,
+                        peak_portfolio_value = %(peak_value)s,
+                        max_drawdown_dollars = %(max_drawdown)s,
+                        updated_at = NOW()
+                    WHERE id = (SELECT id FROM automation_state ORDER BY id LIMIT 1)
+                    """,
+                    {
+                        "daily_loss": daily_loss,
+                        "peak_value": peak_value,
+                        "max_drawdown": max_drawdown,
+                    },
+                )
+            conn.commit()
+        except Exception:
+            self._safe_rollback()
+            logger.warning("Failed to update automation metrics", exc_info=True)

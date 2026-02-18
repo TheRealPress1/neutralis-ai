@@ -172,7 +172,27 @@ def main() -> None:
     # Start health endpoint
     _start_health_server(stats, cfg.health_port)
 
+    # Persistent DB connection for automation state checks
+    _state_storage = PostgresStorage(settings.db)
+    _state_storage.connect()
+
     while not shutdown.is_set():
+        # ── Check automation state ──────────────────────────────
+        try:
+            auto_state = _state_storage.get_automation_state()
+            if auto_state:
+                if auto_state["status"] == "paused":
+                    logger.debug("Automation paused, skipping run")
+                    shutdown.wait(cfg.scan_interval_sec)
+                    continue
+                if auto_state["status"] == "killed":
+                    logger.info(
+                        "Automation killed: %s", auto_state.get("killed_reason")
+                    )
+                    break
+        except Exception:
+            logger.warning("Failed to check automation state", exc_info=True)
+
         try:
             run_stats = run_once(run_number=stats.total_runs)
             stats.record_success(run_stats)
@@ -183,6 +203,16 @@ def main() -> None:
                     run_storage.save_scheduler_run(stats.total_runs, run_stats)
             except Exception:
                 logger.warning("Failed to persist scheduler run metrics", exc_info=True)
+
+            # Update automation state risk metrics
+            try:
+                _state_storage.update_automation_metrics(
+                    daily_loss=getattr(run_stats, "daily_loss", 0.0),
+                    peak_value=getattr(run_stats, "peak_portfolio_value", 0.0),
+                    max_drawdown=getattr(run_stats, "max_drawdown", 0.0),
+                )
+            except Exception:
+                logger.warning("Failed to update automation metrics", exc_info=True)
 
             # Heartbeat alert
             if (
@@ -247,6 +277,9 @@ def main() -> None:
             continue
 
         shutdown.wait(cfg.scan_interval_sec)
+
+    # Close state storage connection
+    _state_storage.close()
 
     # Clean shutdown summary
     logger.info(

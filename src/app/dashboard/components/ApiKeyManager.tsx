@@ -7,6 +7,9 @@ import {
   saveApiKeys,
   saveWalletAddress,
   deleteApiKey,
+  validateKalshiKey,
+  validatePolymarketKey,
+  testConnection,
   type ApiKeyData,
 } from "@/app/actions/api-keys";
 
@@ -33,12 +36,24 @@ function maskAddress(address: string) {
   return address.slice(0, 6) + "..." + address.slice(-4);
 }
 
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
 export default function ApiKeyManager() {
   const [keys, setKeys] = useState<StoredKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [testing, setTesting] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Wallet state from wagmi
@@ -99,6 +114,7 @@ export default function ApiKeyManager() {
 
   function handleSave(platform: "kalshi" | "polymarket") {
     setError(null);
+    setSuccess(null);
 
     const keyData: ApiKeyData[] = [];
 
@@ -127,23 +143,68 @@ export default function ApiKeyManager() {
     }
 
     startTransition(async () => {
+      // Validate before saving
+      let validation: { valid: boolean; error?: string };
+      if (platform === "kalshi") {
+        validation = await validateKalshiKey(kalshiKeyId.trim(), kalshiPem.trim());
+      } else {
+        validation = await validatePolymarketKey(
+          polyKey.trim(),
+          polySecret.trim(),
+          polyPassphrase.trim(),
+        );
+      }
+
+      // Save regardless of validation (user may want to save for later)
       const result = await saveApiKeys(keyData);
       if (result.error) {
         setError(result.error);
+        return;
+      }
+
+      setEditing(null);
+      setKalshiKeyId("");
+      setKalshiPem("");
+      setPolyKey("");
+      setPolySecret("");
+      setPolyPassphrase("");
+      await load();
+
+      if (validation.valid) {
+        setSuccess(`${platform === "kalshi" ? "Kalshi" : "Polymarket"} credentials saved and verified`);
+        setTimeout(() => setSuccess(null), 5000);
       } else {
-        setEditing(null);
-        setKalshiKeyId("");
-        setKalshiPem("");
-        setPolyKey("");
-        setPolySecret("");
-        setPolyPassphrase("");
-        await load();
+        setError(
+          `Credentials saved but validation failed: ${validation.error}. You can try again with Test Connection.`,
+        );
       }
     });
   }
 
+  async function handleTestConnection(platform: string) {
+    setError(null);
+    setSuccess(null);
+    setTesting(platform);
+
+    try {
+      const result = await testConnection(platform);
+      if (result.valid) {
+        setSuccess(`${platform === "kalshi" ? "Kalshi" : "Polymarket"} connection verified`);
+        setTimeout(() => setSuccess(null), 5000);
+      } else {
+        setError(`Connection test failed: ${result.error}`);
+      }
+      await load(); // Reload to update is_valid status
+    } catch {
+      setError("Connection test failed unexpectedly");
+    } finally {
+      setTesting(null);
+    }
+  }
+
   function handleRemove(platform: string) {
     setError(null);
+    setSuccess(null);
     startTransition(async () => {
       const result = await deleteApiKey(platform);
       if (result.error) {
@@ -188,13 +249,25 @@ export default function ApiKeyManager() {
         </div>
       )}
 
+      {success && (
+        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400">
+          {success}
+        </div>
+      )}
+
       {/* Kalshi */}
       <div className="card-panel rounded-xl p-5">
         <div className="flex items-center justify-between mb-1">
           <h3 className="font-medium text-[#eceef0]">Kalshi</h3>
           {kalshiKey ? (
-            <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2.5 py-0.5">
-              Connected
+            <span
+              className={`text-xs font-medium rounded-full px-2.5 py-0.5 border ${
+                kalshiKey.is_valid
+                  ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                  : "text-amber-400 bg-amber-500/10 border-amber-500/20"
+              }`}
+            >
+              {kalshiKey.is_valid ? "Verified" : "Unverified"}
             </span>
           ) : (
             <span className="text-xs font-medium text-[#a1a8b3] bg-[#1a1d21] border border-[#22262d] rounded-full px-2.5 py-0.5">
@@ -214,10 +287,22 @@ export default function ApiKeyManager() {
             <p className="text-xs text-[#a1a8b3]">
               Private key: <span className="text-[#e8e9ea]">configured</span>
             </p>
+            {kalshiKey.updated_at && (
+              <p className="text-xs text-[#6b7280]">
+                Updated {timeAgo(kalshiKey.updated_at)}
+              </p>
+            )}
             <div className="flex gap-2 mt-3">
               <button
+                onClick={() => handleTestConnection("kalshi")}
+                disabled={testing === "kalshi"}
+                className="rounded-lg border border-[#2a2d31] bg-[#1a1d21] px-3 py-1.5 text-xs font-medium text-[#e8e9ea] hover:border-[#e8e9ea]/30 hover:bg-[#22262d] disabled:opacity-50 transition-colors"
+              >
+                {testing === "kalshi" ? "Testing..." : "Test Connection"}
+              </button>
+              <button
                 onClick={() => setEditing("kalshi")}
-                className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors"
+                className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors px-2"
               >
                 Update
               </button>
@@ -288,7 +373,7 @@ export default function ApiKeyManager() {
                   disabled={isPending}
                   className="rounded-lg bg-[#e8e9ea] px-4 py-2 text-xs font-medium text-[#050608] hover:bg-[#c0c5cb] disabled:opacity-50 transition-colors"
                 >
-                  {isPending ? "Saving..." : "Save"}
+                  {isPending ? "Validating & Saving..." : "Save & Validate"}
                 </button>
                 {editing === "kalshi" && (
                   <button
@@ -309,8 +394,14 @@ export default function ApiKeyManager() {
         <div className="flex items-center justify-between mb-1">
           <h3 className="font-medium text-[#eceef0]">Polymarket</h3>
           {polyFullyConnected ? (
-            <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2.5 py-0.5">
-              Connected
+            <span
+              className={`text-xs font-medium rounded-full px-2.5 py-0.5 border ${
+                polymarketKey?.is_valid
+                  ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                  : "text-amber-400 bg-amber-500/10 border-amber-500/20"
+              }`}
+            >
+              {polymarketKey?.is_valid ? "Verified" : "Unverified"}
             </span>
           ) : polyPartial ? (
             <span className="text-xs font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-full px-2.5 py-0.5">
@@ -403,10 +494,22 @@ export default function ApiKeyManager() {
               <p className="text-xs text-[#a1a8b3]">
                 Passphrase: <span className="text-[#e8e9ea]">configured</span>
               </p>
+              {polymarketKey.updated_at && (
+                <p className="text-xs text-[#6b7280]">
+                  Updated {timeAgo(polymarketKey.updated_at)}
+                </p>
+              )}
               <div className="flex gap-2 mt-3">
                 <button
+                  onClick={() => handleTestConnection("polymarket")}
+                  disabled={testing === "polymarket"}
+                  className="rounded-lg border border-[#2a2d31] bg-[#1a1d21] px-3 py-1.5 text-xs font-medium text-[#e8e9ea] hover:border-[#e8e9ea]/30 hover:bg-[#22262d] disabled:opacity-50 transition-colors"
+                >
+                  {testing === "polymarket" ? "Testing..." : "Test Connection"}
+                </button>
+                <button
                   onClick={() => setEditing("polymarket")}
-                  className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors"
+                  className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors px-2"
                 >
                   Update
                 </button>
@@ -475,7 +578,7 @@ export default function ApiKeyManager() {
                     disabled={isPending}
                     className="rounded-lg bg-[#e8e9ea] px-4 py-2 text-xs font-medium text-[#050608] hover:bg-[#c0c5cb] disabled:opacity-50 transition-colors"
                   >
-                    {isPending ? "Saving..." : "Save"}
+                    {isPending ? "Validating & Saving..." : "Save & Validate"}
                   </button>
                   {editing === "polymarket" && (
                     <button

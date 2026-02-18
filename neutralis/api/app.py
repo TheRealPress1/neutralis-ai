@@ -560,3 +560,49 @@ def optimizer_progress(run_id: int):
     if run is None:
         raise HTTPException(status_code=404, detail="Optimizer run not found")
     return run
+
+
+# --- Automation / Kill Switch ---
+
+
+class KillRequest(BaseModel):
+    reason: str = "Manual kill switch"
+
+
+@app.get("/api/automation/state")
+def get_automation_state():
+    storage = _get_storage()
+    state = storage.get_automation_state()
+    if state is None:
+        return {
+            "status": "paused",
+            "kill_switch": False,
+            "killed_reason": None,
+            "started_at": None,
+            "paused_at": None,
+            "killed_at": None,
+            "daily_loss_dollars": 0,
+            "daily_loss_reset_at": None,
+            "peak_portfolio_value": 0,
+            "max_drawdown_dollars": 0,
+            "updated_at": None,
+        }
+    return state
+
+
+@app.post("/api/automation/start")
+def start_automation():
+    storage = _get_storage()
+    return storage.update_automation_state("running")
+
+
+@app.post("/api/automation/pause")
+def pause_automation():
+    storage = _get_storage()
+    return storage.update_automation_state("paused")
+
+
+@app.post("/api/automation/kill")
+def kill_automation(body: KillRequest):
+    storage = _get_storage()
+    return storage.update_automation_state("killed", reason=body.reason)
