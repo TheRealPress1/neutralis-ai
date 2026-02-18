@@ -7,7 +7,6 @@ import { rateLimit, SENSITIVE_LIMIT, GENERAL_LIMIT, getClientIp } from "@/lib/ra
 import { logAudit } from "@/lib/audit";
 
 import type { SubscriptionTier } from "@/lib/subscription";
-export type { SubscriptionTier };
 
 export async function getSubscription(): Promise<{
   tier: SubscriptionTier;
