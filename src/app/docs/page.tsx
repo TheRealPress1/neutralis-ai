@@ -379,14 +379,14 @@ export default function DocsPage() {
             Ready to get started?
           </h2>
           <p className="mt-3 text-[#9ca3af]">
-            Join the waitlist for early access.
+            Create an account to start trading.
           </p>
           <div className="mt-6">
             <Link
-              href="/#waitlist"
+              href="/signup"
               className="btn-sheen btn-pill inline-flex bg-[#e8e9ea] px-7 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb]"
             >
-              Request access
+              Sign up
             </Link>
           </div>
         </section>

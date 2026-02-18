@@ -1,4 +1,3 @@
-import WaitlistForm from "./waitlist-form";
 import Navbar from "./navbar";
 import Link from "next/link";
 
@@ -52,12 +51,12 @@ export default function Home() {
             automatically — so you capture edge without watching&nbsp;screens.
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <a
-              href="#waitlist"
+            <Link
+              href="/signup"
               className="btn-sheen btn-pill inline-flex bg-[#e8e9ea] px-7 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb]"
             >
-              Request access
-            </a>
+              Get started
+            </Link>
             <Link
               href="/docs"
               className="btn-pill inline-flex border border-[#1a1d21] px-7 py-3 font-medium transition-colors hover:border-[#c0c5cb]"
@@ -86,22 +85,6 @@ export default function Home() {
                 </p>
               </article>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Waitlist ────────────────────────────────────────── */}
-      <section id="waitlist" className="border-t border-[#1a1d21] py-24">
-        <div className="mx-auto flex max-w-xl flex-col items-center px-6 text-center">
-          <h2 className="text-3xl font-[family-name:var(--font-italiana)] font-normal uppercase tracking-[0.08em]">
-            Get early access
-          </h2>
-          <p className="mt-4 text-[#9ca3af]">
-            Join the waitlist and we&apos;ll let you know when Neutralis is
-            ready.
-          </p>
-          <div className="mt-8 w-full">
-            <WaitlistForm />
           </div>
         </div>
       </section>

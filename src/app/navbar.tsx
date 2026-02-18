@@ -68,14 +68,6 @@ export default function Navbar() {
           </li>
           <li>
             <a
-              href="#waitlist"
-              className="nav-link-glow transition-all duration-250 ease-out hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.25)]"
-            >
-              Waitlist
-            </a>
-          </li>
-          <li>
-            <a
               href="/dashboard"
               className="nav-link-glow transition-all duration-250 ease-out hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.25)]"
             >
