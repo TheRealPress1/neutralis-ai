@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, useCallback } from "react";
 import {
   getProfile,
   updateProfile,
   updateEmail,
   changePassword,
 } from "@/app/actions/profile";
+import {
+  selectPlan,
+  type SubscriptionTier,
+} from "@/app/actions/subscription";
 import Link from "next/link";
 
 const INPUT_CLASS =
@@ -249,32 +253,17 @@ export default function ProfileSettings() {
         </div>
       </div>
 
-      {/* Current Plan */}
-      <div className="rounded-xl border border-[#22262d] bg-[#0e1117] p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="font-medium text-[#eceef0]">Current Plan</h2>
-          <Link
-            href="/pricing"
-            className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors"
-          >
-            Manage plan
-          </Link>
-        </div>
-        <div className="mt-3 flex items-center gap-3">
-          <span className="rounded-full bg-[#1a1d21] border border-[#22262d] px-3 py-1 text-sm font-medium text-[#eceef0] capitalize">
-            {profile?.subscription_tier ?? "free"}
-          </span>
-          <span className="text-sm text-[#9ca3af]">
-            {profile?.subscription_tier === "pro"
-              ? "$19.99/mo"
-              : profile?.subscription_tier === "starter"
-                ? "$9.99/mo"
-                : "Free"}
-          </span>
-        </div>
-      </div>
+      {/* Subscription */}
+      <SubscriptionCard
+        currentTier={(profile?.subscription_tier as SubscriptionTier) ?? "free"}
+        onTierChange={(newTier) => {
+          setProfile((prev) =>
+            prev ? { ...prev, subscription_tier: newTier } : prev,
+          );
+        }}
+      />
 
-      {/* Change Password */}
+      {/* Change password */}
       <div className="rounded-xl border border-[#22262d] bg-[#0e1117] p-5">
         <div className="flex items-center justify-between">
           <h2 className="font-medium text-[#eceef0]">Change Password</h2>
@@ -361,6 +350,218 @@ export default function ProfileSettings() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ── Subscription management card ─────────────────────────────────── */
+
+const PLANS: {
+  id: SubscriptionTier;
+  name: string;
+  price: string;
+  period: string;
+  features: string[];
+  highlight?: boolean;
+}[] = [
+  {
+    id: "free",
+    name: "Free",
+    price: "$0",
+    period: "",
+    features: [
+      "View live signals & matched pairs",
+      "Market explorer",
+      "Basic analytics",
+    ],
+  },
+  {
+    id: "starter",
+    name: "Starter",
+    price: "$9.99",
+    period: "/mo",
+    highlight: true,
+    features: [
+      "Automated trade execution",
+      "Basic risk configuration",
+      "Taker orders (FOK)",
+      "20% performance fee on profits",
+    ],
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    price: "$19.99",
+    period: "/mo",
+    features: [
+      "Maker orders (GTC) — 4x cheaper fees",
+      "Full risk profile customization",
+      "Priority execution",
+      "10% performance fee on profits",
+    ],
+  },
+];
+
+function SubscriptionCard({
+  currentTier,
+  onTierChange,
+}: {
+  currentTier: SubscriptionTier;
+  onTierChange: (tier: SubscriptionTier) => void;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const currentPlan = PLANS.find((p) => p.id === currentTier) ?? PLANS[0];
+
+  const handleSwitch = useCallback(
+    (tier: SubscriptionTier) => {
+      if (tier === currentTier) return;
+      setError(null);
+      setMessage(null);
+
+      startTransition(async () => {
+        const result = await selectPlan(tier);
+        if (result.error) {
+          setError(result.error);
+        } else {
+          onTierChange(tier);
+          const label = PLANS.find((p) => p.id === tier)?.name ?? tier;
+          setMessage(
+            tier === "free"
+              ? "Downgraded to Free."
+              : `Upgraded to ${label}! Stripe billing will be connected soon.`,
+          );
+          setTimeout(() => setMessage(null), 5000);
+        }
+      });
+    },
+    [currentTier, onTierChange],
+  );
+
+  return (
+    <div className="rounded-xl border border-[#22262d] bg-[#0e1117] p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-medium text-[#eceef0]">Subscription</h2>
+        <Link
+          href="/pricing"
+          className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors"
+        >
+          View full pricing
+        </Link>
+      </div>
+
+      {/* Current plan summary */}
+      <div className="flex items-center gap-3 mb-5">
+        <span className="rounded-full bg-[#1a1d21] border border-[#22262d] px-3 py-1 text-sm font-medium text-[#eceef0]">
+          {currentPlan.name}
+        </span>
+        <span className="text-sm text-[#9ca3af]">
+          {currentPlan.price}
+          {currentPlan.period}
+        </span>
+        {currentTier !== "free" && (
+          <span className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">
+            Active
+          </span>
+        )}
+      </div>
+
+      {error && (
+        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400 mb-4">
+          {error}
+        </div>
+      )}
+      {message && (
+        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400 mb-4">
+          {message}
+        </div>
+      )}
+
+      {/* Plan cards */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        {PLANS.map((plan) => {
+          const isCurrent = plan.id === currentTier;
+          return (
+            <div
+              key={plan.id}
+              className={`rounded-lg border p-4 transition-colors ${
+                isCurrent
+                  ? "border-[#e8e9ea]/30 bg-[#1a1d21]"
+                  : "border-[#22262d] bg-[#0e1117] hover:border-[#22262d]/80"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-[#eceef0]">
+                  {plan.name}
+                </h3>
+                {isCurrent && (
+                  <span className="text-[10px] font-medium text-[#9ca3af] bg-[#22262d] rounded px-1.5 py-0.5">
+                    Current
+                  </span>
+                )}
+              </div>
+              <div className="flex items-baseline gap-0.5 mb-3">
+                <span className="text-lg font-semibold text-[#eceef0]">
+                  {plan.price}
+                </span>
+                {plan.period && (
+                  <span className="text-xs text-[#9ca3af]">{plan.period}</span>
+                )}
+              </div>
+              <ul className="space-y-1.5 mb-4">
+                {plan.features.map((f) => (
+                  <li
+                    key={f}
+                    className="flex items-start gap-1.5 text-xs text-[#9ca3af]"
+                  >
+                    <svg
+                      className="mt-0.5 h-3 w-3 shrink-0 text-emerald-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2.5}
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="m4.5 12.75 6 6 9-13.5"
+                      />
+                    </svg>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              {isCurrent ? (
+                <div className="rounded-md border border-[#22262d] bg-[#0e1117] px-3 py-1.5 text-center text-xs text-[#9ca3af]">
+                  Current plan
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleSwitch(plan.id)}
+                  disabled={isPending}
+                  className={`w-full rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                    plan.highlight
+                      ? "bg-[#e8e9ea] text-[#050608] hover:bg-[#c0c5cb]"
+                      : "border border-[#22262d] text-[#e8e9ea] hover:border-[#e8e9ea]/30 hover:bg-[#1a1d21]"
+                  }`}
+                >
+                  {isPending
+                    ? "Updating..."
+                    : PLANS.indexOf(plan) < PLANS.findIndex((p) => p.id === currentTier)
+                      ? "Downgrade"
+                      : "Upgrade"}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="mt-4 text-xs text-[#6b7280]">
+        Stripe billing coming soon. Plan changes take effect immediately.
+      </p>
     </div>
   );
 }

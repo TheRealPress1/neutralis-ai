@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import PricingCards from "./components/PricingCards";
+import RedeemCode from "./components/RedeemCode";
 
 export const metadata: Metadata = {
   title: "Pricing | Neutralis.ai",
@@ -125,6 +126,8 @@ export default async function PricingPage() {
           currentTier={currentTier}
           signedIn={!!user}
         />
+
+        {user && <RedeemCode />}
       </main>
     </div>
   );

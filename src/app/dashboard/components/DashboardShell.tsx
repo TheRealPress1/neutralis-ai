@@ -12,11 +12,8 @@ import ApiKeyManager from "./ApiKeyManager";
 import UpgradeBanner from "./UpgradeBanner";
 import AuthNav from "@/app/components/AuthNav";
 import Link from "next/link";
-import {
-  getSubscription,
-  hasAccess,
-  type SubscriptionTier,
-} from "@/app/actions/subscription";
+import { getSubscription } from "@/app/actions/subscription";
+import { hasAccess, type SubscriptionTier } from "@/lib/subscription";
 
 type NavTab = "dashboard" | "automation" | "activity" | "matches" | "connections" | "settings";
 
@@ -39,10 +36,14 @@ export default function DashboardShell() {
   const [elapsed, setElapsed] = useState(0);
   const [activeTab, setActiveTab] = useState<NavTab>("dashboard");
   const [tier, setTier] = useState<SubscriptionTier>("free");
+  const [isFounder, setIsFounder] = useState(false);
 
   // Fetch subscription tier
   useEffect(() => {
-    getSubscription().then((r) => setTier(r.tier));
+    getSubscription().then((r) => {
+      setTier(r.tier);
+      setIsFounder(r.isFounder);
+    });
   }, []);
 
   // Auto-refresh every 30 seconds
@@ -153,7 +154,7 @@ export default function DashboardShell() {
 
         {activeTab === "settings" && (
           <section className="mt-2">
-            <SettingsPage tier={tier} />
+            <SettingsPage tier={tier} isFounder={isFounder} />
           </section>
         )}
       </main>
