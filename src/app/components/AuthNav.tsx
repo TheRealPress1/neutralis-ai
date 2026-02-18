@@ -67,7 +67,7 @@ export default function AuthNav() {
         </button>
 
         {open && (
-          <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-[#22262d] bg-[#0e1117] p-1.5 shadow-xl shadow-black/40">
+          <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-[#22262d] bg-[#0e1117] p-1.5 shadow-xl shadow-black/40">
             <p className="px-3 py-2 text-xs text-[#a1a8b3] truncate">
               {user.email}
             </p>
