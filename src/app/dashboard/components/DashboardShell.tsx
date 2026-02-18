@@ -107,29 +107,40 @@ export default function DashboardShell({
                 href="https://kalshi.com/portfolio"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-md px-2 py-1.5 text-xs text-[#6b7280] transition-colors hover:text-[#e8e9ea]"
+                title="Kalshi"
+                className="flex h-6 w-6 items-center justify-center rounded bg-[#1a1d21] text-[10px] font-bold text-[#6b7280] transition-colors hover:text-[#e8e9ea]"
               >
-                Kalshi
+                K
               </a>
               <a
                 href="https://polymarket.com/portfolio"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-md px-2 py-1.5 text-xs text-[#6b7280] transition-colors hover:text-[#e8e9ea]"
+                title="Polymarket"
+                className="flex h-6 w-6 items-center justify-center rounded bg-[#1a1d21] text-[10px] font-bold text-[#6b7280] transition-colors hover:text-[#e8e9ea]"
               >
-                Polymarket
+                P
               </a>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-[#9ca3af]">
-              Updated {elapsed}s ago
-            </span>
             <button
               onClick={handleRefresh}
-              className="rounded border border-[#1a1d21] px-3 py-1.5 text-xs font-medium text-[#9ca3af] transition-colors hover:border-[#c0c5cb] hover:text-[#e8e9ea]"
+              title={`Updated ${elapsed}s ago`}
+              className="group flex h-8 w-8 items-center justify-center rounded-md border border-[#1a1d21] text-[#9ca3af] transition-colors hover:border-[#c0c5cb] hover:text-[#e8e9ea]"
             >
-              Refresh
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="h-3.5 w-3.5 transition-transform group-hover:rotate-45"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H4.598a.75.75 0 0 0-.75.75v3.634a.75.75 0 0 0 1.5 0v-2.033l.312.311a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm-10.624-2.85a5.5 5.5 0 0 1 9.201-2.465l.312.311H11.77a.75.75 0 0 0 0 1.5h3.634a.75.75 0 0 0 .75-.75V3.536a.75.75 0 0 0-1.5 0v2.033l-.312-.311A7 7 0 0 0 2.63 8.396a.75.75 0 0 0 1.45.39l-.392.788Z"
+                  clipRule="evenodd"
+                />
+              </svg>
             </button>
             <AuthNav />
           </div>
