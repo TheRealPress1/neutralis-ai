@@ -74,6 +74,15 @@ const PARAM_GROUPS: ParamGroup[] = [
         max: 500,
         description: "Maximum simultaneously open positions",
       },
+      {
+        key: "max_position_dollars",
+        label: "Max Position Size",
+        unit: "$",
+        step: 5,
+        min: 1,
+        max: 500,
+        description: "Maximum dollars allocated to a single position",
+      },
     ],
   },
   {
@@ -135,21 +144,6 @@ const PARAM_GROUPS: ParamGroup[] = [
         max: 100,
         description: "Minimum score for matching across venues",
         displayMultiplier: 100,
-      },
-    ],
-  },
-  {
-    title: "Position Sizing",
-    description: "Controls how large individual positions can be",
-    params: [
-      {
-        key: "max_position_dollars",
-        label: "Max Position Size",
-        unit: "$",
-        step: 5,
-        min: 1,
-        max: 500,
-        description: "Maximum dollars allocated to a single position",
       },
       {
         key: "target_annual_return_pct",
