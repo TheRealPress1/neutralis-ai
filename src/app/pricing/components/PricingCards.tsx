@@ -2,7 +2,8 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { selectPlan, type SubscriptionTier } from "@/app/actions/subscription";
+import { selectPlan } from "@/app/actions/subscription";
+import type { SubscriptionTier } from "@/lib/subscription";
 
 interface Plan {
   id: SubscriptionTier;
