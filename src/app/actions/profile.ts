@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { rateLimit, GENERAL_LIMIT, AUTH_LIMIT, getClientIp } from "@/lib/rate-limit";
+import { logAudit } from "@/lib/audit";
 
 export async function getProfile() {
   const supabase = await createClient();
@@ -21,6 +23,11 @@ export async function getProfile() {
 }
 
 export async function updateProfile(formData: FormData) {
+  const ip = await getClientIp();
+  if (!rateLimit(`profile:update:${ip}`, GENERAL_LIMIT).success) {
+    return { error: "Too many attempts. Please try again later." };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -44,11 +51,17 @@ export async function updateProfile(formData: FormData) {
 
   if (error) return { error: error.message };
 
+  logAudit("profile.updated", { entityType: "profile" });
   revalidatePath("/profile");
   return { success: true };
 }
 
 export async function updateEmail(formData: FormData) {
+  const ip = await getClientIp();
+  if (!rateLimit(`profile:email:${ip}`, GENERAL_LIMIT).success) {
+    return { error: "Too many attempts. Please try again later." };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -66,6 +79,10 @@ export async function updateEmail(formData: FormData) {
 
   if (error) return { error: error.message };
 
+  logAudit("profile.email_change_requested", {
+    entityType: "profile",
+    details: { new_email: newEmail },
+  });
   return {
     success: true,
     message:
@@ -74,6 +91,11 @@ export async function updateEmail(formData: FormData) {
 }
 
 export async function changePassword(formData: FormData) {
+  const ip = await getClientIp();
+  if (!rateLimit(`auth:password:${ip}`, AUTH_LIMIT).success) {
+    return { error: "Too many attempts. Please try again later." };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -113,5 +135,6 @@ export async function changePassword(formData: FormData) {
 
   if (updateError) return { error: updateError.message };
 
+  logAudit("auth.password_changed", { entityType: "auth" });
   return { success: true, message: "Password updated successfully." };
 }

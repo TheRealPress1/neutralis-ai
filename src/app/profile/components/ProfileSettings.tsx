@@ -7,7 +7,7 @@ import {
   updateEmail,
   changePassword,
 } from "@/app/actions/profile";
-import { selectPlan } from "@/app/actions/subscription";
+import { selectPlan, createBillingPortal } from "@/app/actions/subscription";
 import type { SubscriptionTier } from "@/lib/subscription";
 import Link from "next/link";
 
@@ -460,6 +460,10 @@ function SubscriptionCard({
 
       startTransition(async () => {
         const result = await selectPlan(tier);
+        if (result.checkoutUrl) {
+          window.location.href = result.checkoutUrl;
+          return;
+        }
         if (result.error) {
           setError(result.error);
         } else {
@@ -468,7 +472,7 @@ function SubscriptionCard({
           setMessage(
             tier === "free"
               ? "Downgraded to Free."
-              : `Upgraded to ${label}! Stripe billing will be connected soon.`,
+              : `Upgraded to ${label}!`,
           );
           setTimeout(() => setMessage(null), 5000);
         }
@@ -476,6 +480,17 @@ function SubscriptionCard({
     },
     [currentTier, onTierChange],
   );
+
+  const handleManageBilling = useCallback(() => {
+    startTransition(async () => {
+      const result = await createBillingPortal();
+      if (result.url) {
+        window.location.href = result.url;
+      } else if (result.error) {
+        setError(result.error);
+      }
+    });
+  }, []);
 
   return (
     <div className="rounded-xl border border-[#22262d] bg-[#0e1117] p-5">
@@ -596,9 +611,20 @@ function SubscriptionCard({
         })}
       </div>
 
-      <p className="mt-4 text-xs text-[#6b7280]">
-        Stripe billing coming soon. Plan changes take effect immediately.
-      </p>
+      {currentTier !== "free" && (
+        <div className="mt-4 flex items-center justify-between">
+          <p className="text-xs text-[#6b7280]">
+            Plan changes take effect immediately.
+          </p>
+          <button
+            onClick={handleManageBilling}
+            disabled={isPending}
+            className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors disabled:opacity-50"
+          >
+            Manage billing
+          </button>
+        </div>
+      )}
     </div>
   );
 }

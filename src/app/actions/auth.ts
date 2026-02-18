@@ -3,8 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { rateLimit, AUTH_LIMIT, getClientIp } from "@/lib/rate-limit";
+import { logAudit } from "@/lib/audit";
 
 export async function signUp(formData: FormData) {
+  const ip = await getClientIp();
+  if (!rateLimit(`auth:signup:${ip}`, AUTH_LIMIT).success) {
+    return { error: "Too many attempts. Please try again later." };
+  }
+
   const supabase = await createClient();
 
   const firstName = (formData.get("firstName") as string)?.trim();
@@ -45,6 +52,7 @@ export async function signUp(formData: FormData) {
 
   // Only redirect if signup was successful
   if (data.user) {
+    logAudit("auth.signup", { userId: data.user.id, details: { email } });
     revalidatePath("/", "layout");
     redirect("/onboarding");
   }
@@ -53,6 +61,11 @@ export async function signUp(formData: FormData) {
 }
 
 export async function signIn(formData: FormData) {
+  const ip = await getClientIp();
+  if (!rateLimit(`auth:signin:${ip}`, AUTH_LIMIT).success) {
+    return { error: "Too many attempts. Please try again later." };
+  }
+
   const supabase = await createClient();
 
   const email = formData.get("email") as string;
@@ -69,14 +82,17 @@ export async function signIn(formData: FormData) {
   });
 
   if (error) {
+    logAudit("auth.signin_failed", { details: { email, reason: error.message } });
     return { error: error.message };
   }
 
+  logAudit("auth.signin", { details: { email } });
   revalidatePath("/", "layout");
   redirect(redirectTo || "/dashboard");
 }
 
 export async function signOut() {
+  logAudit("auth.signout");
   const supabase = await createClient();
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
@@ -84,6 +100,11 @@ export async function signOut() {
 }
 
 export async function forgotPassword(formData: FormData) {
+  const ip = await getClientIp();
+  if (!rateLimit(`auth:forgot:${ip}`, AUTH_LIMIT).success) {
+    return { error: "Too many attempts. Please try again later." };
+  }
+
   const supabase = await createClient();
 
   const email = formData.get("email") as string;
@@ -100,10 +121,16 @@ export async function forgotPassword(formData: FormData) {
     return { error: error.message };
   }
 
+  logAudit("auth.password_reset_requested", { details: { email } });
   return { success: true };
 }
 
 export async function resetPassword(formData: FormData) {
+  const ip = await getClientIp();
+  if (!rateLimit(`auth:reset:${ip}`, AUTH_LIMIT).success) {
+    return { error: "Too many attempts. Please try again later." };
+  }
+
   const supabase = await createClient();
 
   const password = formData.get("password") as string;
@@ -127,6 +154,7 @@ export async function resetPassword(formData: FormData) {
     return { error: error.message };
   }
 
+  logAudit("auth.password_reset");
   revalidatePath("/", "layout");
   redirect("/dashboard");
 }

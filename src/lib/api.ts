@@ -225,14 +225,17 @@ export function triggerKillSwitch(reason = "Manual kill switch") {
 
 // --- Audit Logs / Activity ---
 
-export function fetchAuditLogs(
+export async function fetchAuditLogs(
   params?: { event_type?: string; entity_type?: string; limit?: number },
-) {
-  const queryParams: Record<string, string> = {};
-  if (params?.event_type) queryParams.event_type = params.event_type;
-  if (params?.entity_type) queryParams.entity_type = params.entity_type;
-  if (params?.limit) queryParams.limit = String(params.limit);
-  return apiFetch<AuditLogEntry[]>("/api/activity", queryParams);
+): Promise<AuditLogEntry[]> {
+  const url = new URL("/api/activity", window.location.origin);
+  if (params?.event_type) url.searchParams.set("event_type", params.event_type);
+  if (params?.entity_type) url.searchParams.set("entity_type", params.entity_type);
+  if (params?.limit) url.searchParams.set("limit", String(params.limit));
+
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(`Activity ${res.status}: ${res.statusText}`);
+  return res.json() as Promise<AuditLogEntry[]>;
 }
 
 // --- Exports ---

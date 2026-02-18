@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { encrypt, decrypt } from "@/lib/encryption";
 import { createSign, constants as cryptoConstants } from "crypto";
+import { rateLimit, SENSITIVE_LIMIT, getClientIp } from "@/lib/rate-limit";
+import { logAudit } from "@/lib/audit";
 
 export interface ApiKeyData {
   platform: "kalshi" | "polymarket";
@@ -12,6 +14,11 @@ export interface ApiKeyData {
 }
 
 export async function saveApiKeys(keys: ApiKeyData[]) {
+  const ip = await getClientIp();
+  if (!rateLimit(`keys:save:${ip}`, SENSITIVE_LIMIT).success) {
+    return { error: "Too many attempts. Please try again later." };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -35,6 +42,8 @@ export async function saveApiKeys(keys: ApiKeyData[]) {
     if (error) return { error: error.message };
   }
 
+  const platforms = keys.map((k) => k.platform);
+  logAudit("keys.saved", { entityType: "api_key", details: { platforms } });
   return { success: true };
 }
 
@@ -97,6 +106,11 @@ export async function saveWalletAddress(address: string) {
 }
 
 export async function deleteApiKey(platform: string) {
+  const ip = await getClientIp();
+  if (!rateLimit(`keys:delete:${ip}`, SENSITIVE_LIMIT).success) {
+    return { error: "Too many attempts. Please try again later." };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -110,6 +124,7 @@ export async function deleteApiKey(platform: string) {
     .eq("platform", platform);
 
   if (error) return { error: error.message };
+  logAudit("keys.deleted", { entityType: "api_key", details: { platform } });
   return { success: true };
 }
 
@@ -211,6 +226,11 @@ export async function validatePolymarketKey(
 export async function testConnection(
   platform: string,
 ): Promise<{ valid: boolean; error?: string }> {
+  const ip = await getClientIp();
+  if (!rateLimit(`keys:test:${ip}`, SENSITIVE_LIMIT).success) {
+    return { valid: false, error: "Too many attempts. Please try again later." };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -246,5 +266,9 @@ export async function testConnection(
     .eq("user_id", user.id)
     .eq("platform", platform);
 
+  logAudit("keys.validated", {
+    entityType: "api_key",
+    details: { platform, valid: result.valid },
+  });
   return result;
 }
