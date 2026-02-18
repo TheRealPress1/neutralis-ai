@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { getStripe, PRICE_MAP } from "@/lib/stripe";
 import { rateLimit, SENSITIVE_LIMIT, GENERAL_LIMIT, getClientIp } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
@@ -295,7 +296,9 @@ export async function listAccessCodes(): Promise<{
 
   let emailMap: Record<string, string> = {};
   if (redeemerIds.length > 0) {
-    const { data: profiles } = await (supabase as any)
+    // Use service client to bypass RLS on profiles (founder admin query)
+    const service = createServiceClient();
+    const { data: profiles } = await service
       .from("profiles")
       .select("id, email")
       .in("id", redeemerIds);
