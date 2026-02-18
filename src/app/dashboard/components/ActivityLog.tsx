@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { AuditLogEntry } from "@/types/api";
-import { fetchAuditLogs, getTradesCsvUrl } from "@/lib/api";
+import { fetchAuditLogs } from "@/lib/api";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -171,27 +171,6 @@ export default function ActivityLog({ refreshKey }: { refreshKey: number }) {
             ))}
           </select>
 
-          {/* CSV export button */}
-          <a
-            href={getTradesCsvUrl()}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded border border-[#1a1d21] bg-[#050608] px-3 py-1.5 text-xs font-medium text-[#9ca3af] transition-colors hover:border-[#3b3f46] hover:text-[#e8e9ea]"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className="h-3.5 w-3.5"
-            >
-              <path
-                fillRule="evenodd"
-                d="M10 3a.75.75 0 0 1 .75.75v6.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 1 1 1.06-1.06l2.22 2.22V3.75A.75.75 0 0 1 10 3Zm-5.5 9.75a.75.75 0 0 0-1.5 0v.5A2.75 2.75 0 0 0 5.75 16h8.5A2.75 2.75 0 0 0 17 13.25v-.5a.75.75 0 0 0-1.5 0v.5c0 .69-.56 1.25-1.25 1.25h-8.5c-.69 0-1.25-.56-1.25-1.25v-.5Z"
-                clipRule="evenodd"
-              />
-            </svg>
-            Export CSV
-          </a>
         </div>
       </div>
 

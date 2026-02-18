@@ -2,13 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { AutomationState, Decision } from "@/types/api";
-import {
-  fetchAutomationState,
-  startAutomation,
-  pauseAutomation,
-  triggerKillSwitch,
-  fetchDecisions,
-} from "@/lib/api";
+import { fetchAutomationState, fetchDecisions } from "@/lib/api";
+import { setAutomationStatus } from "@/app/actions/dashboard";
 
 /* ── Helpers ─────────────────────────────────────────────────────── */
 
@@ -108,11 +103,10 @@ export default function AutomationPanel({
     setToggling(true);
     setError(null);
     try {
-      const updated =
-        state.status === "running"
-          ? await pauseAutomation()
-          : await startAutomation();
-      setState(updated);
+      const action = state.status === "running" ? "pause" : "start";
+      const result = await setAutomationStatus(action);
+      if (result.error) throw new Error(result.error);
+      if (result.data) setState(result.data);
     } catch {
       setError("Failed to toggle automation");
     } finally {
@@ -127,8 +121,9 @@ export default function AutomationPanel({
     }
     setError(null);
     try {
-      const updated = await triggerKillSwitch("Manual kill switch");
-      setState(updated);
+      const result = await setAutomationStatus("kill", "Manual kill switch");
+      if (result.error) throw new Error(result.error);
+      if (result.data) setState(result.data);
       setKillArmed(false);
     } catch {
       setError("Failed to trigger kill switch");
@@ -175,8 +170,16 @@ export default function AutomationPanel({
 
   if (!state) {
     return (
-      <div className="card-panel rounded-xl p-8 text-center text-[#9ca3af]">
-        Unable to load automation state
+      <div className="card-panel rounded-xl">
+        <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mb-3 h-10 w-10 text-[#2a2d31]">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />
+          </svg>
+          <p className="text-sm text-[#9ca3af]">Automation engine offline</p>
+          <p className="mt-1 max-w-xs text-xs text-[#3b3f46]">
+            The trading engine is not currently running. Start the backend pipeline to enable automation controls.
+          </p>
+        </div>
       </div>
     );
   }

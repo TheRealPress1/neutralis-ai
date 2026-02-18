@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import type { RiskProfile } from "@/types/api";
-import { fetchActiveProfile, updateProfile } from "@/lib/api";
+import { getActiveRiskProfile, updateRiskProfile } from "@/app/actions/dashboard";
 
 /* ── Parameter metadata ─────────────────────────────────────────── */
 
@@ -184,9 +184,11 @@ export default function RiskProfileEditor() {
 
   const loadProfile = useCallback(async () => {
     try {
-      const profile = await fetchActiveProfile();
-      setActive(profile);
-      populateForm(profile);
+      const result = await getActiveRiskProfile();
+      if (result.data) {
+        setActive(result.data);
+        populateForm(result.data);
+      }
     } catch {
       /* profile may not exist yet */
     }
@@ -232,9 +234,12 @@ export default function RiskProfileEditor() {
     }
 
     try {
-      const updated = await updateProfile(active.id, updates);
-      setActive(updated);
-      populateForm(updated);
+      const result = await updateRiskProfile(active.id, updates);
+      if (result.error) throw new Error(result.error);
+      if (result.data) {
+        setActive(result.data);
+        populateForm(result.data);
+      }
       setMessage("Settings saved");
       setTimeout(() => setMessage(null), 3000);
     } catch {
