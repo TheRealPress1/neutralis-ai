@@ -7,10 +7,8 @@ import {
   updateEmail,
   changePassword,
 } from "@/app/actions/profile";
-import {
-  selectPlan,
-  type SubscriptionTier,
-} from "@/app/actions/subscription";
+import { selectPlan } from "@/app/actions/subscription";
+import type { SubscriptionTier } from "@/lib/subscription";
 import Link from "next/link";
 
 const INPUT_CLASS =
