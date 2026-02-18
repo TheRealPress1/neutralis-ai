@@ -1,30 +1,40 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export default function AuthListener() {
-  const router = useRouter();
-
   useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash || !hash.includes("access_token")) return;
+
+    // Parse hash fragment: #access_token=...&type=recovery&refresh_token=...
+    const params = new URLSearchParams(hash.substring(1));
+    const accessToken = params.get("access_token");
+    const refreshToken = params.get("refresh_token");
+    const type = params.get("type");
+
+    if (!accessToken || !refreshToken) return;
+
     const supabase = createClient();
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
-        router.push("/reset-password");
-      } else if (event === "SIGNED_IN") {
-        // Hash-based sign-in from email confirmation
-        if (window.location.hash.includes("access_token")) {
-          router.push("/dashboard");
+    supabase.auth
+      .setSession({ access_token: accessToken, refresh_token: refreshToken })
+      .then(({ error }) => {
+        if (error) {
+          console.error("Failed to set session:", error.message);
+          return;
         }
-      }
-    });
+        // Clear the hash so tokens aren't visible in the URL
+        window.history.replaceState(null, "", window.location.pathname);
 
-    return () => subscription.unsubscribe();
-  }, [router]);
+        if (type === "recovery") {
+          window.location.href = "/reset-password";
+        } else {
+          window.location.href = "/dashboard";
+        }
+      });
+  }, []);
 
   return null;
 }
