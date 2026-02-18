@@ -59,19 +59,11 @@ export default function Navbar() {
             </a>
           </li>
           <li>
-            <a
-              href="#method"
-              className="nav-link-glow transition-all duration-250 ease-out hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.25)]"
-            >
-              How it Works
-            </a>
-          </li>
-          <li>
             <Link
               href="/docs"
               className="nav-link-glow transition-all duration-250 ease-out hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.25)]"
             >
-              Docs
+              How it Works
             </Link>
           </li>
           <li>

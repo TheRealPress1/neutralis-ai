@@ -25,26 +25,6 @@ const features = [
   },
 ];
 
-const methodSteps = [
-  {
-    number: 1,
-    title: "Scan",
-    description:
-      "Markets across Kalshi and Polymarket are matched using NLP and monitored via real-time WebSocket feeds for price discrepancies.",
-  },
-  {
-    number: 2,
-    title: "Evaluate",
-    description:
-      "Each signal passes through fee calculations, slippage buffers, liquidity checks, and portfolio guards before qualifying as a trade.",
-  },
-  {
-    number: 3,
-    title: "Execute",
-    description:
-      "Qualified trades are placed as cross-platform pairs — buy on one venue, sell on the other — locking in the spread with automated risk management.",
-  },
-];
 
 export default function Home() {
   return (
@@ -110,31 +90,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Method ─────────────────────────────────────────── */}
-      <section id="method" className="metallic-band border-t border-[#1a1d21] py-24">
-        <div className="mx-auto max-w-5xl px-6">
-          <h2 className="text-center text-3xl font-[family-name:var(--font-italiana)] font-normal uppercase tracking-[0.08em]">
-            How it works
-          </h2>
-          <div className="mt-14 grid gap-8 md:grid-cols-3">
-            {methodSteps.map((step) => (
-              <article
-                key={step.number}
-                className="card-panel rounded-xl p-8"
-              >
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#050608] text-lg font-bold text-[#c0c5cb]">
-                  {step.number}
-                </div>
-                <h3 className="font-[family-name:var(--font-cormorant)] text-xl font-medium">{step.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-[#9ca3af]">
-                  {step.description}
-                </p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ── Waitlist ────────────────────────────────────────── */}
       <section id="waitlist" className="border-t border-[#1a1d21] py-24">
         <div className="mx-auto flex max-w-xl flex-col items-center px-6 text-center">
@@ -161,7 +116,7 @@ export default function Home() {
                 href="/docs"
                 className="transition-colors hover:text-[#e8e9ea]"
               >
-                Docs
+                How it Works
               </Link>
             </li>
             <li>
