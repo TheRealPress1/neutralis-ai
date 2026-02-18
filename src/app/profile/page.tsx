@@ -11,10 +11,19 @@ export const metadata: Metadata = {
 };
 
 export default async function ProfilePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user;
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return (
+      <div className="min-h-screen bg-[#050608] text-[#e8e9ea] flex items-center justify-center">
+        <p className="text-red-400 text-sm">Profile error: {msg}</p>
+      </div>
+    );
+  }
 
   if (!user) {
     redirect("/login?redirect=/profile");
