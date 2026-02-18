@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useTransition, useRef } from "react";
-import { useAccount, useConnect, useDisconnect } from "wagmi";
 import {
   getApiKeys,
   saveApiKeys,
@@ -56,14 +55,10 @@ export default function ApiKeyManager() {
   const [testing, setTesting] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Wallet state from wagmi
-  const { address, isConnected } = useAccount();
-  const { connect, connectors, isPending: isConnecting } = useConnect();
-  const { disconnect } = useDisconnect();
-
   // Form state
   const [kalshiKeyId, setKalshiKeyId] = useState("");
   const [kalshiPem, setKalshiPem] = useState("");
+  const [polyWalletAddress, setPolyWalletAddress] = useState("");
   const [polyKey, setPolyKey] = useState("");
   const [polySecret, setPolySecret] = useState("");
   const [polyPassphrase, setPolyPassphrase] = useState("");
@@ -85,25 +80,14 @@ export default function ApiKeyManager() {
     init();
   }, []);
 
-  // Save wallet address when connected
-  useEffect(() => {
-    if (isConnected && address) {
-      startTransition(async () => {
-        const result = await saveWalletAddress(address);
-        if (result.error) setError(result.error);
-        else await load();
-      });
-    }
-  }, [isConnected, address]);
-
   const kalshiKey = keys.find((k) => k.platform === "kalshi");
   const polymarketKey = keys.find((k) => k.platform === "polymarket");
   const walletKey = keys.find((k) => k.platform === "polymarket_wallet");
   const savedWalletAddress = walletKey?.api_key_id;
 
   // Determine overall Polymarket connection status
-  const polyFullyConnected = !!polymarketKey && (!!savedWalletAddress || isConnected);
-  const polyPartial = !!polymarketKey || !!savedWalletAddress || isConnected;
+  const polyFullyConnected = !!polymarketKey && !!savedWalletAddress;
+  const polyPartial = !!polymarketKey || !!savedWalletAddress;
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -130,8 +114,8 @@ export default function ApiKeyManager() {
         private_key_pem: kalshiPem.trim(),
       });
     } else {
-      if (!polyKey || !polySecret || !polyPassphrase) {
-        setError("API Key, API Secret, and Passphrase are all required.");
+      if (!polyWalletAddress || !polyKey || !polySecret || !polyPassphrase) {
+        setError("Wallet Address, API Key, API Secret, and Passphrase are all required.");
         return;
       }
       keyData.push({
@@ -155,16 +139,26 @@ export default function ApiKeyManager() {
         );
       }
 
-      // Save regardless of validation (user may want to save for later)
+      // Save CLOB credentials
       const result = await saveApiKeys(keyData);
       if (result.error) {
         setError(result.error);
         return;
       }
 
+      // Save wallet address for Polymarket
+      if (platform === "polymarket") {
+        const walletResult = await saveWalletAddress(polyWalletAddress.trim());
+        if (walletResult.error) {
+          setError(walletResult.error);
+          return;
+        }
+      }
+
       setEditing(null);
       setKalshiKeyId("");
       setKalshiPem("");
+      setPolyWalletAddress("");
       setPolyKey("");
       setPolySecret("");
       setPolyPassphrase("");
@@ -210,17 +204,12 @@ export default function ApiKeyManager() {
       if (result.error) {
         setError(result.error);
       } else {
+        if (platform === "polymarket") {
+          await deleteApiKey("polymarket_wallet");
+        }
         setEditing(null);
         await load();
       }
-    });
-  }
-
-  function handleDisconnectWallet() {
-    disconnect();
-    startTransition(async () => {
-      await deleteApiKey("polymarket_wallet");
-      await load();
     });
   }
 
@@ -414,185 +403,139 @@ export default function ApiKeyManager() {
           )}
         </div>
 
-        {/* Step 1: Wallet Connection */}
-        <div className="mt-4">
-          <p className="text-xs font-medium text-[#a1a8b3] mb-2">
-            Step 1 — Connect Wallet
-          </p>
-
-          {isConnected && address ? (
-            <div className="flex items-center justify-between rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                <span className="font-mono text-sm text-[#e8e9ea]">
-                  {maskAddress(address)}
-                </span>
-                <span className="text-xs text-[#6b7280]">Polygon</span>
-              </div>
+        {polyFullyConnected && editing !== "polymarket" ? (
+          <div className="mt-3 space-y-2">
+            <p className="text-xs text-[#a1a8b3]">
+              Wallet:{" "}
+              <span className="font-mono text-[#e8e9ea]">
+                {maskAddress(savedWalletAddress!)}
+              </span>
+            </p>
+            <p className="text-xs text-[#a1a8b3]">
+              API Key:{" "}
+              <span className="font-mono text-[#e8e9ea]">
+                {mask(polymarketKey!.api_key_id)}
+              </span>
+            </p>
+            <p className="text-xs text-[#a1a8b3]">
+              Secret: <span className="text-[#e8e9ea]">configured</span>
+            </p>
+            <p className="text-xs text-[#a1a8b3]">
+              Passphrase: <span className="text-[#e8e9ea]">configured</span>
+            </p>
+            {polymarketKey!.updated_at && (
+              <p className="text-xs text-[#6b7280]">
+                Updated {timeAgo(polymarketKey!.updated_at)}
+              </p>
+            )}
+            <div className="flex gap-2 mt-3">
               <button
-                onClick={handleDisconnectWallet}
+                onClick={() => handleTestConnection("polymarket")}
+                disabled={testing === "polymarket"}
+                className="rounded-lg border border-[#2a2d31] bg-[#1a1d21] px-3 py-1.5 text-xs font-medium text-[#e8e9ea] hover:border-[#e8e9ea]/30 hover:bg-[#22262d] disabled:opacity-50 transition-colors"
+              >
+                {testing === "polymarket" ? "Testing..." : "Test Connection"}
+              </button>
+              <button
+                onClick={() => setEditing("polymarket")}
+                className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors px-2"
+              >
+                Update
+              </button>
+              <button
+                onClick={() => handleRemove("polymarket")}
+                disabled={isPending}
                 className="text-xs text-red-400 hover:text-red-300 transition-colors"
               >
-                Disconnect
+                Remove
               </button>
             </div>
-          ) : savedWalletAddress && !isConnected ? (
-            <div className="flex items-center justify-between rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-amber-400" />
-                <span className="font-mono text-sm text-[#e8e9ea]">
-                  {maskAddress(savedWalletAddress)}
-                </span>
-                <span className="text-xs text-[#6b7280]">saved</span>
-              </div>
-              <div className="flex gap-2">
-                {connectors.map((connector) => (
-                  <button
-                    key={connector.uid}
-                    onClick={() => connect({ connector })}
-                    disabled={isConnecting}
-                    className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors"
-                  >
-                    Reconnect
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {connectors.map((connector) => (
-                <button
-                  key={connector.uid}
-                  onClick={() => connect({ connector })}
-                  disabled={isConnecting}
-                  className="rounded-lg border border-[#2a2d31] bg-[#1a1d21] px-4 py-2.5 text-xs font-medium text-[#e8e9ea] hover:border-[#e8e9ea]/30 hover:bg-[#22262d] disabled:opacity-50 transition-colors"
+          </div>
+        ) : (
+          (editing === "polymarket" || !polyFullyConnected) && (
+            <div className="mt-4 space-y-3">
+              <p className="text-xs text-[#9ca3af]">
+                Get your credentials from{" "}
+                <a
+                  href="https://polymarket.com/settings?tab=builder"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#e8e9ea] underline underline-offset-2 hover:text-white"
                 >
-                  {isConnecting ? "Connecting..." : connector.name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Step 2: CLOB API Credentials */}
-        <div className="mt-5 pt-4 border-t border-[#1a1d21]">
-          <p className="text-xs font-medium text-[#a1a8b3] mb-2">
-            Step 2 — CLOB API Credentials
-          </p>
-
-          {polymarketKey && editing !== "polymarket" ? (
-            <div className="space-y-2">
-              <p className="text-xs text-[#a1a8b3]">
-                API Key:{" "}
-                <span className="font-mono text-[#e8e9ea]">
-                  {mask(polymarketKey.api_key_id)}
-                </span>
+                  polymarket.com &rarr; Profile &rarr; Builders &rarr; Create New
+                </a>
               </p>
-              <p className="text-xs text-[#a1a8b3]">
-                Secret: <span className="text-[#e8e9ea]">configured</span>
-              </p>
-              <p className="text-xs text-[#a1a8b3]">
-                Passphrase: <span className="text-[#e8e9ea]">configured</span>
-              </p>
-              {polymarketKey.updated_at && (
-                <p className="text-xs text-[#6b7280]">
-                  Updated {timeAgo(polymarketKey.updated_at)}
+              <div>
+                <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+                  Wallet Address
+                </label>
+                <input
+                  type="text"
+                  value={polyWalletAddress}
+                  onChange={(e) => setPolyWalletAddress(e.target.value)}
+                  className={INPUT_CLASS}
+                  placeholder="0x..."
+                />
+                <p className="mt-1 text-xs text-[#6b7280]">
+                  Find this on polymarket.com &rarr; Profile
                 </p>
-              )}
-              <div className="flex gap-2 mt-3">
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+                  API Key
+                </label>
+                <input
+                  type="text"
+                  value={polyKey}
+                  onChange={(e) => setPolyKey(e.target.value)}
+                  className={INPUT_CLASS}
+                  placeholder="Your Polymarket CLOB API key"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+                  API Secret
+                </label>
+                <input
+                  type="password"
+                  value={polySecret}
+                  onChange={(e) => setPolySecret(e.target.value)}
+                  className={INPUT_CLASS}
+                  placeholder="Your Polymarket CLOB API secret"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+                  Passphrase
+                </label>
+                <input
+                  type="password"
+                  value={polyPassphrase}
+                  onChange={(e) => setPolyPassphrase(e.target.value)}
+                  className={INPUT_CLASS}
+                  placeholder="Your Polymarket CLOB passphrase"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
                 <button
-                  onClick={() => handleTestConnection("polymarket")}
-                  disabled={testing === "polymarket"}
-                  className="rounded-lg border border-[#2a2d31] bg-[#1a1d21] px-3 py-1.5 text-xs font-medium text-[#e8e9ea] hover:border-[#e8e9ea]/30 hover:bg-[#22262d] disabled:opacity-50 transition-colors"
-                >
-                  {testing === "polymarket" ? "Testing..." : "Test Connection"}
-                </button>
-                <button
-                  onClick={() => setEditing("polymarket")}
-                  className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors px-2"
-                >
-                  Update
-                </button>
-                <button
-                  onClick={() => handleRemove("polymarket")}
+                  onClick={() => handleSave("polymarket")}
                   disabled={isPending}
-                  className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                  className="rounded-lg bg-[#e8e9ea] px-4 py-2 text-xs font-medium text-[#050608] hover:bg-[#c0c5cb] disabled:opacity-50 transition-colors"
                 >
-                  Remove
+                  {isPending ? "Validating & Saving..." : "Save & Validate"}
                 </button>
+                {editing === "polymarket" && (
+                  <button
+                    onClick={() => setEditing(null)}
+                    className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors px-3"
+                  >
+                    Cancel
+                  </button>
+                )}
               </div>
             </div>
-          ) : (
-            (editing === "polymarket" || !polymarketKey) && (
-              <div className="space-y-3">
-                <p className="text-xs text-[#9ca3af]">
-                  Get your CLOB credentials from{" "}
-                  <a
-                    href="https://polymarket.com/settings?tab=builder"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#e8e9ea] underline underline-offset-2 hover:text-white"
-                  >
-                    polymarket.com &rarr; Profile &rarr; Builders &rarr; Create New
-                  </a>
-                </p>
-                <div>
-                  <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
-                    API Key
-                  </label>
-                  <input
-                    type="text"
-                    value={polyKey}
-                    onChange={(e) => setPolyKey(e.target.value)}
-                    className={INPUT_CLASS}
-                    placeholder="Your Polymarket CLOB API key"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
-                    API Secret
-                  </label>
-                  <input
-                    type="password"
-                    value={polySecret}
-                    onChange={(e) => setPolySecret(e.target.value)}
-                    className={INPUT_CLASS}
-                    placeholder="Your Polymarket CLOB API secret"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
-                    Passphrase
-                  </label>
-                  <input
-                    type="password"
-                    value={polyPassphrase}
-                    onChange={(e) => setPolyPassphrase(e.target.value)}
-                    className={INPUT_CLASS}
-                    placeholder="Your Polymarket CLOB passphrase"
-                  />
-                </div>
-                <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={() => handleSave("polymarket")}
-                    disabled={isPending}
-                    className="rounded-lg bg-[#e8e9ea] px-4 py-2 text-xs font-medium text-[#050608] hover:bg-[#c0c5cb] disabled:opacity-50 transition-colors"
-                  >
-                    {isPending ? "Validating & Saving..." : "Save & Validate"}
-                  </button>
-                  {editing === "polymarket" && (
-                    <button
-                      onClick={() => setEditing(null)}
-                      className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors px-3"
-                    >
-                      Cancel
-                    </button>
-                  )}
-                </div>
-              </div>
-            )
-          )}
-        </div>
+          )
+        )}
       </div>
     </div>
   );
