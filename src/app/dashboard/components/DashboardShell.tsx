@@ -102,24 +102,24 @@ export default function DashboardShell({
               )}
 
               {/* External exchange links */}
-              <span className="mx-1.5 h-4 w-px bg-[#1a1d21]" />
+              <span className="mx-2 h-4 w-px bg-[#3b3f46]" />
               <a
                 href="https://kalshi.com/portfolio"
                 target="_blank"
                 rel="noopener noreferrer"
                 title="Kalshi"
-                className="flex h-7 w-7 items-center justify-center rounded opacity-70 transition-opacity hover:opacity-100"
+                className="flex items-center justify-center rounded opacity-85 transition-opacity hover:opacity-100"
               >
-                <img src="/kalshi-icon.png" alt="Kalshi" className="h-5 w-5" />
+                <img src="/kalshi-icon.png" alt="Kalshi" className="h-[22px] w-[22px]" />
               </a>
               <a
                 href="https://polymarket.com/portfolio"
                 target="_blank"
                 rel="noopener noreferrer"
                 title="Polymarket"
-                className="flex h-7 w-7 items-center justify-center rounded opacity-70 transition-opacity hover:opacity-100"
+                className="flex items-center justify-center rounded opacity-85 transition-opacity hover:opacity-100"
               >
-                <img src="/polymarket-icon.svg" alt="Polymarket" className="h-5 w-5" />
+                <img src="/polymarket-icon.svg" alt="Polymarket" className="h-[22px] w-[22px]" />
               </a>
             </div>
           </div>
