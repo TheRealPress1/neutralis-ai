@@ -42,7 +42,7 @@ export default async function ProfilePage() {
         <div className="mb-8">
           <h1 className="text-2xl font-semibold">My Profile</h1>
           <p className="text-sm text-[#a1a8b3] mt-1">
-            Manage your account details and connected exchanges.
+            Manage your account details.
           </p>
         </div>
         <ProfileSettings />

@@ -8,15 +8,17 @@ import MatchesTable from "./MatchesTable";
 import SettingsPage from "./SettingsPage";
 import AutomationPanel from "./AutomationPanel";
 import ActivityLog from "./ActivityLog";
+import ApiKeyManager from "./ApiKeyManager";
 import AuthNav from "@/app/components/AuthNav";
 
-type NavTab = "dashboard" | "automation" | "activity" | "matches" | "settings";
+type NavTab = "dashboard" | "automation" | "activity" | "matches" | "connections" | "settings";
 
 const NAV_ITEMS: { id: NavTab; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
   { id: "automation", label: "Automation" },
   { id: "activity", label: "Activity" },
   { id: "matches", label: "Explore" },
+  { id: "connections", label: "Connections" },
   { id: "settings", label: "Settings" },
 ];
 
@@ -120,6 +122,12 @@ export default function DashboardShell() {
         {activeTab === "matches" && (
           <section className="mt-2">
             <MatchesTable refreshKey={refreshKey} />
+          </section>
+        )}
+
+        {activeTab === "connections" && (
+          <section className="mt-2">
+            <ApiKeyManager />
           </section>
         )}
 
