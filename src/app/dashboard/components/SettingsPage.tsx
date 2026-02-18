@@ -3,7 +3,7 @@
 import RiskProfileEditor from "./RiskProfileEditor";
 import UpgradeBanner from "./UpgradeBanner";
 import AccessCodeGenerator from "./AccessCodeGenerator";
-import { hasAccess, type SubscriptionTier } from "@/app/actions/subscription";
+import { hasAccess, type SubscriptionTier } from "@/lib/subscription";
 
 export default function SettingsPage({
   tier,
