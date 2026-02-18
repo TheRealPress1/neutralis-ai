@@ -11,15 +11,31 @@ export async function setAutomationStatus(
 ): Promise<{ data?: AutomationState; error?: string }> {
   const supabase = createServiceClient();
 
-  // Get current state
-  const { data: current } = await supabase
+  // Get current state (or create initial row)
+  let { data: current } = await supabase
     .from("automation_state")
     .select("*")
     .order("id", { ascending: true })
     .limit(1)
     .single();
 
-  if (!current) return { error: "No automation state found" };
+  if (!current) {
+    const { data: created } = await supabase
+      .from("automation_state")
+      .insert({
+        status: "paused",
+        kill_switch: false,
+        daily_loss_dollars: 0,
+        max_drawdown_dollars: 0,
+        peak_portfolio_value: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+    if (!created) return { error: "Failed to initialize automation state" };
+    current = created;
+  }
 
   const now = new Date().toISOString();
   let updates: Record<string, unknown>;

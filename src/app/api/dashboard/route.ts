@@ -528,7 +528,7 @@ async function getDecisionReasons(supabase: SB, params: URLSearchParams): Promis
   } as DecisionReasons;
 }
 
-async function getAutomationState(supabase: SB): Promise<AutomationState | null> {
+async function getAutomationState(supabase: SB): Promise<AutomationState> {
   const { data } = await supabase
     .from("automation_state")
     .select("*")
@@ -536,5 +536,33 @@ async function getAutomationState(supabase: SB): Promise<AutomationState | null>
     .limit(1)
     .single();
 
-  return data as AutomationState | null;
+  if (data) return data as AutomationState;
+
+  // No row exists yet — create one in "paused" state
+  const now = new Date().toISOString();
+  const { data: created } = await supabase
+    .from("automation_state")
+    .insert({
+      status: "paused",
+      kill_switch: false,
+      daily_loss_dollars: 0,
+      max_drawdown_dollars: 0,
+      peak_portfolio_value: 0,
+      created_at: now,
+      updated_at: now,
+    })
+    .select()
+    .single();
+
+  if (created) return created as AutomationState;
+
+  // Fallback if insert also fails (e.g. table doesn't exist)
+  return {
+    id: 0,
+    status: "paused",
+    kill_switch: false,
+    daily_loss_dollars: 0,
+    max_drawdown_dollars: 0,
+    peak_portfolio_value: 0,
+  } as AutomationState;
 }
