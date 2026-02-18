@@ -28,9 +28,9 @@ const cormorantGaramond = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "Neutralis.ai — Calm, clear AI for thoughtful teams",
+  title: "Neutralis.ai — Automated prediction market arbitrage",
   description:
-    "Neutralis.ai helps teams make better decisions with balanced, transparent AI. No hype — just clarity.",
+    "Neutralis detects arbitrage across prediction markets in real time, evaluates trades through quantitative risk guards, and executes automatically.",
 };
 
 export default function RootLayout({

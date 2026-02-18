@@ -52,10 +52,10 @@ export default function Navbar() {
         <ul className="hidden items-center gap-6 text-sm font-medium text-white/70 sm:flex">
           <li>
             <a
-              href="#outputs"
+              href="#features"
               className="nav-link-glow transition-all duration-250 ease-out hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.25)]"
             >
-              Outputs
+              Features
             </a>
           </li>
           <li>
@@ -63,8 +63,16 @@ export default function Navbar() {
               href="#method"
               className="nav-link-glow transition-all duration-250 ease-out hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.25)]"
             >
-              Method
+              How it Works
             </a>
+          </li>
+          <li>
+            <Link
+              href="/docs"
+              className="nav-link-glow transition-all duration-250 ease-out hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.25)]"
+            >
+              Docs
+            </Link>
           </li>
           <li>
             <a
