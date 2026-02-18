@@ -30,10 +30,6 @@ export default function ExecutionPanel({ refreshKey }: { refreshKey: number }) {
     return () => { cancelled = true; };
   }, [refreshKey]);
 
-  const fillRate = stats && stats.total_orders > 0
-    ? ((stats.filled + stats.partial) / stats.total_orders * 100).toFixed(1)
-    : "0.0";
-
   return (
     <div className="space-y-6">
       {/* Stats bar */}

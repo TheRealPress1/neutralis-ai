@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Email is required" }, { status: 400 });
   }
 
-  const { error } = await (supabase as any).from("waitlist").insert({ email });
+  const { error } = await supabase.from("waitlist").insert({ email });
 
   if (error) {
     if (error.code === "23505") {

@@ -105,24 +105,27 @@ export default function ActivityLog({ refreshKey }: { refreshKey: number }) {
   /* Fetch logs whenever filters or refreshKey change */
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    function load() {
+      setLoading(true);
 
-    const params: { event_type?: string; entity_type?: string; limit?: number } = {
-      limit: 100,
-    };
-    if (eventFilter !== "All")  params.event_type  = eventFilter;
-    if (entityFilter !== "All") params.entity_type = entityFilter;
+      const params: { event_type?: string; entity_type?: string; limit?: number } = {
+        limit: 100,
+      };
+      if (eventFilter !== "All")  params.event_type  = eventFilter;
+      if (entityFilter !== "All") params.entity_type = entityFilter;
 
-    fetchAuditLogs(params)
-      .then((data) => {
-        if (!cancelled) setLogs(data);
-      })
-      .catch(() => {
-        if (!cancelled) setLogs([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      fetchAuditLogs(params)
+        .then((data) => {
+          if (!cancelled) setLogs(data);
+        })
+        .catch(() => {
+          if (!cancelled) setLogs([]);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }
+    load();
 
     return () => {
       cancelled = true;

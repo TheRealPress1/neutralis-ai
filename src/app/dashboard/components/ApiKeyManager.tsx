@@ -61,7 +61,13 @@ export default function ApiKeyManager() {
   }
 
   useEffect(() => {
-    load();
+    async function init() {
+      const result = await getApiKeys();
+      if (result.error) setError(result.error);
+      setKeys((result.keys as StoredKey[]) ?? []);
+      setLoading(false);
+    }
+    init();
   }, []);
 
   // Save wallet address when connected

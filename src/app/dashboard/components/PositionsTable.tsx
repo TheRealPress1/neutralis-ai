@@ -21,11 +21,14 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    fetchPositions(tab)
-      .then((d) => { if (!cancelled) setPositions(d); })
-      .catch(() => { if (!cancelled) setPositions([]); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+    function load() {
+      setLoading(true);
+      fetchPositions(tab)
+        .then((d) => { if (!cancelled) setPositions(d); })
+        .catch(() => { if (!cancelled) setPositions([]); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    }
+    load();
     return () => { cancelled = true; };
   }, [refreshKey, tab]);
 

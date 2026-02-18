@@ -26,11 +26,14 @@ export default function MatchesTable({ refreshKey }: { refreshKey: number }) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    fetchMatches(25)
-      .then((d) => { if (!cancelled) setMatches(d); })
-      .catch(() => { if (!cancelled) setMatches([]); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+    function load() {
+      setLoading(true);
+      fetchMatches(25)
+        .then((d) => { if (!cancelled) setMatches(d); })
+        .catch(() => { if (!cancelled) setMatches([]); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    }
+    load();
     return () => { cancelled = true; };
   }, [refreshKey]);
 

@@ -10,6 +10,7 @@ import AutomationPanel from "./AutomationPanel";
 import ActivityLog from "./ActivityLog";
 import ApiKeyManager from "./ApiKeyManager";
 import AuthNav from "@/app/components/AuthNav";
+import Link from "next/link";
 
 type NavTab = "dashboard" | "automation" | "activity" | "matches" | "connections" | "settings";
 
@@ -58,9 +59,9 @@ export default function DashboardShell() {
       <nav className="fixed top-0 z-50 w-full border-b border-[#1a1d21] bg-[#050608]/80 backdrop-blur-lg">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-8">
-            <a href="/" className="text-lg font-semibold tracking-tight">
+            <Link href="/" className="text-lg font-semibold tracking-tight">
               Neutralis.ai
-            </a>
+            </Link>
             {/* Tab navigation */}
             <div className="flex items-center gap-1">
               {NAV_ITEMS.map((item) => (

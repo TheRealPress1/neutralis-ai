@@ -38,11 +38,14 @@ export default function DecisionReasonDrawer({
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    fetchDecisionReasons(decisionId)
-      .then((d) => { if (!cancelled) setData(d); })
-      .catch(() => { if (!cancelled) setData(null); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+    function load() {
+      setLoading(true);
+      fetchDecisionReasons(decisionId)
+        .then((d) => { if (!cancelled) setData(d); })
+        .catch(() => { if (!cancelled) setData(null); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    }
+    load();
     return () => { cancelled = true; };
   }, [decisionId]);
 

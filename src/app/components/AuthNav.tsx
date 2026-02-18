@@ -4,9 +4,10 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { signOut } from "@/app/actions/auth";
 import Link from "next/link";
+import type { User } from "@supabase/supabase-js";
 
 export default function AuthNav() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLLIElement>(null);

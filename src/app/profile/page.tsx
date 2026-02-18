@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import ProfileSettings from "./components/ProfileSettings";
 import AuthNav from "@/app/components/AuthNav";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "My Profile | Neutralis.ai",
@@ -24,9 +25,9 @@ export default async function ProfilePage() {
       <nav className="fixed top-0 z-50 w-full border-b border-[#22262d] bg-[#08090c]/80 backdrop-blur-lg">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-6">
-            <a href="/" className="text-lg font-semibold tracking-tight">
+            <Link href="/" className="text-lg font-semibold tracking-tight">
               Neutralis.ai
-            </a>
+            </Link>
             <span className="text-xs text-[#a1a8b3]">/</span>
             <span className="text-sm font-medium text-[#eceef0]">
               My Profile

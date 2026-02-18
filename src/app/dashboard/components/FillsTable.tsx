@@ -30,11 +30,14 @@ export default function FillsTable({ refreshKey }: { refreshKey: number }) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    fetchFills(50)
-      .then((d) => { if (!cancelled) setFills(d); })
-      .catch(() => { if (!cancelled) setFills([]); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+    function load() {
+      setLoading(true);
+      fetchFills(50)
+        .then((d) => { if (!cancelled) setFills(d); })
+        .catch(() => { if (!cancelled) setFills([]); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    }
+    load();
     return () => { cancelled = true; };
   }, [refreshKey]);
 

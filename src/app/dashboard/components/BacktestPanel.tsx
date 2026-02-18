@@ -65,7 +65,7 @@ export default function BacktestPanel() {
   const [minEdge, setMinEdge] = useState("1.0");
   const [maxPosition, setMaxPosition] = useState("25");
   const [maxExposure, setMaxExposure] = useState("500");
-  const [minSimilarity, setMinSimilarity] = useState("0.70");
+  const [minSimilarity] = useState("0.70");
 
   // Optimizer state
   const [optObjective, setOptObjective] = useState("total_pnl");

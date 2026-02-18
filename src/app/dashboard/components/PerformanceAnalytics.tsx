@@ -88,27 +88,30 @@ export default function PerformanceAnalytics({
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    function load() {
+      setLoading(true);
 
-    Promise.all([
-      fetchAnalyticsSummary(),
-      fetchPnLTimeline(90),
-      fetchBreakdown(),
-      fetchGuardStats(),
-    ])
-      .then(([sum, tl, bd, gs]) => {
-        if (cancelled) return;
-        setSummary(sum);
-        setTimeline(tl);
-        setCategories(bd.by_category);
-        setVenues(bd.by_venue);
-        setDistribution(bd.pnl_distribution);
-        setGuards(gs);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      Promise.all([
+        fetchAnalyticsSummary(),
+        fetchPnLTimeline(90),
+        fetchBreakdown(),
+        fetchGuardStats(),
+      ])
+        .then(([sum, tl, bd, gs]) => {
+          if (cancelled) return;
+          setSummary(sum);
+          setTimeline(tl);
+          setCategories(bd.by_category);
+          setVenues(bd.by_venue);
+          setDistribution(bd.pnl_distribution);
+          setGuards(gs);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }
+    load();
 
     return () => {
       cancelled = true;

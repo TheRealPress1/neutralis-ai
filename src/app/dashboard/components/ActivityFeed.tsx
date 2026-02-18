@@ -43,23 +43,26 @@ export default function ActivityFeed({ refreshKey }: { refreshKey: number }) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    Promise.all([fetchSignals(20), fetchDecisions(20)])
-      .then(([signals, decisions]) => {
-        if (cancelled) return;
-        const merged: ActivityItem[] = [
-          ...signals.map((s) => ({ kind: "signal" as const, data: s })),
-          ...decisions.map((d) => ({ kind: "decision" as const, data: d })),
-        ];
-        merged.sort(
-          (a, b) =>
-            new Date(b.data.created_at).getTime() -
-            new Date(a.data.created_at).getTime(),
-        );
-        setItems(merged);
-      })
-      .catch(() => { if (!cancelled) setItems([]); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+    function load() {
+      setLoading(true);
+      Promise.all([fetchSignals(20), fetchDecisions(20)])
+        .then(([signals, decisions]) => {
+          if (cancelled) return;
+          const merged: ActivityItem[] = [
+            ...signals.map((s) => ({ kind: "signal" as const, data: s })),
+            ...decisions.map((d) => ({ kind: "decision" as const, data: d })),
+          ];
+          merged.sort(
+            (a, b) =>
+              new Date(b.data.created_at).getTime() -
+              new Date(a.data.created_at).getTime(),
+          );
+          setItems(merged);
+        })
+        .catch(() => { if (!cancelled) setItems([]); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    }
+    load();
     return () => { cancelled = true; };
   }, [refreshKey]);
 
@@ -84,7 +87,7 @@ export default function ActivityFeed({ refreshKey }: { refreshKey: number }) {
           </p>
         ) : (
           <ul>
-            {items.map((item, i) => {
+            {items.map((item) => {
               if (item.kind === "signal") {
                 const s = item.data;
                 return (

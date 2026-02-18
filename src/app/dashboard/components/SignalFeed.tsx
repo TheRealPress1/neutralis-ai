@@ -137,8 +137,11 @@ export default function SignalFeed({ refreshKey }: { refreshKey: number }) {
 
   // Load on mount and refreshKey changes
   useEffect(() => {
-    setLoading(true);
-    loadData();
+    function load() {
+      setLoading(true);
+      loadData();
+    }
+    load();
   }, [refreshKey, loadData]);
 
   // Independent 10-second polling

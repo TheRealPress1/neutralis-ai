@@ -276,7 +276,7 @@ export interface DecisionReasons {
   selection_score: number | null;
   guard_results: GuardResult[];
   allocation_reasons: string[];
-  features_json: Record<string, any>;
+  features_json: Record<string, unknown>;
 }
 
 // --- Enriched Signals & Regime ---
@@ -297,8 +297,8 @@ export interface EnrichedSignal {
 
 export interface RegimeState {
   regime: "normal" | "risk_off";
-  metrics_json: Record<string, any>;
-  params_json: Record<string, any>;
+  metrics_json: Record<string, unknown>;
+  params_json: Record<string, unknown>;
 }
 
 // --- Automation / Kill Switch ---

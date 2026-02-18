@@ -35,7 +35,7 @@ export async function getRiskProfiles(): Promise<{
   const supabase = await createClient();
 
   // Fetch global profiles (user_id IS NULL) — shared presets
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("risk_profiles")
     .select("*")
     .is("user_id", null)
@@ -55,7 +55,7 @@ export async function activateRiskProfile(
   if (!user) return { error: "Not authenticated" };
 
   // Deactivate all global profiles first
-  const { error: deactivateErr } = await (supabase as any)
+  const { error: deactivateErr } = await supabase
     .from("risk_profiles")
     .update({ is_active: false })
     .is("user_id", null);
@@ -63,7 +63,7 @@ export async function activateRiskProfile(
   if (deactivateErr) return { error: deactivateErr.message };
 
   // Activate the selected one
-  const { error: activateErr } = await (supabase as any)
+  const { error: activateErr } = await supabase
     .from("risk_profiles")
     .update({ is_active: true, updated_at: new Date().toISOString() })
     .eq("id", profileId);
@@ -82,7 +82,7 @@ export async function updateRiskProfile(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
-  const { error } = await (supabase as any)
+  const { error } = await supabase
     .from("risk_profiles")
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq("id", profileId);

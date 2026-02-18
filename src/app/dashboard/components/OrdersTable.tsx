@@ -45,12 +45,15 @@ export default function OrdersTable({ refreshKey }: { refreshKey: number }) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    const status = tab === "all" ? undefined : tab;
-    fetchOrders(50, status)
-      .then((d) => { if (!cancelled) setOrders(d); })
-      .catch(() => { if (!cancelled) setOrders([]); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+    function load() {
+      setLoading(true);
+      const status = tab === "all" ? undefined : tab;
+      fetchOrders(50, status)
+        .then((d) => { if (!cancelled) setOrders(d); })
+        .catch(() => { if (!cancelled) setOrders([]); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    }
+    load();
     return () => { cancelled = true; };
   }, [refreshKey, tab]);
 

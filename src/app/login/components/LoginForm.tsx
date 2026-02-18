@@ -83,7 +83,7 @@ export default function LoginForm({ redirect }: { redirect?: string }) {
         </button>
 
         <div className="text-center text-sm text-[#9ca3af]">
-          Don't have an account?{" "}
+          Don&apos;t have an account?{" "}
           <Link
             href="/signup"
             className="text-[#e8e9ea] hover:text-white transition-colors font-medium"

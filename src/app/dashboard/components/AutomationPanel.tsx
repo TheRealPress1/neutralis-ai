@@ -70,22 +70,25 @@ export default function AutomationPanel({
   /* Fetch automation state + recent decisions */
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    Promise.all([fetchAutomationState(), fetchDecisions(20)])
-      .then(([automationState, recentDecisions]) => {
-        if (cancelled) return;
-        setState(automationState);
-        setDecisions(recentDecisions);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setState(null);
-          setDecisions([]);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    function load() {
+      setLoading(true);
+      Promise.all([fetchAutomationState(), fetchDecisions(20)])
+        .then(([automationState, recentDecisions]) => {
+          if (cancelled) return;
+          setState(automationState);
+          setDecisions(recentDecisions);
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setState(null);
+            setDecisions([]);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }
+    load();
     return () => {
       cancelled = true;
     };

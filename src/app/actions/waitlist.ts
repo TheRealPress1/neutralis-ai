@@ -25,7 +25,7 @@ export async function joinWaitlist(
 
   const supabase = await createClient();
 
-  const { error } = await (supabase as any).from("waitlist").insert({ email });
+  const { error } = await supabase.from("waitlist").insert({ email });
 
   if (error) {
     // Unique constraint violation — email already exists

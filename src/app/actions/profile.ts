@@ -10,7 +10,7 @@ export async function getProfile() {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated", profile: null };
 
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("profiles")
     .select("id, email, full_name, created_at, updated_at")
     .eq("id", user.id)
@@ -29,7 +29,7 @@ export async function updateProfile(formData: FormData) {
 
   const fullName = (formData.get("full_name") as string)?.trim() ?? "";
 
-  const { error } = await (supabase as any)
+  const { error } = await supabase
     .from("profiles")
     .update({ full_name: fullName, updated_at: new Date().toISOString() })
     .eq("id", user.id);
