@@ -49,7 +49,7 @@ export default function Navbar() {
           Neutralis.ai
         </Link>
 
-        <ul className="hidden items-center gap-6 font-[family-name:var(--font-cormorant)] text-base font-medium tracking-wide text-white/70 sm:flex">
+        <ul className="hidden items-center gap-6 text-sm font-medium text-white/70 sm:flex">
           <li>
             <a
               href="#outputs"
