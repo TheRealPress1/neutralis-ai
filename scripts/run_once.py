@@ -18,13 +18,14 @@ from neutralis.execution.executor import PaperExecutor
 from neutralis.execution.models import TickContext
 from neutralis.profiles import load_active_profile
 from neutralis.core.cross_scanner import scan_cross_platform
+from neutralis.core.directional_scanner import scan_high_probability
 from neutralis.core.disagreement import compute_disagreement
 from neutralis.core.features import compute_market_features, estimate_costs
 from neutralis.core.matcher import match_markets
 from neutralis.core.scanners import scan_complement_arb
 from neutralis.core.three_way import group_kalshi_three_way, scan_three_way_arb
 from neutralis.core.scoring import score_signal
-from neutralis.guard.decision import evaluate_signal, select_portfolio
+from neutralis.guard.decision import evaluate_directional_signal, evaluate_signal, select_portfolio
 from neutralis.guard.regime import apply_regime_to_pipeline, compute_regime
 from neutralis.logging import get_logger
 from neutralis.models import Decision, DecisionVerdict, MarketType, NormalizedMarket, Signal
@@ -64,6 +65,7 @@ class RunStats:
     exit_pnl: float = 0.0
     regime: str = "normal"
     disagreement_index: float = 0.0
+    directional_signals: int = 0
     orders_created: int = 0
     fills_created: int = 0
 
@@ -167,7 +169,10 @@ def run_once(run_number: int = 0) -> RunStats:
         logger.info("Step 0c: Evaluating exit strategies")
         with PostgresStorage(settings.db) as exit_storage:
             exit_portfolio = PortfolioManager(exit_storage, settings.portfolio)
-            exits = exit_portfolio.evaluate_exits(settings, settings.exits)
+            exits = exit_portfolio.evaluate_exits(
+                settings, settings.exits,
+                directional_config=settings.directional,
+            )
             for pos, reason, price in exits:
                 closed = exit_portfolio.execute_exit(pos, reason, price)
                 exit_count += 1
@@ -232,6 +237,14 @@ def run_once(run_number: int = 0) -> RunStats:
     # Step 3c: Cross-platform signal scan
     logger.info("Step 3c: Scanning matched pairs for price discrepancies")
     xp_signals = scan_cross_platform(pairs, settings.matching, pipeline_config=settings.pipeline)
+
+    # Step 3f: High-probability directional scan (sports markets)
+    directional_signals: list[Signal] = []
+    if settings.directional.enabled:
+        logger.info("Step 3f: Running directional scanner on sports markets")
+        all_normalized = kalshi_markets + poly_markets
+        directional_signals = scan_high_probability(all_normalized, settings.directional)
+        logger.info("Directional scanner: %d signals found", len(directional_signals))
 
     # Alert on signals found
     if complement_signals or three_way_signals or xp_signals:
@@ -353,6 +366,53 @@ def run_once(run_number: int = 0) -> RunStats:
             scored = _score_signal(signal, market, storage, match_score=match_conf)
             signal_market_pairs.append((scored, market))
 
+        # Set up PaperExecutor (used by both directional and arb paths)
+        paper_executor = PaperExecutor(storage, portfolio)
+        total_orders = 0
+        total_fills = 0
+
+        # 4a3: Score and evaluate directional signals (isolated portfolio)
+        directional_selected = 0
+        if directional_signals:
+            dir_snapshot = portfolio.get_snapshot_filtered(
+                "high_probability_directional",
+            )
+            logger.info(
+                "Directional portfolio: %d open, $%.2f exposure",
+                dir_snapshot.open_position_count,
+                dir_snapshot.total_exposure_dollars,
+            )
+            for signal in directional_signals:
+                market = signal.market_snapshot
+                if market is None:
+                    continue
+                scored = _score_signal(signal, market, storage)
+                snap_id = storage.save_market_snapshot(market)
+                storage.save_signal(scored, snapshot_id=snap_id)
+
+                decision = evaluate_directional_signal(
+                    scored, market, settings.directional,
+                    portfolio_snapshot=dir_snapshot,
+                )
+                decision_id = storage.save_decision(decision)
+
+                if decision.verdict == DecisionVerdict.PASS:
+                    directional_selected += 1
+                    exec_result = paper_executor.execute(
+                        scored, decision, decision_id, tick_ctx, market=market,
+                    )
+                    total_orders += len(exec_result.orders)
+                    total_fills += len(exec_result.fills)
+                    # Refresh directional snapshot after each fill
+                    dir_snapshot = portfolio.get_snapshot_filtered(
+                        "high_probability_directional",
+                    )
+
+            logger.info(
+                "Directional: %d signals, %d selected",
+                len(directional_signals), directional_selected,
+            )
+
         # 4c: Evaluate all signals through guard (provisional)
         provisional: list[tuple[Signal, Decision]] = []
         snapshot_ids: dict[str, int] = {}  # signal_id -> snapshot_id
@@ -385,10 +445,7 @@ def run_once(run_number: int = 0) -> RunStats:
         )
 
         # 4e: Save decisions and fill only selected (via PaperExecutor)
-        paper_executor = PaperExecutor(storage, portfolio)
         selected_count = 0
-        total_orders = 0
-        total_fills = 0
         for signal, decision in ranked:
             decision_id = storage.save_decision(decision)
 
@@ -474,11 +531,12 @@ def run_once(run_number: int = 0) -> RunStats:
 
     elapsed = (time.monotonic() - start) * 1000
     logger.info(
-        "Pipeline complete: %d complement, %d 3-way, %d cross-platform, %d matches, "
-        "%d pass (%d selected), %d reject, regime=%s, %.0fms",
+        "Pipeline complete: %d complement, %d 3-way, %d cross-platform, %d directional, "
+        "%d matches, %d pass (%d selected), %d reject, regime=%s, %.0fms",
         len(complement_signals),
         len(three_way_signals),
         len(xp_signals),
+        len(directional_signals),
         len(pairs),
         pass_count,
         selected_count,
@@ -495,6 +553,7 @@ def run_once(run_number: int = 0) -> RunStats:
         complement_signals=len(complement_signals),
         three_way_signals=len(three_way_signals),
         cross_platform_signals=len(xp_signals),
+        directional_signals=len(directional_signals),
         matches=len(pairs),
         decisions_pass=pass_count,
         decisions_reject=reject_count,

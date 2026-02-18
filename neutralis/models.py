@@ -29,6 +29,7 @@ class SignalType(str, Enum):
     COMPLEMENT_ARB = "complement_arb"
     CROSS_PLATFORM_DISCREPANCY = "cross_platform_discrepancy"
     THREE_WAY_ARB = "three_way_arb"
+    HIGH_PROBABILITY_DIRECTIONAL = "high_probability_directional"
 
 
 class DecisionVerdict(str, Enum):
@@ -165,6 +166,10 @@ class Signal:
     time_to_resolution_days: float = 0.0
     roi_per_day: float = 0.0
     features_json: dict = field(default_factory=dict)
+    # Directional strategy fields
+    implied_probability: float = 0.0
+    entry_side: str = ""
+    probability_floor: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -226,6 +231,7 @@ class Position:
     category: str = "other"
     exit_reason: Optional[str] = None
     exit_price: Optional[float] = None
+    signal_type: str = ""
 
 
 @dataclass(frozen=True)

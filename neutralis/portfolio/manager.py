@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import datetime
 
 from neutralis.categories import classify_market
-from neutralis.config import ExitConfig, PortfolioConfig, Settings
+from neutralis.config import DirectionalConfig, ExitConfig, PortfolioConfig, Settings
 from neutralis.logging import get_logger
 from neutralis.models import (
     Decision,
@@ -15,6 +15,7 @@ from neutralis.models import (
     PositionStatus,
     PortfolioSnapshot,
     Signal,
+    SignalType,
     Trade,
     TradeSide,
 )
@@ -126,7 +127,9 @@ class PortfolioManager:
 
         return trades
 
-    def _upsert_position(self, trade: Trade) -> Position:
+    def _upsert_position(
+        self, trade: Trade, signal_type: str = "",
+    ) -> Position:
         """Create or update an open position for this trade's ticker/venue/side."""
         existing = self._storage.get_open_position(
             ticker=trade.ticker, venue=trade.venue, side=trade.side,
@@ -145,6 +148,7 @@ class PortfolioManager:
                 quantity=trade.quantity,
                 trade_count=1,
                 category=category,
+                signal_type=signal_type,
             )
             self._storage.save_position(position)
             return position
@@ -240,6 +244,37 @@ class PortfolioManager:
     def get_snapshot(self) -> PortfolioSnapshot:
         """Build an immutable snapshot of current portfolio state."""
         positions = self._storage.get_open_positions()
+
+        total_exposure = 0.0
+        total_realized = 0.0
+        total_unrealized = 0.0
+        venue_map: dict[str, float] = defaultdict(float)
+        event_map: dict[str, float] = defaultdict(float)
+
+        for p in positions:
+            total_exposure += p.size_dollars
+            total_realized += p.realized_pnl
+            total_unrealized += p.unrealized_pnl
+            venue_map[p.venue] += p.size_dollars
+            event_map[p.event_ticker] += p.size_dollars
+
+        return PortfolioSnapshot(
+            positions=tuple(positions),
+            total_exposure_dollars=round(total_exposure, 2),
+            total_realized_pnl=round(total_realized, 4),
+            total_unrealized_pnl=round(total_unrealized, 4),
+            open_position_count=len(positions),
+            venue_exposure=tuple(sorted(venue_map.items(), key=lambda x: -x[1])),
+            event_exposure=tuple(sorted(event_map.items(), key=lambda x: -x[1])),
+        )
+
+    def get_snapshot_filtered(self, signal_type: str) -> PortfolioSnapshot:
+        """Build a snapshot filtered to positions of a specific signal type.
+
+        Used for portfolio isolation — directional positions are evaluated
+        against directional-only exposure limits.
+        """
+        positions = self._storage.get_open_positions_by_signal_type(signal_type)
 
         total_exposure = 0.0
         total_realized = 0.0
@@ -363,6 +398,7 @@ class PortfolioManager:
         self,
         settings: Settings,
         exit_config: ExitConfig | None = None,
+        directional_config: DirectionalConfig | None = None,
     ) -> list[tuple[Position, str, float]]:
         """Evaluate exit conditions for all open positions.
 
@@ -438,6 +474,12 @@ class PortfolioManager:
             # 3. Time decay
             if exit_reason is None:
                 exit_reason = self._check_time_decay(pos, current_bid, cfg)
+
+            # 4. Probability floor (directional positions only)
+            if exit_reason is None and pos.signal_type == SignalType.HIGH_PROBABILITY_DIRECTIONAL.value:
+                dir_cfg = directional_config or DirectionalConfig()
+                if current_bid <= dir_cfg.probability_floor:
+                    exit_reason = "probability_floor"
 
             if exit_reason is not None:
                 exits.append((pos, exit_reason, current_bid))
