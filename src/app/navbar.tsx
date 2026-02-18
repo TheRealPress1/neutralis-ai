@@ -30,7 +30,7 @@ export default function Navbar() {
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
       onMouseMove={handleMouseMove}
-      className={`fixed top-0 z-50 w-full border-b transition-all duration-300 relative overflow-hidden ${
+      className={`fixed top-0 z-50 w-full border-b transition-all duration-300 relative ${
         scrolled
           ? "border-white/10 bg-black/30 backdrop-blur-xl"
           : "border-white/[0.06] bg-black/15 backdrop-blur-[10px]"
@@ -44,12 +44,12 @@ export default function Navbar() {
       <div className="relative z-10 mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
         <Link
           href="/"
-          className="text-lg font-semibold tracking-tight text-white/90"
+          className="font-[family-name:var(--font-italiana)] text-xl font-normal tracking-[0.08em] text-white/90"
         >
           Neutralis.ai
         </Link>
 
-        <ul className="hidden items-center gap-6 text-sm font-medium text-white/70 sm:flex">
+        <ul className="hidden items-center gap-6 font-[family-name:var(--font-cormorant)] text-base font-medium tracking-wide text-white/70 sm:flex">
           <li>
             <a
               href="#outputs"

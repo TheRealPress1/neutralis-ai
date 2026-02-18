@@ -67,7 +67,7 @@ export default function Home() {
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-lg text-[#c8ccd2]">
             Neutralis uses automated quantitative systems to identify
-            mis-priced probabilities, manage risk at the portfolio level, and
+            mispriced probabilities, manage risk at the portfolio level, and
             execute trades systematically across prediction&nbsp;markets.
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -90,7 +90,7 @@ export default function Home() {
       {/* ── Outputs ──────────────────────────────────────── */}
       <section id="outputs" className="border-t border-[#1a1d21] py-24">
         <div className="mx-auto max-w-5xl px-6">
-          <h2 className="text-center text-3xl font-bold tracking-tight">
+          <h2 className="text-center text-3xl font-[family-name:var(--font-italiana)] font-normal uppercase tracking-[0.08em]">
             What Neutralis delivers
           </h2>
           <div className="mt-14 grid gap-8 md:grid-cols-2">
@@ -99,7 +99,7 @@ export default function Home() {
                 key={o.title}
                 className="card-panel rounded-xl p-8"
               >
-                <h3 className="text-lg font-semibold">{o.title}</h3>
+                <h3 className="font-[family-name:var(--font-cormorant)] text-xl font-medium">{o.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-[#9ca3af]">
                   {o.description}
                 </p>
@@ -112,7 +112,7 @@ export default function Home() {
       {/* ── Method ─────────────────────────────────────────── */}
       <section id="method" className="metallic-band border-t border-[#1a1d21] py-24">
         <div className="mx-auto max-w-5xl px-6">
-          <h2 className="text-center text-3xl font-bold tracking-tight">
+          <h2 className="text-center text-3xl font-[family-name:var(--font-italiana)] font-normal uppercase tracking-[0.08em]">
             How it works
           </h2>
           <div className="mt-14 grid gap-8 md:grid-cols-3">
@@ -124,7 +124,7 @@ export default function Home() {
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#050608] text-lg font-bold text-[#c0c5cb]">
                   {step.number}
                 </div>
-                <h3 className="text-lg font-semibold">{step.title}</h3>
+                <h3 className="font-[family-name:var(--font-cormorant)] text-xl font-medium">{step.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-[#9ca3af]">
                   {step.description}
                 </p>
@@ -137,7 +137,7 @@ export default function Home() {
       {/* ── Waitlist ────────────────────────────────────────── */}
       <section id="waitlist" className="border-t border-[#1a1d21] py-24">
         <div className="mx-auto flex max-w-xl flex-col items-center px-6 text-center">
-          <h2 className="text-3xl font-bold tracking-tight">
+          <h2 className="text-3xl font-[family-name:var(--font-italiana)] font-normal uppercase tracking-[0.08em]">
             Get early access
           </h2>
           <p className="mt-4 text-[#9ca3af]">
