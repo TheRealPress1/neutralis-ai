@@ -96,7 +96,12 @@ export default async function Home() {
       {/* ── Footer ──────────────────────────────────────────── */}
       <footer className="border-t border-[#1a1d21] py-10">
         <div className="mx-auto flex max-w-5xl flex-col items-center gap-4 px-6 text-sm text-[#9ca3af] sm:flex-row sm:justify-between">
-          <span>&copy; {new Date().getFullYear()} Neutralis.ai</span>
+          <span className="flex items-center gap-2">
+            &copy; {new Date().getFullYear()} Neutralis.ai
+            <a href="mailto:neutralis.ai@gmail.com" className="text-[#9ca3af] transition-colors hover:text-[#e8e9ea]" aria-label="Email us">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+            </a>
+          </span>
           <ul className="flex gap-6">
             <li>
               <Link
@@ -116,7 +121,7 @@ export default async function Home() {
             </li>
             <li>
               <a
-                href="#"
+                href="mailto:neutralis.ai@gmail.com"
                 className="transition-colors hover:text-[#e8e9ea]"
               >
                 Contact
