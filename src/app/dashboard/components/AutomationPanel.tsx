@@ -141,30 +141,30 @@ export default function AutomationPanel({
     return (
       <div className="space-y-6">
         <div className="card-panel rounded-xl p-6">
-          <div className="h-8 w-48 animate-pulse rounded bg-[#0a0d10]" />
+          <div className="h-8 w-48 animate-pulse rounded bg-[#12151a]" />
           <div className="mt-4 flex gap-4">
-            <div className="h-12 w-48 animate-pulse rounded-lg bg-[#0a0d10]" />
-            <div className="h-12 w-40 animate-pulse rounded-lg bg-[#0a0d10]" />
+            <div className="h-12 w-48 animate-pulse rounded-lg bg-[#12151a]" />
+            <div className="h-12 w-40 animate-pulse rounded-lg bg-[#12151a]" />
           </div>
         </div>
         <div className="card-panel rounded-xl p-6">
-          <div className="h-6 w-32 animate-pulse rounded bg-[#0a0d10]" />
+          <div className="h-6 w-32 animate-pulse rounded bg-[#12151a]" />
           <div className="mt-4 grid grid-cols-3 gap-4">
             {Array.from({ length: 3 }).map((_, i) => (
               <div
                 key={i}
-                className="h-20 animate-pulse rounded-lg bg-[#0a0d10]"
+                className="h-20 animate-pulse rounded-lg bg-[#12151a]"
               />
             ))}
           </div>
         </div>
         <div className="card-panel rounded-xl p-6">
-          <div className="h-6 w-40 animate-pulse rounded bg-[#0a0d10]" />
+          <div className="h-6 w-40 animate-pulse rounded bg-[#12151a]" />
           <div className="mt-4 space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={i}
-                className="h-10 animate-pulse rounded bg-[#0a0d10]"
+                className="h-10 animate-pulse rounded bg-[#12151a]"
               />
             ))}
           </div>
@@ -209,7 +209,7 @@ export default function AutomationPanel({
                 />
               </div>
               <div>
-                <h2 className="text-lg font-bold tracking-tight">
+                <h2 className="font-[family-name:var(--font-italiana)] text-xl font-normal tracking-[0.04em]">
                   Automation{" "}
                   <span className={cfg.text}>{cfg.label}</span>
                 </h2>
@@ -297,7 +297,7 @@ export default function AutomationPanel({
       {/* ── Risk Metrics ───────────────────────────────────────── */}
       <div className="card-panel rounded-xl">
         <div className="border-b border-[#1a1d21] px-6 py-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
+          <h2 className="font-[family-name:var(--font-cormorant)] text-base font-medium tracking-wide text-[#9ca3af]">
             Risk Metrics
           </h2>
         </div>
@@ -356,16 +356,22 @@ export default function AutomationPanel({
       {/* ── Recent Candidates ──────────────────────────────────── */}
       <div className="card-panel rounded-xl">
         <div className="border-b border-[#1a1d21] px-6 py-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
+          <h2 className="font-[family-name:var(--font-cormorant)] text-base font-medium tracking-wide text-[#9ca3af]">
             Recent Candidates
           </h2>
         </div>
 
         <div className="max-h-[480px] overflow-y-auto">
           {decisions.length === 0 ? (
-            <p className="px-6 py-10 text-center text-[#9ca3af]">
-              No decisions yet
-            </p>
+            <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mb-3 h-10 w-10 text-[#2a2d31]">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+              </svg>
+              <p className="text-sm text-[#9ca3af]">No candidates yet</p>
+              <p className="mt-1 text-xs text-[#3b3f46]">
+                Trade candidates will appear here as the system evaluates signals.
+              </p>
+            </div>
           ) : (
             <table className="w-full text-left text-sm">
               <thead>

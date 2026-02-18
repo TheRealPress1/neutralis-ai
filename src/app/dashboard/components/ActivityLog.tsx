@@ -140,7 +140,7 @@ export default function ActivityLog({ refreshKey }: { refreshKey: number }) {
     <div className="card-panel rounded-xl">
       {/* ---------- Filter bar ---------- */}
       <div className="flex flex-wrap items-center gap-3 border-b border-[#1a1d21] px-5 py-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
+        <h2 className="font-[family-name:var(--font-cormorant)] text-base font-medium tracking-wide text-[#9ca3af]">
           Activity Log
         </h2>
 
@@ -202,7 +202,7 @@ export default function ActivityLog({ refreshKey }: { refreshKey: number }) {
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
-                className="h-12 animate-pulse rounded bg-[#0a0d10]"
+                className="h-12 animate-pulse rounded bg-[#12151a]"
               />
             ))}
           </div>

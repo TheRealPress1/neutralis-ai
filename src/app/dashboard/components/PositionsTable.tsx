@@ -38,7 +38,7 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
     <div className="card-panel rounded-xl">
       {/* Header + tabs */}
       <div className="flex items-center justify-between border-b border-[#1a1d21] px-5 py-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
+        <h2 className="font-[family-name:var(--font-cormorant)] text-base font-medium tracking-wide text-[#9ca3af]">
           Positions
         </h2>
         <div className="flex gap-1">
@@ -79,20 +79,28 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
                 <tr key={i} className="border-t border-[#1a1d21]">
                   {Array.from({ length: 6 }).map((_, j) => (
                     <td key={j} className="px-5 py-3">
-                      <div className="h-4 w-16 animate-pulse rounded bg-[#0a0d10]" />
+                      <div className="h-4 w-16 animate-pulse rounded bg-[#12151a]" />
                     </td>
                   ))}
                 </tr>
               ))
             ) : positions.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-5 py-10 text-center text-[#9ca3af]">
-                  No {tab} positions
+                <td colSpan={6} className="px-5 py-16 text-center">
+                  <div className="flex flex-col items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mb-3 h-10 w-10 text-[#2a2d31]">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6" />
+                    </svg>
+                    <p className="text-sm text-[#9ca3af]">No {tab} positions</p>
+                    <p className="mt-1 text-xs text-[#3b3f46]">
+                      {tab === "open" ? "Positions will appear here when the system opens trades." : "Closed positions will be shown here."}
+                    </p>
+                  </div>
                 </td>
               </tr>
             ) : (
               positions.map((p) => (
-                <tr key={p.id} className="border-t border-[#1a1d21]">
+                <tr key={p.id} className="border-t border-[#1a1d21] transition-colors hover:bg-white/[0.02]">
                   <td className="px-5 py-3 font-mono text-xs">{p.ticker}</td>
                   <td className="px-5 py-3">
                     <span className="rounded border border-[#1a1d21] bg-[#0a0d10] px-2 py-0.5 text-xs uppercase">

@@ -260,7 +260,7 @@ export default function RiskProfileEditor() {
 
   return (
     <div className="mx-auto max-w-5xl px-6">
-      <h2 className="text-2xl font-bold tracking-tight">
+      <h2 className="font-[family-name:var(--font-italiana)] text-2xl font-normal tracking-[0.06em]">
         Strategy Configuration
       </h2>
       <p className="mt-2 text-sm text-[#9ca3af]">
@@ -273,7 +273,7 @@ export default function RiskProfileEditor() {
         {PARAM_GROUPS.map((group) => (
           <div key={group.title} className="card-panel rounded-xl">
             <div className="px-6 py-4">
-              <h3 className="text-sm font-semibold">{group.title}</h3>
+              <h3 className="font-[family-name:var(--font-cormorant)] text-base font-medium">{group.title}</h3>
               <p className="mt-0.5 text-xs text-[#9ca3af]">
                 {group.description}
               </p>

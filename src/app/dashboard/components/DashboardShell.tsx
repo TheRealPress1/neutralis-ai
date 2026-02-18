@@ -59,7 +59,7 @@ export default function DashboardShell() {
       <nav className="fixed top-0 z-50 w-full border-b border-[#1a1d21] bg-[#050608]/80 backdrop-blur-lg">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-8">
-            <Link href="/" className="text-lg font-semibold tracking-tight">
+            <Link href="/" className="font-[family-name:var(--font-italiana)] text-xl font-normal tracking-[0.08em] text-white/90">
               Neutralis.ai
             </Link>
             {/* Tab navigation */}

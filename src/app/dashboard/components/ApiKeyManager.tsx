@@ -165,8 +165,8 @@ export default function ApiKeyManager() {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-[#22262d] bg-[#0e1117] p-6">
-        <p className="text-sm text-[#a1a8b3]">Loading API keys...</p>
+      <div className="card-panel rounded-xl p-6">
+        <p className="text-sm text-[#9ca3af]">Loading API keys...</p>
       </div>
     );
   }
@@ -174,7 +174,7 @@ export default function ApiKeyManager() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold text-[#eceef0]">
+        <h2 className="font-[family-name:var(--font-italiana)] text-xl font-normal tracking-[0.04em]">
           Exchange Connections
         </h2>
         <p className="text-sm text-[#a1a8b3] mt-1">
@@ -189,7 +189,7 @@ export default function ApiKeyManager() {
       )}
 
       {/* Kalshi */}
-      <div className="rounded-xl border border-[#22262d] bg-[#0e1117] p-5">
+      <div className="card-panel rounded-xl p-5">
         <div className="flex items-center justify-between mb-1">
           <h3 className="font-medium text-[#eceef0]">Kalshi</h3>
           {kalshiKey ? (
@@ -305,7 +305,7 @@ export default function ApiKeyManager() {
       </div>
 
       {/* Polymarket */}
-      <div className="rounded-xl border border-[#22262d] bg-[#0e1117] p-5">
+      <div className="card-panel rounded-xl p-5">
         <div className="flex items-center justify-between mb-1">
           <h3 className="font-medium text-[#eceef0]">Polymarket</h3>
           {polyFullyConnected ? (

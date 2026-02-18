@@ -69,7 +69,7 @@ export default function ActivityFeed({ refreshKey }: { refreshKey: number }) {
   return (
     <div className="card-panel rounded-xl">
       <div className="border-b border-[#1a1d21] px-5 py-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
+        <h2 className="font-[family-name:var(--font-cormorant)] text-base font-medium tracking-wide text-[#9ca3af]">
           Activity
         </h2>
       </div>
@@ -78,13 +78,19 @@ export default function ActivityFeed({ refreshKey }: { refreshKey: number }) {
         {loading ? (
           <div className="space-y-3 p-5">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-10 animate-pulse rounded bg-[#0a0d10]" />
+              <div key={i} className="h-10 animate-pulse rounded bg-[#12151a]" />
             ))}
           </div>
         ) : items.length === 0 ? (
-          <p className="px-5 py-10 text-center text-[#9ca3af]">
-            No activity yet
-          </p>
+          <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mb-3 h-10 w-10 text-[#2a2d31]">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+            </svg>
+            <p className="text-sm text-[#9ca3af]">No activity yet</p>
+            <p className="mt-1 text-xs text-[#3b3f46]">
+              Signals and decisions will stream here in real time.
+            </p>
+          </div>
         ) : (
           <ul>
             {items.map((item) => {
@@ -93,7 +99,7 @@ export default function ActivityFeed({ refreshKey }: { refreshKey: number }) {
                 return (
                   <li
                     key={`s-${s.id}`}
-                    className="flex items-start gap-3 border-t border-[#1a1d21] px-5 py-3"
+                    className="flex items-start gap-3 border-t border-[#1a1d21] px-5 py-3 transition-colors hover:bg-white/[0.02]"
                   >
                     <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-400" />
                     <div className="min-w-0 flex-1">
@@ -125,7 +131,7 @@ export default function ActivityFeed({ refreshKey }: { refreshKey: number }) {
               return (
                 <li
                   key={`d-${d.id}`}
-                  className="border-t border-[#1a1d21] px-5 py-3"
+                  className="border-t border-[#1a1d21] px-5 py-3 transition-colors hover:bg-white/[0.02]"
                 >
                   <button
                     onClick={() => setExpandedId(expanded ? null : d.id)}

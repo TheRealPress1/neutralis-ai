@@ -45,7 +45,7 @@ export default function StatsBar({ refreshKey }: { refreshKey: number }) {
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
       {cards.map((c) => (
         <div key={c.key} className="card-panel rounded-xl p-5">
-          <p className="text-xs font-medium uppercase tracking-wider text-[#9ca3af]">
+          <p className="font-[family-name:var(--font-cormorant)] text-xs font-medium uppercase tracking-[0.15em] text-[#9ca3af]">
             {c.label}
           </p>
           {stats ? (
@@ -57,7 +57,7 @@ export default function StatsBar({ refreshKey }: { refreshKey: number }) {
               {c.format(stats[c.key] as number)}
             </p>
           ) : (
-            <div className="mt-3 h-7 w-20 animate-pulse rounded bg-[#0a0d10]" />
+            <div className="mt-3 h-7 w-20 animate-pulse rounded bg-[#12151a]" />
           )}
         </div>
       ))}
