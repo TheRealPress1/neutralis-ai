@@ -5,11 +5,11 @@ html {
 }
 
 :root {
-  --titanium-black: #050608;
-  --titanium-darker: #0a0d10;
-  --titanium-border: #1a1d21;
-  --text-primary: #e8e9ea;
-  --text-secondary: #9ca3af;
+  --titanium-black: #08090c;
+  --titanium-darker: #0e1117;
+  --titanium-border: #22262d;
+  --text-primary: #eceef0;
+  --text-secondary: #a1a8b3;
   --silver: #c0c5cb;
 }
 
@@ -44,14 +44,14 @@ body::before {
   background-size: 256px 256px;
 }
 
-/* ── Vignette ──────────────────────────────────────── */
+/* ── Vignette (dashboard-friendly: very subtle edge tint) ── */
 body::after {
   content: "";
   position: fixed;
   inset: 0;
   z-index: 99;
   pointer-events: none;
-  background: radial-gradient(ellipse at center, transparent 25%, rgba(5,6,8,0.5) 55%, #050608 80%);
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(8,9,12,0.15) 100%);
 }
 
 /* ── Hero center glow ─────────────────────────────── */
@@ -142,14 +142,14 @@ body::after {
 
 /* ── Card panel (solid, no blur) ──────────────────── */
 .card-panel {
-  background: #0a0d10;
-  border: 1px solid #1a1d21;
+  background: var(--titanium-darker);
+  border: 1px solid var(--titanium-border);
   transition: transform 0.3s ease, border-color 0.3s ease;
 }
 
 .card-panel:hover {
   transform: translateY(-2px);
-  border-color: rgba(192, 197, 203, 0.2);
+  border-color: rgba(192, 197, 203, 0.25);
 }
 
 /* ── Metallic banding ──────────────────────────────── */
@@ -188,6 +188,53 @@ body::after {
   html {
     scroll-behavior: auto;
   }
+}
+
+/* ── Nav link glow ────────────────────────────────── */
+.nav-link-glow {
+  transition: color 0.25s ease, filter 0.25s ease, text-shadow 0.25s ease;
+}
+.nav-link-glow:hover {
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+}
+
+/* ── Headline italic accent ──────────────────────── */
+.headline-italic {
+  position: relative;
+}
+.headline-italic::after {
+  content: "";
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: -0.1em;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.25),
+    transparent
+  );
+  pointer-events: none;
+}
+
+/* ── Nav spotlight ────────────────────────────────── */
+.nav-spotlight {
+  background:
+    radial-gradient(
+      180px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+      rgba(255, 255, 255, 0.85) 0%,
+      rgba(255, 255, 255, 0.35) 35%,
+      rgba(255, 255, 255, 0.12) 55%,
+      transparent 70%
+    ),
+    radial-gradient(
+      380px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+      rgba(255, 255, 255, 0.18) 0%,
+      transparent 60%
+    );
+  filter: blur(2px);
+  mix-blend-mode: screen;
 }
 
 /* ── Focus states ──────────────────────────────────── */

@@ -30,14 +30,14 @@ export default function Navbar() {
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
       onMouseMove={handleMouseMove}
-      className={`fixed top-0 z-50 w-full border-b transition-all duration-300 relative ${
+      className={`fixed top-0 z-50 w-full border-b transition-all duration-300 relative overflow-hidden ${
         scrolled
           ? "border-white/10 bg-black/30 backdrop-blur-xl"
           : "border-white/[0.06] bg-black/15 backdrop-blur-[10px]"
       }`}
     >
       <div
-        className={`nav-spotlight pointer-events-none absolute inset-0 z-0 overflow-hidden transition-opacity duration-300 ${
+        className={`nav-spotlight pointer-events-none absolute -inset-4 z-0 transition-opacity duration-300 ${
           hovering ? "opacity-100" : "opacity-0"
         }`}
       />
@@ -52,18 +52,18 @@ export default function Navbar() {
         <ul className="hidden items-center gap-6 text-sm font-medium text-white/70 sm:flex">
           <li>
             <a
-              href="#edge"
+              href="#outputs"
               className="nav-link-glow transition-all duration-250 ease-out hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.25)]"
             >
-              Edge
+              Outputs
             </a>
           </li>
           <li>
             <a
-              href="#pipeline"
+              href="#method"
               className="nav-link-glow transition-all duration-250 ease-out hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.25)]"
             >
-              Pipeline
+              Method
             </a>
           </li>
           <li>
@@ -72,6 +72,14 @@ export default function Navbar() {
               className="nav-link-glow transition-all duration-250 ease-out hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.25)]"
             >
               Waitlist
+            </a>
+          </li>
+          <li>
+            <a
+              href="/dashboard"
+              className="nav-link-glow transition-all duration-250 ease-out hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.25)]"
+            >
+              Dashboard
             </a>
           </li>
           <AuthNav />
