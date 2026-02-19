@@ -323,7 +323,8 @@ class PostgresStorage:
         "id, ticker, event_ticker, venue, side, status, "
         "entry_price, size_dollars, quantity, "
         "realized_pnl, unrealized_pnl, trade_count, "
-        "opened_at, closed_at, category, exit_reason, exit_price, signal_type"
+        "opened_at, closed_at, category, exit_reason, exit_price, signal_type, "
+        "hwm_pnl_pct"
     )
 
     @staticmethod
@@ -347,6 +348,7 @@ class PostgresStorage:
             exit_reason=row[15] if len(row) > 15 else None,
             exit_price=float(row[16]) if len(row) > 16 and row[16] is not None else None,
             signal_type=row[17] if len(row) > 17 and row[17] is not None else "",
+            hwm_pnl_pct=float(row[18]) if len(row) > 18 and row[18] is not None else 0.0,
         )
 
     def save_trade(self, trade: Trade) -> str:
@@ -396,14 +398,14 @@ class PostgresStorage:
                     entry_price, size_dollars, quantity,
                     realized_pnl, unrealized_pnl, trade_count,
                     opened_at, closed_at, category, exit_reason, exit_price,
-                    signal_type
+                    signal_type, hwm_pnl_pct
                 ) VALUES (
                     %(id)s, %(ticker)s, %(event_ticker)s, %(venue)s, %(side)s, %(status)s,
                     %(entry_price)s, %(size_dollars)s, %(quantity)s,
                     %(realized_pnl)s, %(unrealized_pnl)s, %(trade_count)s,
                     %(opened_at)s, %(closed_at)s, %(category)s,
                     %(exit_reason)s, %(exit_price)s,
-                    %(signal_type)s
+                    %(signal_type)s, %(hwm_pnl_pct)s
                 )
                 """,
                 {
@@ -425,6 +427,7 @@ class PostgresStorage:
                     "exit_reason": position.exit_reason,
                     "exit_price": position.exit_price,
                     "signal_type": position.signal_type,
+                    "hwm_pnl_pct": position.hwm_pnl_pct,
                 },
             )
         conn.commit()
@@ -471,6 +474,20 @@ class PostgresStorage:
                 WHERE id = %(id)s AND status = 'open'
                 """,
                 {"id": position_id, "pnl": unrealized_pnl},
+            )
+        conn.commit()
+
+    def update_hwm_pnl_pct(self, position_id: str, hwm_pnl_pct: float) -> None:
+        """Persist the trailing-stop high-water mark for an open position."""
+        conn = self._ensure_connected()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE positions
+                SET hwm_pnl_pct = %(hwm)s
+                WHERE id = %(id)s AND status = 'open'
+                """,
+                {"id": position_id, "hwm": hwm_pnl_pct},
             )
         conn.commit()
 

@@ -233,6 +233,7 @@ class Position:
     exit_reason: Optional[str] = None
     exit_price: Optional[float] = None
     signal_type: str = ""
+    hwm_pnl_pct: float = 0.0
 
 
 @dataclass(frozen=True)

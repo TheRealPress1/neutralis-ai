@@ -75,10 +75,14 @@ class KalshiExecutor:
         )
 
         if resp.status_code == 429:
+            if _retries >= 5:
+                logger.error("Rate limited 5 times on %s %s, giving up", method, path)
+                resp.raise_for_status()
             retry_after = float(resp.headers.get("Retry-After", "2"))
-            logger.warning("Rate limited, sleeping %.1fs", retry_after)
-            time.sleep(retry_after)
-            return self._request(method, path, json_body, params, _retries=_retries)
+            backoff = retry_after * (2 ** _retries)
+            logger.warning("Rate limited, retry %d/5 sleeping %.1fs", _retries + 1, backoff)
+            time.sleep(backoff)
+            return self._request(method, path, json_body, params, _retries=_retries + 1)
 
         if resp.status_code >= 500 and _retries < 3:
             wait = 2.0 * (2**_retries)

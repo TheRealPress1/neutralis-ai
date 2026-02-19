@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from neutralis.backtest.portfolio import SimulatedPortfolio
@@ -154,18 +154,27 @@ def _try_exits(
     markets: list[NormalizedMarket],
     exit_cfg: ExitConfig,
     ts: object,
+    hwm: dict[str, float] | None = None,
 ) -> tuple[int, float]:
-    """Evaluate stop-loss and take-profit exits using snapshot bid prices.
+    """Evaluate stop-loss, take-profit, trailing stop, and dynamic TP exits.
+
+    Args:
+        hwm: High-water mark dict (position key -> best pnl_pct seen). Mutated in place.
 
     Returns (exit_count, total_pnl).
     """
     if not exit_cfg.enabled:
         return 0, 0.0
 
-    # Build bid-price lookup from current market snapshots
+    if hwm is None:
+        hwm = {}
+
+    # Build bid-price lookup and expiry lookup from current market snapshots
     bid_prices: dict[str, float] = {}
+    market_expiry: dict[str, datetime | None] = {}
     for m in markets:
         bid_prices[m.ticker] = m.yes_bid if m.yes_bid > 0 else m.yes_ask
+        market_expiry[m.ticker] = m.expected_expiration or m.close_time
 
     exit_count = 0
     total_pnl = 0.0
@@ -185,16 +194,48 @@ def _try_exits(
         pnl_dollars = exit_value - pos.size_dollars
         pnl_pct = (pnl_dollars / pos.size_dollars * 100) if pos.size_dollars > 0 else 0.0
 
+        # Update high-water mark
+        prev_hwm = hwm.get(key, 0.0)
+        if pnl_pct > prev_hwm:
+            hwm[key] = pnl_pct
+            prev_hwm = pnl_pct
+
+        # Dynamic take-profit: tighten TP near expiry
+        effective_tp = exit_cfg.take_profit_pct
+        expiry = market_expiry.get(pos.ticker)
+        if expiry is not None:
+            if expiry.tzinfo is None:
+                expiry = expiry.replace(tzinfo=timezone.utc)
+            now_ts = ts if isinstance(ts, datetime) else datetime.now(timezone.utc)
+            if isinstance(now_ts, datetime) and now_ts.tzinfo is None:
+                now_ts = now_ts.replace(tzinfo=timezone.utc)
+            hours_left = (expiry - now_ts).total_seconds() / 3600.0
+            if hours_left <= 0:
+                effective_tp = exit_cfg.dynamic_tp_floor_pct
+            elif hours_left < exit_cfg.dynamic_tp_hours:
+                ratio = hours_left / exit_cfg.dynamic_tp_hours
+                effective_tp = exit_cfg.dynamic_tp_floor_pct + (
+                    exit_cfg.take_profit_pct - exit_cfg.dynamic_tp_floor_pct
+                ) * ratio
+
         exit_reason = None
         if pnl_pct <= -exit_cfg.stop_loss_pct:
             exit_reason = "stop_loss"
-        elif pnl_pct >= exit_cfg.take_profit_pct:
+        elif pnl_pct >= effective_tp:
             exit_reason = "take_profit"
+        # Trailing stop: only activates after position hit +activation_pct
+        elif (
+            prev_hwm >= exit_cfg.trailing_stop_activation_pct
+            and (prev_hwm - pnl_pct) >= exit_cfg.trailing_stop_pct
+        ):
+            exit_reason = "trailing_stop"
 
         if exit_reason is not None:
             pnl = portfolio.exit_position(pos.ticker, current_bid, ts)
             total_pnl += pnl
             exit_count += 1
+            # Clean up HWM for closed position
+            hwm.pop(key, None)
 
     return exit_count, total_pnl
 
@@ -238,6 +279,7 @@ def run_backtest(
 
     portfolio = SimulatedPortfolio()
     settled_tickers: set[str] = set()
+    hwm: dict[tuple, float] = {}  # trailing stop high-water marks
     equity_curve: list[dict] = []
     time_steps = 0
     total_signals = 0
@@ -267,8 +309,8 @@ def run_backtest(
             # Settlement check
             _try_settle(portfolio, all_markets, settled_tickers, ts)
 
-            # Exit strategy check
-            _try_exits(portfolio, all_markets, exit_cfg, ts)
+            # Exit strategy check (trailing stop + dynamic TP)
+            _try_exits(portfolio, all_markets, exit_cfg, ts, hwm=hwm)
 
             # Complement arb scan (Kalshi)
             complement_signals = scan_complement_arb(kalshi_markets, pipeline_cfg)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 
 from neutralis.categories import classify_market
 from neutralis.config import DirectionalConfig, ExitConfig, PortfolioConfig, Settings
@@ -43,7 +43,9 @@ class PortfolioManager:
         self._config = config or PortfolioConfig()
         self._fee_accruer = fee_accruer  # PerformanceFeeAccruer (optional)
         # Trailing stop high-water marks: position_id -> highest P&L %
+        # Loaded from DB on init so trailing stops survive restarts
         self._hwm: dict[str, float] = {}
+        self._load_hwm()
 
     def record_fill(
         self,
@@ -209,7 +211,7 @@ class PortfolioManager:
         settlement_value = position.quantity * settlement_price
         realized_pnl = settlement_value - position.size_dollars
 
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         exit_price = settlement_price if exit_reason != "settlement" else None
         self._storage.close_position(
             position_id=position_id,
@@ -552,6 +554,16 @@ class PortfolioManager:
 
         return None
 
+    def _load_hwm(self) -> None:
+        """Load high-water marks from DB for all open positions."""
+        try:
+            positions = self._storage.get_open_positions()
+            for pos in positions:
+                if pos.hwm_pnl_pct > 0:
+                    self._hwm[pos.id] = pos.hwm_pnl_pct
+        except Exception:
+            logger.warning("Failed to load HWM from DB, starting fresh", exc_info=True)
+
     def _check_trailing_stop(
         self,
         pos: Position,
@@ -565,10 +577,14 @@ class PortfolioManager:
         """
         prev_hwm = self._hwm.get(pos.id, 0.0)
 
-        # Update high-water mark
+        # Update high-water mark and persist to DB
         if pnl_pct > prev_hwm:
             self._hwm[pos.id] = pnl_pct
             prev_hwm = pnl_pct
+            try:
+                self._storage.update_hwm_pnl_pct(pos.id, pnl_pct)
+            except Exception:
+                logger.warning("Failed to persist HWM for %s", pos.id)
 
         # Only activate trailing stop after position has been profitable enough
         if prev_hwm < cfg.trailing_stop_activation_pct:

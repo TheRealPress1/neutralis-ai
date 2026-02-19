@@ -192,6 +192,7 @@ def evaluate_directional_signal(
             check_total_exposure(size, portfolio_snapshot, pcfg),
             check_event_exposure(size, signal.event_ticker, portfolio_snapshot, pcfg),
             check_ticker_exposure(size, signal.ticker, portfolio_snapshot, pcfg),
+            check_position_correlation(signal, size, portfolio_snapshot),
         ])
 
         # Clamp size to headroom
