@@ -78,7 +78,7 @@ function summarize(details: Record<string, unknown>): string {
   if (details.reason)      parts.push(String(details.reason));
 
   if (typeof details.edge_pct === "number") {
-    parts.push(`edge ${(details.edge_pct as number * 100).toFixed(1)}%`);
+    parts.push(`edge ${(details.edge_pct as number).toFixed(1)}%`);
   }
   if (typeof details.size_dollars === "number") {
     parts.push(`$${(details.size_dollars as number).toFixed(2)}`);

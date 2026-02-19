@@ -410,7 +410,7 @@ export default function AutomationPanel({
                         </span>
                       </td>
                       <td className="px-6 py-3 text-right font-mono text-xs">
-                        {(d.edge_pct * 100).toFixed(1)}%
+                        {d.edge_pct.toFixed(1)}%
                       </td>
                       <td className="px-6 py-3 text-right font-mono text-xs">
                         ${fmt(d.suggested_size)}

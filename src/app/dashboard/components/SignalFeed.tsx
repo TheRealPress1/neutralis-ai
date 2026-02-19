@@ -234,7 +234,7 @@ export default function SignalFeed({ refreshKey }: { refreshKey: number }) {
                         </span>
                       </div>
                       <div className="mt-1 flex flex-wrap gap-3 text-xs text-[#9ca3af]">
-                        <span>Edge {(s.edge_pct * 100).toFixed(1)}%</span>
+                        <span>Edge {s.edge_pct.toFixed(1)}%</span>
                         <span>ROI/d {s.roi_per_day.toFixed(2)}%</span>
                         <span>Conf {s.confidence_score}</span>
                         <span>{timeAgo(s.signal_created_at)}</span>
