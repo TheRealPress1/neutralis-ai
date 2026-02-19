@@ -15,6 +15,7 @@ from neutralis.guard.constraints import (
     check_min_implied_probability,
     check_open_position_count,
     check_orderbook_depth,
+    check_position_correlation,
     check_ticker_exposure,
     check_time_to_expiry,
     check_total_exposure,
@@ -103,6 +104,11 @@ def evaluate_signal(
                 preliminary_size, market.venue, portfolio_snapshot, pcfg,
             ),
         ]
+
+        # Position correlation guard (same event series)
+        portfolio_results.append(
+            check_position_correlation(signal, preliminary_size, portfolio_snapshot)
+        )
 
         # Per-category exposure guard
         if category_overrides:
