@@ -42,6 +42,8 @@ class PortfolioManager:
         self._storage = storage
         self._config = config or PortfolioConfig()
         self._fee_accruer = fee_accruer  # PerformanceFeeAccruer (optional)
+        # Trailing stop high-water marks: position_id -> highest P&L %
+        self._hwm: dict[str, float] = {}
 
     def record_fill(
         self,
@@ -481,23 +483,29 @@ class PortfolioManager:
 
             exit_reason = None
 
-            # 1. Stop loss
+            # 1. Stop loss (fixed)
             if pnl_pct <= -cfg.stop_loss_pct:
                 exit_reason = "stop_loss"
-            # 2. Take profit
-            elif pnl_pct >= cfg.take_profit_pct:
-                exit_reason = "take_profit"
-            # 3. Time decay
+            # 2. Take profit (dynamic — tightens near expiry)
+            elif exit_reason is None:
+                effective_tp = self._dynamic_take_profit(pos, cfg)
+                if pnl_pct >= effective_tp:
+                    exit_reason = "take_profit"
+            # 3. Trailing stop (activates after position is up activation_pct)
+            if exit_reason is None:
+                exit_reason = self._check_trailing_stop(pos, pnl_pct, cfg)
+            # 4. Time decay
             if exit_reason is None:
                 exit_reason = self._check_time_decay(pos, current_bid, cfg)
-
-            # 4. Probability floor (directional positions only)
+            # 5. Probability floor (directional positions only)
             if exit_reason is None and pos.signal_type == SignalType.HIGH_PROBABILITY_DIRECTIONAL.value:
                 dir_cfg = directional_config or DirectionalConfig()
                 if current_bid <= dir_cfg.probability_floor:
                     exit_reason = "probability_floor"
 
             if exit_reason is not None:
+                # Clean up HWM on exit
+                self._hwm.pop(pos.id, None)
                 exits.append((pos, exit_reason, current_bid))
 
         return exits
@@ -543,6 +551,87 @@ class PortfolioManager:
             return "time_decay"
 
         return None
+
+    def _check_trailing_stop(
+        self,
+        pos: Position,
+        pnl_pct: float,
+        cfg: ExitConfig,
+    ) -> str | None:
+        """Trailing stop: exit if price drops trailing_stop_pct from high-water mark.
+
+        Only activates after position has reached +activation_pct to avoid
+        triggering on normal noise around entry.
+        """
+        prev_hwm = self._hwm.get(pos.id, 0.0)
+
+        # Update high-water mark
+        if pnl_pct > prev_hwm:
+            self._hwm[pos.id] = pnl_pct
+            prev_hwm = pnl_pct
+
+        # Only activate trailing stop after position has been profitable enough
+        if prev_hwm < cfg.trailing_stop_activation_pct:
+            return None
+
+        # Check if price dropped trailing_stop_pct from peak
+        drawdown_from_peak = prev_hwm - pnl_pct
+        if drawdown_from_peak >= cfg.trailing_stop_pct:
+            logger.info(
+                "Trailing stop: %s peak=+%.1f%% now=+%.1f%% drawdown=%.1f%%",
+                pos.ticker, prev_hwm, pnl_pct, drawdown_from_peak,
+            )
+            return "trailing_stop"
+
+        return None
+
+    def _dynamic_take_profit(
+        self,
+        pos: Position,
+        cfg: ExitConfig,
+    ) -> float:
+        """Compute dynamic take-profit threshold that tightens near expiry.
+
+        Far from expiry: use cfg.take_profit_pct (e.g., 25%)
+        Within dynamic_tp_hours: linear interpolation down to dynamic_tp_floor_pct (e.g., 8%)
+
+        This captures gains earlier when time is running out rather than
+        waiting for a large move that may never come.
+        """
+        from datetime import datetime as dt, timezone
+
+        rows = self._storage._fetch_dicts(
+            """SELECT expected_expiration, close_time
+               FROM market_snapshots
+               WHERE ticker = %(ticker)s
+               ORDER BY snapshot_ts DESC LIMIT 1""",
+            {"ticker": pos.ticker},
+        )
+        if not rows:
+            return cfg.take_profit_pct
+
+        expiry = rows[0].get("expected_expiration") or rows[0].get("close_time")
+        if expiry is None:
+            return cfg.take_profit_pct
+
+        if isinstance(expiry, str):
+            expiry = dt.fromisoformat(expiry)
+
+        now = dt.now(timezone.utc)
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+
+        hours_left = (expiry - now).total_seconds() / 3600.0
+
+        if hours_left >= cfg.dynamic_tp_hours:
+            return cfg.take_profit_pct
+
+        if hours_left <= 0:
+            return cfg.dynamic_tp_floor_pct
+
+        # Linear interpolation: full TP at dynamic_tp_hours, floor at 0
+        ratio = hours_left / cfg.dynamic_tp_hours
+        return cfg.dynamic_tp_floor_pct + (cfg.take_profit_pct - cfg.dynamic_tp_floor_pct) * ratio
 
     def execute_exit(
         self,

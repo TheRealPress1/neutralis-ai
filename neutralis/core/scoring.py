@@ -111,10 +111,19 @@ def score_signal(
 
     # 6. Signal-type-specific components
     if signal.signal_type == SignalType.VOLUME_MOMENTUM:
-        # Flow strength: how far above the 70% imbalance threshold
-        # implied_probability stores the imbalance ratio (0.70-1.0)
+        # Flow strength: imbalance above threshold + price momentum alignment
         imbalance = signal.implied_probability if signal.implied_probability > 0 else 0.7
-        components["flow_strength"] = _saturate((imbalance - 0.70) / 0.30)
+        base_flow = _saturate((imbalance - 0.70) / 0.30)
+        # Boost if price momentum aligns with flow direction
+        momentum = features.get("price_momentum", 0.0)
+        if signal.entry_side == "yes" and momentum > 0:
+            base_flow = min(1.0, base_flow + momentum * 2.0)  # Positive momentum confirms buy
+        elif signal.entry_side == "no" and momentum < 0:
+            base_flow = min(1.0, base_flow + abs(momentum) * 2.0)  # Negative confirms sell
+        elif (signal.entry_side == "yes" and momentum < -0.02) or \
+             (signal.entry_side == "no" and momentum > 0.02):
+            base_flow *= 0.5  # Strong counter-trend → penalize
+        components["flow_strength"] = base_flow
     elif signal.signal_type == SignalType.THREE_WAY_ARB:
         # Venue diversification: cross-venue (mixed Kalshi+Poly) reduces fee risk
         venues = set(leg.venue or "kalshi" for leg in signal.legs)

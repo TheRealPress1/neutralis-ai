@@ -37,11 +37,19 @@ def check_volume_momentum(
     sell_volume: int,
     total_volume: int,
     config: PipelineConfig | None = None,
+    *,
+    depth_bid: float = 0.0,
+    depth_ask: float = 0.0,
 ) -> Signal | None:
     """Check if a single ticker has a volume momentum signal.
 
     Returns a Signal if the volume imbalance exceeds the threshold,
     or None if no signal.
+
+    depth_bid/depth_ask: Orderbook depth from Polymarket WS (optional).
+    When provided, confirms volume signal with depth:
+      - High volume + matching depth imbalance = higher confidence
+      - High volume + thin depth = likely wash trading, penalize
     """
     cfg = config or PipelineConfig()
 
@@ -76,6 +84,23 @@ def check_volume_momentum(
     # Scale edge_pct to a reasonable range (0.5-5%)
     edge_pct = max(0.5, min(edge_pct * 5.0, 5.0))
 
+    # Depth confirmation: adjust edge based on orderbook depth alignment
+    total_depth = depth_bid + depth_ask
+    if total_depth > 0:
+        depth_imbalance = depth_bid / total_depth  # >0.5 = more bids
+        if side == "yes" and depth_imbalance > 0.60:
+            # Buy volume + bid-heavy book = structural demand, boost edge
+            edge_pct *= 1.0 + (depth_imbalance - 0.50) * 0.5  # up to +25%
+        elif side == "no" and depth_imbalance < 0.40:
+            # Sell volume + ask-heavy book = structural supply, boost edge
+            edge_pct *= 1.0 + (0.50 - depth_imbalance) * 0.5
+        elif (side == "yes" and depth_imbalance < 0.35) or \
+             (side == "no" and depth_imbalance > 0.65):
+            # Volume contradicts depth — likely noise, penalize heavily
+            edge_pct *= 0.50
+
+    edge_pct = max(0.5, min(edge_pct, 6.0))
+
     size = min(cfg.max_position_dollars, market.liquidity * 0.10)
     if size < 1.0:
         return None
@@ -105,8 +130,10 @@ def check_volume_momentum(
     )
 
     logger.info(
-        "Volume momentum: %s %s imbalance=%.1f%% vol=%d (buy=%d sell=%d) edge=%.2f%%",
-        ticker, side, imbalance * 100, total_volume, buy_volume, sell_volume, edge_pct,
+        "Volume momentum: %s %s imbalance=%.1f%% vol=%d (buy=%d sell=%d) "
+        "depth=%.0f/%.0f edge=%.2f%%",
+        ticker, side, imbalance * 100, total_volume, buy_volume, sell_volume,
+        depth_bid, depth_ask, edge_pct,
     )
 
     return signal

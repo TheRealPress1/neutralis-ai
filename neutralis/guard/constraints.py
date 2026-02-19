@@ -308,6 +308,77 @@ def check_category_exposure(
     )
 
 
+# -- Correlation guard --
+
+# Maximum total exposure to correlated positions (same event series or related events)
+_MAX_CORRELATED_EXPOSURE = 150.0  # $150 — 30% of default $500 max total
+
+
+def _event_series(event_ticker: str) -> str:
+    """Extract the series prefix from an event ticker.
+
+    KXEPLGAME-26FEB21AVLLEE -> KXEPLGAME
+    KXPREMIERLEAGUE-MCI -> KXPREMIERLEAGUE
+    """
+    # Split on first dash after the series name
+    parts = event_ticker.split("-", 1)
+    return parts[0] if parts else event_ticker
+
+
+def check_position_correlation(
+    signal: Signal,
+    proposed_size: float,
+    snapshot: PortfolioSnapshot,
+    max_correlated_exposure: float = _MAX_CORRELATED_EXPOSURE,
+) -> GuardResult:
+    """Check if adding this position creates excessive correlated exposure.
+
+    Correlation is detected by:
+    1. Same event series prefix (e.g., multiple KXPREMIERLEAGUE positions)
+    2. Same event_ticker (multiple positions in same match/event)
+
+    Directional positions (not arbs) are higher correlation risk since
+    arbs are naturally hedged.
+    """
+    signal_series = _event_series(signal.event_ticker)
+
+    # Find existing positions in the same event series
+    correlated_exposure = 0.0
+    correlated_tickers: list[str] = []
+
+    for pos in snapshot.positions:
+        pos_series = _event_series(pos.event_ticker)
+        if pos_series == signal_series:
+            correlated_exposure += pos.size_dollars
+            correlated_tickers.append(pos.ticker)
+
+    new_correlated = correlated_exposure + proposed_size
+
+    if new_correlated <= max_correlated_exposure:
+        return GuardResult(
+            guard_name="position_correlation",
+            passed=True,
+            reason=(
+                f"series '{signal_series}' correlated exposure "
+                f"${new_correlated:.2f} <= ${max_correlated_exposure:.2f}"
+            ),
+            value=new_correlated,
+            threshold=max_correlated_exposure,
+        )
+
+    return GuardResult(
+        guard_name="position_correlation",
+        passed=False,
+        reason=(
+            f"series '{signal_series}' correlated exposure "
+            f"${new_correlated:.2f} > ${max_correlated_exposure:.2f} "
+            f"({len(correlated_tickers)} existing positions)"
+        ),
+        value=new_correlated,
+        threshold=max_correlated_exposure,
+    )
+
+
 # -- Directional strategy guards --
 
 

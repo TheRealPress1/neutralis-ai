@@ -40,9 +40,11 @@ def compute_market_features(
     if market.no_bids:
         ob_depth = min(ob_depth, market.no_bids[0].quantity_dollars) if ob_depth > 0 else market.no_bids[0].quantity_dollars
 
-    # Rolling volatility from recent snapshots
+    # Rolling volatility and momentum from recent snapshots
     prob_volatility = 0.0
     staleness_hours = 0.0
+    price_momentum = 0.0  # (current_mid - oldest_mid) / oldest_mid
+    price_acceleration = 0.0  # recent_momentum - earlier_momentum
 
     if recent_snapshots and len(recent_snapshots) >= 2:
         mids = []
@@ -55,6 +57,20 @@ def compute_market_features(
             mean = sum(mids) / len(mids)
             variance = sum((x - mean) ** 2 for x in mids) / len(mids)
             prob_volatility = math.sqrt(variance)
+
+            # Price momentum: change from oldest to newest snapshot
+            if mids[0] > 0:
+                price_momentum = (mids[-1] - mids[0]) / mids[0]
+
+            # Price acceleration: compare recent half momentum vs earlier half
+            if len(mids) >= 4:
+                half = len(mids) // 2
+                earlier_mids = mids[:half]
+                recent_mids = mids[half:]
+                if earlier_mids[0] > 0 and recent_mids[0] > 0:
+                    earlier_mom = (earlier_mids[-1] - earlier_mids[0]) / earlier_mids[0]
+                    recent_mom = (recent_mids[-1] - recent_mids[0]) / recent_mids[0]
+                    price_acceleration = recent_mom - earlier_mom
 
         # Staleness: time since the most recent snapshot
         latest_ts = max(s.snapshot_ts for s in recent_snapshots)
@@ -75,6 +91,8 @@ def compute_market_features(
         "prob_volatility": round(prob_volatility, 6),
         "staleness_hours": round(staleness_hours, 2),
         "time_to_resolution_days": round(time_to_resolution_days, 2),
+        "price_momentum": round(price_momentum, 6),
+        "price_acceleration": round(price_acceleration, 6),
     }
 
 

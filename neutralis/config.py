@@ -101,6 +101,13 @@ class ExitConfig:
     time_decay_edge_floor_pct: float = 1.0
     min_exit_liquidity_dollars: float = 10.0
     enabled: bool = True
+    # Trailing stop: exit if price drops this % from high-water mark
+    trailing_stop_pct: float = 10.0
+    trailing_stop_activation_pct: float = 5.0  # Only activate after position is +5%
+    # Dynamic take-profit: tighten TP as expiry approaches
+    # When hours_to_expiry < dynamic_tp_hours, scale TP from take_profit_pct down to dynamic_tp_floor_pct
+    dynamic_tp_hours: float = 12.0
+    dynamic_tp_floor_pct: float = 8.0
 
 
 @dataclass(frozen=True)

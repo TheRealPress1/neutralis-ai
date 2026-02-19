@@ -987,12 +987,25 @@ class EventEngine:
         flow = state.trade_flow.get(ticker)
         if flow and flow.total_volume_5m >= 20:
             if not self._signal_on_cooldown(state, ticker, "volume"):
+                # Look up Polymarket depth for this ticker (if matched)
+                d_bid, d_ask = 0.0, 0.0
+                xp_entry = state.xp_pairs.get(ticker)
+                if xp_entry:
+                    poly_ticker = xp_entry[1]
+                    poly_market = state.poly_markets.get(poly_ticker)
+                    if poly_market and poly_market.clob_token_ids:
+                        depth = state.poly_depth.get(poly_market.clob_token_ids[0])
+                        if depth:
+                            d_bid, d_ask = depth.bid_depth, depth.ask_depth
+
                 vol_signal = check_volume_momentum(
                     ticker, market,
                     buy_volume=flow.buy_volume_5m,
                     sell_volume=flow.sell_volume_5m,
                     total_volume=flow.total_volume_5m,
                     config=cfg,
+                    depth_bid=d_bid,
+                    depth_ask=d_ask,
                 )
                 if vol_signal is not None:
                     state.signals_detected += 1
