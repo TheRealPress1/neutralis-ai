@@ -33,15 +33,20 @@ def compute_size(
     portfolio_config: PortfolioConfig | None = None,
     category: str | None = None,
     category_overrides: dict[str, Any] | None = None,
+    regime_params: dict[str, Any] | None = None,
 ) -> float:
     """Compute suggested position size in dollars (per leg) using fractional Kelly.
 
     Returns 0.0 if the signal should not be traded.
     Kelly criterion scales position with edge quality — higher edge = larger bet.
     Still clamped to max_position_dollars, liquidity caps, and portfolio headroom.
+
+    regime_params: If provided, uses regime-specific Kelly fraction
+        (e.g., 0.10 in RISK_OFF vs 0.25 in NORMAL).
     """
     cfg = config or PipelineConfig()
     pcfg = portfolio_config or PortfolioConfig()
+    kelly_frac = (regime_params or {}).get("kelly_fraction", _KELLY_FRACTION)
 
     # ── Fractional Kelly base sizing ──
     kelly = _kelly_optimal(signal)
@@ -53,7 +58,7 @@ def compute_size(
             size *= edge_ratio
     else:
         bankroll = pcfg.max_total_exposure_dollars
-        size = kelly * _KELLY_FRACTION * bankroll
+        size = kelly * kelly_frac * bankroll
 
     # Cap at configured max per-position
     size = min(size, cfg.max_position_dollars)

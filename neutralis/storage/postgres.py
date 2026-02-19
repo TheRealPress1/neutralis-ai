@@ -1888,3 +1888,38 @@ class PostgresStorage:
             "current_hwm": 0.0,
             "current_cumulative_pnl": 0.0,
         }
+
+    def settle_pending_fees(self, user_id: str) -> float:
+        """Mark accrued fees as settled (billed via Stripe).
+
+        Returns the amount that was settled (accrued - previously settled).
+        """
+        state = self.get_user_fee_state(user_id)
+        if state is None:
+            return 0.0
+
+        accrued = float(state["total_fees_accrued"])
+        settled = float(state.get("total_fees_settled", 0.0))
+        pending = round(accrued - settled, 4)
+
+        if pending <= 0:
+            return 0.0
+
+        conn = self._ensure_connected()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE user_fee_state
+                    SET total_fees_settled = total_fees_accrued,
+                        updated_at = now()
+                    WHERE user_id = %(user_id)s
+                    """,
+                    {"user_id": user_id},
+                )
+            conn.commit()
+        except Exception:
+            self._safe_rollback()
+            raise
+
+        return pending

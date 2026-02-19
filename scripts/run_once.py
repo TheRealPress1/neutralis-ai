@@ -463,6 +463,7 @@ def run_once(run_number: int = 0) -> RunStats:
                 portfolio_snapshot=portfolio_snapshot,
                 portfolio_config=settings.portfolio,
                 category_overrides=category_overrides,
+                regime_params=regime_params,
             )
             provisional.append((scored_signal, decision))
             if decision.verdict == DecisionVerdict.PASS:

@@ -41,11 +41,13 @@ def evaluate_signal(
     portfolio_snapshot: PortfolioSnapshot | None = None,
     portfolio_config: PortfolioConfig | None = None,
     category_overrides: dict[str, Any] | None = None,
+    regime_params: dict[str, Any] | None = None,
 ) -> Decision:
     """Run all guard checks on a signal and produce a Decision.
 
     When portfolio_snapshot is provided, runs portfolio-aware checks.
     When category_overrides is provided, applies per-category risk tuning.
+    When regime_params is provided, uses regime-specific Kelly fraction for sizing.
     """
     cfg = config or PipelineConfig()
 
@@ -72,7 +74,7 @@ def evaluate_signal(
         cfg = resolve_pipeline_config(cfg, category, category_overrides)
 
     # Preliminary size for depth check and exposure checks (base sizing, no headroom)
-    preliminary_size = compute_size(signal, market, cfg)
+    preliminary_size = compute_size(signal, market, cfg, regime_params=regime_params)
 
     # Phase 1: Market-level checks
     market_results: list[GuardResult] = [
@@ -120,6 +122,7 @@ def evaluate_signal(
             portfolio_config=portfolio_config,
             category=category,
             category_overrides=category_overrides,
+            regime_params=regime_params,
         )
         verdict = DecisionVerdict.PASS if suggested_size > 0 else DecisionVerdict.REJECT
     else:

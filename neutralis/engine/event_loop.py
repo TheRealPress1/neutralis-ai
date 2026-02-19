@@ -25,6 +25,8 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Any
 
+import os
+
 from neutralis.config import Settings, WebSocketConfig, load_settings, load_settings_with_profile
 from neutralis.core.cross_scanner import scan_cross_platform
 from neutralis.core.matcher import MarketPair, match_markets
@@ -36,6 +38,7 @@ from neutralis.core.features import compute_market_features, estimate_costs
 from neutralis.execution.executor import PaperExecutor
 from neutralis.execution.models import TickContext
 from neutralis.fees import estimate_total_fee, estimate_cross_platform_fee, estimate_three_way_fee
+from neutralis.fees.performance import PerformanceFeeAccruer
 from neutralis.guard.decision import evaluate_signal, select_portfolio
 from neutralis.logging import get_logger
 from neutralis.models import (
@@ -784,13 +787,25 @@ class EventEngine:
         """Check if a signal for this ticker was recently dispatched.
 
         Returns True if the signal should be suppressed (still in cooldown).
+        Checks both per-type cooldown AND cross-type ticker cooldown to prevent
+        the same ticker from triggering signals from multiple scanners.
         """
-        key = f"{signal_type}:{ticker}"
         now = time.monotonic()
+
+        # Cross-type ticker cooldown — prevents double-trades on same ticker
+        ticker_key = f"_any_:{ticker}"
+        ticker_last = state.signal_cooldown.get(ticker_key, 0.0)
+        if now - ticker_last < _SIGNAL_COOLDOWN_SEC:
+            return True
+
+        # Per-type cooldown
+        key = f"{signal_type}:{ticker}"
         last = state.signal_cooldown.get(key, 0.0)
         if now - last < _SIGNAL_COOLDOWN_SEC:
             return True
+
         state.signal_cooldown[key] = now
+        state.signal_cooldown[ticker_key] = now
         return False
 
     async def _fast_arb_check(
@@ -1163,7 +1178,15 @@ class EventEngine:
 
         try:
             with PostgresStorage(settings.db) as storage:
-                portfolio = PortfolioManager(storage, settings.portfolio)
+                fee_accruer = None
+                _user_id = os.environ.get("NEUTRALIS_USER_ID")
+                if settings.performance_fees.enabled and _user_id:
+                    fee_accruer = PerformanceFeeAccruer(
+                        storage, settings.performance_fees, user_id=_user_id,
+                    )
+                portfolio = PortfolioManager(
+                    storage, settings.portfolio, fee_accruer=fee_accruer,
+                )
                 portfolio_snapshot = portfolio.get_snapshot()
 
                 # Score
@@ -1573,6 +1596,7 @@ class EventEngine:
 
                     # Poll for fill with exponential backoff
                     filled = False
+                    partial_count = 0
                     deadline = time.monotonic() + timeout
                     poll_delay = 0.05  # Start at 50ms
                     while time.monotonic() < deadline:
@@ -1580,25 +1604,46 @@ class EventEngine:
                         poll_delay = min(poll_delay * 2, 1.0)  # 50→100→200→400→800→1000ms
                         check = k_exec.get_order(order_id)
                         check_order = check.get("order", {})
-                        if check_order.get("status") == "executed":
+                        check_status = check_order.get("status", "")
+                        if check_status == "executed":
                             kalshi_results.append(check_order)
                             filled = True
                             break
+                        # Track partial fills for proportional second-leg
+                        partial_count = check_order.get("fill_count", 0)
 
                     if not filled:
-                        # Cancel unfilled GTC order
+                        # Cancel remaining portion of GTC order
                         k_exec.cancel_order(order_id)
-                        logger.info(
-                            "Kalshi maker order unfilled after %.1fs, canceled for %s",
-                            timeout, signal.ticker,
-                        )
-                        return False
+                        if partial_count > 0:
+                            # Partial fill — proceed with proportional second leg
+                            logger.info(
+                                "Kalshi maker partial fill: %d/%d contracts for %s — "
+                                "executing proportional Poly leg",
+                                partial_count, count, signal.ticker,
+                            )
+                            check_order["_partial_fill_count"] = partial_count
+                            check_order["_original_count"] = count
+                            kalshi_results.append(check_order)
+                        else:
+                            logger.info(
+                                "Kalshi maker order unfilled after %.1fs, canceled for %s",
+                                timeout, signal.ticker,
+                            )
+                            return False
 
         except Exception:
             logger.warning("Kalshi maker execution failed for %s", signal.ticker, exc_info=True)
             return False
 
         # ── Step 2: Kalshi filled — immediately execute Poly FOK ──
+        # Scale Poly leg if Kalshi was a partial fill
+        fill_ratio = 1.0
+        for kr in kalshi_results:
+            if "_partial_fill_count" in kr:
+                fill_ratio = kr["_partial_fill_count"] / kr["_original_count"]
+                break
+
         try:
             with PolymarketExecutor(settings.execution) as poly_exec:
                 for leg in poly_legs:
@@ -1615,7 +1660,7 @@ class EventEngine:
                         leg_frac = leg.price_dollars / signal.combined_cost
                     else:
                         leg_frac = 1.0 / max(len(signal.legs), 1)
-                    leg_dollars = decision.suggested_size_dollars * leg_frac
+                    leg_dollars = decision.suggested_size_dollars * leg_frac * fill_ratio
                     leg_dollars = min(leg_dollars, settings.execution.max_order_dollars)
 
                     poly_side = "BUY" if leg.side == "yes" else "SELL"

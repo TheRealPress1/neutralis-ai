@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from neutralis.models import Signal
+from neutralis.models import Signal, SignalType
 
 
 # Default component weights (sum to 1.0)
@@ -15,6 +15,26 @@ _DEFAULT_WEIGHTS = {
     "spread_health": 0.15,
     "time_efficiency": 0.10,
     "match_confidence": 0.10,
+}
+
+# Volume momentum: flow strength replaces match confidence, spread de-weighted
+_VOLUME_MOMENTUM_WEIGHTS = {
+    "edge_robustness": 0.25,
+    "liquidity_robustness": 0.20,
+    "price_stability": 0.10,
+    "spread_health": 0.05,  # Directional trades tolerate wider spreads
+    "time_efficiency": 0.15,
+    "flow_strength": 0.25,  # Replaces match_confidence
+}
+
+# Three-way arb: venue diversification replaces match confidence
+_THREE_WAY_WEIGHTS = {
+    "edge_robustness": 0.30,
+    "liquidity_robustness": 0.20,
+    "price_stability": 0.10,
+    "spread_health": 0.10,
+    "time_efficiency": 0.10,
+    "venue_diversification": 0.20,  # Cross-venue = lower fee risk
 }
 
 
@@ -38,7 +58,15 @@ def score_signal(
         Dict with confidence_score, roi_per_day, time_to_resolution_days,
         net_edge_after_costs, and component_scores breakdown.
     """
-    w = weights or _DEFAULT_WEIGHTS
+    # Select weights based on signal type
+    if weights is not None:
+        w = weights
+    elif signal.signal_type == SignalType.VOLUME_MOMENTUM:
+        w = _VOLUME_MOMENTUM_WEIGHTS
+    elif signal.signal_type == SignalType.THREE_WAY_ARB:
+        w = _THREE_WAY_WEIGHTS
+    else:
+        w = _DEFAULT_WEIGHTS
 
     # Net edge after all estimated costs
     total_cost_impact = costs.get("total_cost", 0.0)
@@ -81,12 +109,22 @@ def score_signal(
     # Map: 1 day -> 1.0, 30+ days -> ~0.03
     components["time_efficiency"] = min(1.0, 1.0 / max(ttr_days, 1.0))
 
-    # 6. Match confidence (cross-platform only)
-    if match_score is not None:
-        components["match_confidence"] = min(match_score, 1.0)
+    # 6. Signal-type-specific components
+    if signal.signal_type == SignalType.VOLUME_MOMENTUM:
+        # Flow strength: how far above the 70% imbalance threshold
+        # implied_probability stores the imbalance ratio (0.70-1.0)
+        imbalance = signal.implied_probability if signal.implied_probability > 0 else 0.7
+        components["flow_strength"] = _saturate((imbalance - 0.70) / 0.30)
+    elif signal.signal_type == SignalType.THREE_WAY_ARB:
+        # Venue diversification: cross-venue (mixed Kalshi+Poly) reduces fee risk
+        venues = set(leg.venue or "kalshi" for leg in signal.legs)
+        components["venue_diversification"] = 1.0 if len(venues) > 1 else 0.5
     else:
-        # Complement arb: no matching uncertainty, full score
-        components["match_confidence"] = 1.0
+        # Match confidence (cross-platform arb) or full score (complement arb)
+        if match_score is not None:
+            components["match_confidence"] = min(match_score, 1.0)
+        else:
+            components["match_confidence"] = 1.0
 
     # Composite: weighted sum -> scale to 0-100
     composite = sum(

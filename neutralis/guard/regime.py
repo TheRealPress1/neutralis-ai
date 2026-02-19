@@ -103,6 +103,7 @@ def _normal_params() -> dict[str, Any]:
         "min_edge_pct": 1.0,
         "min_confidence": 20,
         "max_position_pct": 1.0,  # multiplier on base position size
+        "kelly_fraction": 0.25,  # standard quarter-Kelly
     }
 
 
@@ -112,6 +113,7 @@ def _risk_off_params() -> dict[str, Any]:
         "min_edge_pct": 2.0,  # require 2x normal edge
         "min_confidence": 40,  # require higher confidence
         "max_position_pct": 0.50,  # half position sizes
+        "kelly_fraction": 0.10,  # conservative 10% Kelly in risk-off
     }
 
 

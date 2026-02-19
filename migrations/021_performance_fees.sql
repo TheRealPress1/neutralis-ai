@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS user_fee_state (
     high_water_mark         DOUBLE PRECISION NOT NULL DEFAULT 0.0,
     cumulative_realized_pnl DOUBLE PRECISION NOT NULL DEFAULT 0.0,
     total_fees_accrued      DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    total_fees_settled      DOUBLE PRECISION NOT NULL DEFAULT 0.0,
     current_tier            TEXT NOT NULL DEFAULT 'free',
     created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
