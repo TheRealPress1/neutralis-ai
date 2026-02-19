@@ -377,12 +377,12 @@ export default function ApiKeyManager() {
               <p className="text-xs text-[#9ca3af]">
                 Generate an API key at{" "}
                 <a
-                  href="https://kalshi.com/account/api"
+                  href="https://kalshi.com/account/profile"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[#e8e9ea] underline underline-offset-2 hover:text-white"
                 >
-                  kalshi.com/account/api
+                  kalshi.com/account/profile
                 </a>
               </p>
               <div>

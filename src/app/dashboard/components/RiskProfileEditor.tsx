@@ -153,7 +153,7 @@ function fromDisplay(display: number, def: ParamDef): number {
 
 export default function RiskProfileEditor() {
   const [active, setActive] = useState<RiskProfile | null>(null);
-  const [form, setForm] = useState<Record<string, number>>({});
+  const [form, setForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -174,11 +174,11 @@ export default function RiskProfileEditor() {
   }, [loadProfile]);
 
   function populateForm(profile: RiskProfile) {
-    const values: Record<string, number> = {};
+    const values: Record<string, string> = {};
     for (const group of PARAM_GROUPS) {
       for (const p of group.params) {
         const raw = profile[p.key] as number;
-        values[p.key] = toDisplay(raw, p);
+        values[p.key] = String(toDisplay(raw, p));
       }
     }
     setForm(values);
@@ -189,7 +189,8 @@ export default function RiskProfileEditor() {
     for (const group of PARAM_GROUPS) {
       for (const p of group.params) {
         const saved = toDisplay(active[p.key] as number, p);
-        if (Math.abs((form[p.key] ?? 0) - saved) > 0.001) return true;
+        const current = parseFloat(form[p.key] ?? "0") || 0;
+        if (Math.abs(current - saved) > 0.001) return true;
       }
     }
     return false;
@@ -203,7 +204,7 @@ export default function RiskProfileEditor() {
     const updates: Record<string, number> = {};
     for (const group of PARAM_GROUPS) {
       for (const p of group.params) {
-        const displayVal = form[p.key] ?? 0;
+        const displayVal = parseFloat(form[p.key] ?? "0") || 0;
         updates[p.key] = fromDisplay(displayVal, p);
       }
     }
@@ -262,7 +263,7 @@ export default function RiskProfileEditor() {
             <div className="border-t border-[#1a1d21] px-6 pb-6 pt-4">
               <div className="grid gap-5 sm:grid-cols-2">
                 {group.params.map((param) => {
-                  const val = form[param.key] ?? 0;
+                  const val = form[param.key] ?? "";
                   return (
                     <div key={param.key}>
                       <label className="flex items-baseline gap-2 text-sm font-medium">
@@ -277,17 +278,20 @@ export default function RiskProfileEditor() {
                         {param.description}
                       </p>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={val}
-                        step={param.step}
-                        min={param.min}
-                        max={param.max}
-                        onChange={(e) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            [param.key]: parseFloat(e.target.value) || 0,
-                          }))
-                        }
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "" || /^-?\d*\.?\d*$/.test(v)) {
+                            setForm((prev) => ({ ...prev, [param.key]: v }));
+                          }
+                        }}
+                        onBlur={() => {
+                          const n = parseFloat(val) || 0;
+                          const clamped = Math.min(Math.max(n, param.min), param.max);
+                          setForm((prev) => ({ ...prev, [param.key]: String(clamped) }));
+                        }}
                         className="mt-2 w-full rounded-lg border border-[#1a1d21] bg-[#050608] px-3 py-2 text-sm text-[#e8e9ea] outline-none transition-colors focus:border-[#c0c5cb]"
                       />
                     </div>
