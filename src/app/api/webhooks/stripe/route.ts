@@ -1,15 +1,27 @@
 import { NextResponse } from "next/server";
 import { getStripe, tierFromPriceId } from "@/lib/stripe";
-import { createServerClient } from "@supabase/ssr";
+import { createServiceClient } from "@/lib/supabase/service";
+import {
+  sendSubscriptionConfirmedEmail,
+  sendSubscriptionChangedEmail,
+  sendSubscriptionCancelledEmail,
+  sendPaymentFailedEmail,
+} from "@/lib/email";
 import type Stripe from "stripe";
 
-// Use service-role key for webhook handler (no user cookie context)
-function createServiceClient() {
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => [], setAll: () => {} } },
-  );
+/** Fetch user email and first name from profiles. */
+async function getUserProfile(
+  supabase: ReturnType<typeof createServiceClient>,
+  userId: string,
+): Promise<{ email: string; firstName: string } | null> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("email, full_name")
+    .eq("id", userId)
+    .single();
+  if (!data?.email) return null;
+  const firstName = (data.full_name as string)?.split(" ")[0] || "there";
+  return { email: data.email as string, firstName };
 }
 
 export async function POST(request: Request) {
@@ -50,6 +62,11 @@ export async function POST(request: Request) {
               updated_at: new Date().toISOString(),
             })
             .eq("id", userId);
+
+          const profile = await getUserProfile(supabase, userId);
+          if (profile) {
+            sendSubscriptionConfirmedEmail(profile.email, profile.firstName, tier);
+          }
         }
         break;
       }
@@ -70,6 +87,11 @@ export async function POST(request: Request) {
                 updated_at: new Date().toISOString(),
               })
               .eq("id", userId);
+
+            const profile = await getUserProfile(supabase, userId);
+            if (profile) {
+              sendSubscriptionChangedEmail(profile.email, profile.firstName, tier);
+            }
           }
         }
         break;
@@ -88,6 +110,30 @@ export async function POST(request: Request) {
               updated_at: new Date().toISOString(),
             })
             .eq("id", userId);
+
+          const profile = await getUserProfile(supabase, userId);
+          if (profile) {
+            sendSubscriptionCancelledEmail(profile.email, profile.firstName);
+          }
+        }
+        break;
+      }
+
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const customerId = invoice.customer as string;
+
+        if (customerId) {
+          const { data: profileRow } = await (supabase as any)
+            .from("profiles")
+            .select("email, full_name")
+            .eq("stripe_customer_id", customerId)
+            .single();
+
+          if (profileRow?.email) {
+            const firstName = profileRow.full_name?.split(" ")[0] || "there";
+            sendPaymentFailedEmail(profileRow.email, firstName);
+          }
         }
         break;
       }

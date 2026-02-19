@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { rateLimit, AUTH_LIMIT, getClientIp } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
+import { sendWelcomeEmail } from "@/lib/email";
 
 export async function signUp(formData: FormData) {
   const ip = await getClientIp();
@@ -53,6 +54,7 @@ export async function signUp(formData: FormData) {
   // Only redirect if signup was successful
   if (data.user) {
     logAudit("auth.signup", { userId: data.user.id, details: { email } });
+    sendWelcomeEmail(email, firstName);
     revalidatePath("/", "layout");
     redirect("/onboarding");
   }
