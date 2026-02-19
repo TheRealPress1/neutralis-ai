@@ -60,7 +60,7 @@ class PipelineConfig:
     min_time_to_expiry_hours: float = 1.0
     fee_rate: float = 0.07
     max_position_dollars: float = 25.0
-    min_xp_edge_pct: float = 0.05  # Cross-platform arb threshold (lower — one side is fee-free)
+    min_xp_edge_pct: float = 0.10  # Cross-platform arb threshold (lower — one side is fee-free)
     slippage_per_leg: float = 0.005  # $0.005 per leg execution buffer (price movement risk)
 
 

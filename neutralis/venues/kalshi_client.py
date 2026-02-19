@@ -12,7 +12,7 @@ from neutralis.logging import get_logger
 
 logger = get_logger(__name__)
 
-_MIN_INTERVAL = 1.0 / 10  # ~100ms, conservative headroom under 20 req/sec
+_MIN_INTERVAL = 1.0 / 18  # ~56ms, tighter headroom under 20 req/sec limit
 
 
 class KalshiClient:

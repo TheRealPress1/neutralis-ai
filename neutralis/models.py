@@ -30,6 +30,7 @@ class SignalType(str, Enum):
     CROSS_PLATFORM_DISCREPANCY = "cross_platform_discrepancy"
     THREE_WAY_ARB = "three_way_arb"
     HIGH_PROBABILITY_DIRECTIONAL = "high_probability_directional"
+    VOLUME_MOMENTUM = "volume_momentum"
 
 
 class DecisionVerdict(str, Enum):

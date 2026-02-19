@@ -161,7 +161,7 @@ def scan_three_way_arb(
         prices = (group.outcome_a.ask, group.outcome_b.ask, group.outcome_draw.ask)
         venues = (group.venue, group.venue, group.venue)
         fee = estimate_three_way_fee(prices, venues, maker=maker)
-        net_edge = gross_edge - fee
+        net_edge = gross_edge - fee - (cfg.slippage_per_leg * 3)
 
         if net_edge <= 0:
             continue

@@ -23,6 +23,7 @@ from neutralis.core.disagreement import compute_disagreement
 from neutralis.core.features import compute_market_features, estimate_costs
 from neutralis.core.matcher import match_markets
 from neutralis.core.scanners import scan_complement_arb
+from neutralis.core.settlement_scanner import scan_settlement_arb
 from neutralis.core.three_way import group_kalshi_three_way, scan_three_way_arb
 from neutralis.core.scoring import score_signal
 from neutralis.guard.decision import evaluate_directional_signal, evaluate_signal, select_portfolio
@@ -221,14 +222,23 @@ def run_once(run_number: int = 0) -> RunStats:
 
     # Step 3a: Complement arb scan (Kalshi only)
     logger.info("Step 3a: Running complement arb scanner")
-    complement_signals = scan_complement_arb(kalshi_markets, settings.pipeline)
+    use_maker = settings.execution.use_maker_orders
+    complement_signals = scan_complement_arb(kalshi_markets, settings.pipeline, maker=use_maker)
 
     # Step 3a2: 3-way (Dutch book) arb scan
     logger.info("Step 3a2: Running 3-way arb scanner")
     kalshi_by_ticker = {m.ticker: m for m in kalshi_markets}
     three_way_groups = group_kalshi_three_way(kalshi_by_ticker)
-    use_maker = settings.execution.use_maker_orders
     three_way_signals = scan_three_way_arb(three_way_groups, settings.pipeline, maker=use_maker)
+
+    # Step 3a3: Settlement arb scan (near-expiry markets, relaxed threshold)
+    logger.info("Step 3a3: Running settlement arb scanner")
+    settlement_signals = scan_settlement_arb(kalshi_markets, settings.pipeline, maker=use_maker)
+    # Merge with complement signals (avoid duplicates — settlement scanner uses same SignalType)
+    settlement_tickers = {s.ticker for s in complement_signals}
+    for s in settlement_signals:
+        if s.ticker not in settlement_tickers:
+            complement_signals.append(s)
 
     # Step 3b: Cross-platform matching
     logger.info("Step 3b: Matching markets across venues")
@@ -236,7 +246,7 @@ def run_once(run_number: int = 0) -> RunStats:
 
     # Step 3c: Cross-platform signal scan
     logger.info("Step 3c: Scanning matched pairs for price discrepancies")
-    xp_signals = scan_cross_platform(pairs, settings.matching, pipeline_config=settings.pipeline)
+    xp_signals = scan_cross_platform(pairs, settings.matching, pipeline_config=settings.pipeline, maker=use_maker)
 
     # Step 3f: High-probability directional scan (sports markets)
     directional_signals: list[Signal] = []

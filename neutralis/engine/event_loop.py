@@ -30,6 +30,7 @@ from neutralis.core.cross_scanner import scan_cross_platform
 from neutralis.core.matcher import MarketPair, match_markets
 from neutralis.core.scanners import scan_complement_arb
 from neutralis.core.three_way import group_kalshi_three_way
+from neutralis.core.volume_scanner import check_volume_momentum
 from neutralis.core.scoring import score_signal
 from neutralis.core.features import compute_market_features, estimate_costs
 from neutralis.execution.executor import PaperExecutor
@@ -80,6 +81,16 @@ class TradeFlowStats:
 
 
 @dataclass
+class DepthSnapshot:
+    """Orderbook depth imbalance for a Polymarket asset."""
+    asset_id: str
+    bid_depth: float = 0.0  # Total bid-side liquidity ($)
+    ask_depth: float = 0.0  # Total ask-side liquidity ($)
+    imbalance: float = 0.0  # bid/(bid+ask), >0.5 means more buyers
+    updated_ts: float = 0.0
+
+
+@dataclass
 class _LiveState:
     """Mutable state shared across the event engine."""
     # Normalized markets keyed by ticker
@@ -99,6 +110,8 @@ class _LiveState:
     ticker_to_three_way: dict[str, str] = field(default_factory=dict)
     # Trade flow tracking
     trade_flow: dict[str, TradeFlowStats] = field(default_factory=dict)
+    # Polymarket orderbook depth: asset_id -> DepthSnapshot
+    poly_depth: dict[str, DepthSnapshot] = field(default_factory=dict)
     # Signal cooldown: ticker -> monotonic timestamp of last signal dispatch
     signal_cooldown: dict[str, float] = field(default_factory=dict)
     # Discrepancy analytics buffer
@@ -202,6 +215,8 @@ class EventEngine:
                 max_reconnect_delay_sec=self._poly_ws_cfg.max_reconnect_delay_sec,
             )
             self._poly_ws.on("price_change", self._on_poly_price_change)
+            self._poly_ws.on("book", self._on_poly_book)
+            self._poly_ws.on("last_trade_price", self._on_poly_trade)
             try:
                 await self._poly_ws.connect()
                 await self._poly_ws.subscribe_markets(asset_ids)
@@ -610,6 +625,150 @@ class EventEngine:
                 if kalshi_market:
                     await self._fast_arb_check(kalshi_ticker, kalshi_market, trigger_source="poly_ws")
 
+    async def _on_poly_book(self, msg: dict[str, Any]) -> None:
+        """Handle Polymarket orderbook snapshot — track depth imbalance.
+
+        Message format:
+            {"event_type": "book", "market": "0x...", "asset_id": "...",
+             "buys": [{"price": "0.55", "size": "100"}, ...],
+             "sells": [{"price": "0.57", "size": "80"}, ...],
+             "timestamp": ...}
+
+        Depth imbalance (bid_depth >> ask_depth) suggests underpricing.
+        Cross-reference with Kalshi price for confirmation.
+        """
+        state = self._state
+        if state is None:
+            return
+
+        asset_id = msg.get("asset_id", "")
+        if not asset_id:
+            return
+
+        nm = self._asset_id_to_poly.get(asset_id)
+        if nm is None:
+            return
+
+        # Sum bid and ask depth in dollars
+        buys = msg.get("buys") or []
+        sells = msg.get("sells") or []
+
+        bid_depth = 0.0
+        for level in buys:
+            try:
+                price = float(level.get("price", 0))
+                size = float(level.get("size", 0))
+                bid_depth += price * size
+            except (ValueError, TypeError):
+                continue
+
+        ask_depth = 0.0
+        for level in sells:
+            try:
+                price = float(level.get("price", 0))
+                size = float(level.get("size", 0))
+                ask_depth += price * size
+            except (ValueError, TypeError):
+                continue
+
+        total = bid_depth + ask_depth
+        if total < 10.0:  # Skip illiquid books
+            return
+
+        imbalance = bid_depth / total  # >0.5 means more buyers
+
+        snap = DepthSnapshot(
+            asset_id=asset_id,
+            bid_depth=bid_depth,
+            ask_depth=ask_depth,
+            imbalance=imbalance,
+            updated_ts=time.monotonic(),
+        )
+        state.poly_depth[asset_id] = snap
+
+        # Strong imbalance: >70% on one side suggests directional pressure
+        if imbalance >= 0.70 or imbalance <= 0.30:
+            # Cross-reference with Kalshi counterpart
+            kalshi_ticker = state.poly_to_kalshi.get(nm.ticker)
+            if kalshi_ticker:
+                kalshi_market = state.kalshi_markets.get(kalshi_ticker)
+                if kalshi_market:
+                    direction = "YES" if imbalance >= 0.70 else "NO"
+                    logger.info(
+                        "Poly depth imbalance: %s bid=$%.0f ask=$%.0f imb=%.1f%% → %s pressure (Kalshi %s)",
+                        nm.ticker[:30], bid_depth, ask_depth, imbalance * 100,
+                        direction, kalshi_ticker,
+                    )
+                    # Trigger arb check on Kalshi side (may find XP arb)
+                    await self._fast_arb_check(kalshi_ticker, kalshi_market, trigger_source="poly_book")
+
+    async def _on_poly_trade(self, msg: dict[str, Any]) -> None:
+        """Handle Polymarket last_trade_price — detect informed flow that Kalshi hasn't priced in.
+
+        When a large Polymarket trade moves the YES price significantly, check if
+        Kalshi's YES price has adjusted. If Kalshi is lagging, the price difference
+        creates a directional edge.
+
+        Academic basis: Ng et al. (SSRN, Jan 2026) — Polymarket leads Kalshi in
+        price discovery. Large-trade order imbalance predicts subsequent returns.
+        """
+        state = self._state
+        if state is None:
+            return
+
+        asset_id = msg.get("asset_id", "")
+        if not asset_id:
+            return
+
+        nm = self._asset_id_to_poly.get(asset_id)
+        if nm is None:
+            return
+
+        try:
+            trade_price = float(msg.get("price", 0))
+            trade_size = float(msg.get("size", 0))
+        except (ValueError, TypeError):
+            return
+
+        if trade_price <= 0 or trade_size < 100:  # Min 100 contracts to be "large"
+            return
+
+        # Check if Poly trade price diverges from cached Poly market price
+        cached_yes = nm.yes_ask
+        if cached_yes <= 0:
+            return
+
+        price_move = trade_price - cached_yes
+        if abs(price_move) < 0.02:  # Less than 2 cents — not significant
+            return
+
+        # Check Kalshi counterpart for lag
+        kalshi_ticker = state.poly_to_kalshi.get(nm.ticker)
+        if not kalshi_ticker:
+            return
+        kalshi_market = state.kalshi_markets.get(kalshi_ticker)
+        if not kalshi_market or kalshi_market.yes_ask <= 0:
+            return
+
+        # Kalshi is "lagging" if its price hasn't moved in the same direction
+        # as the Polymarket trade
+        kalshi_yes = kalshi_market.yes_ask
+        lag = trade_price - kalshi_yes  # Positive = Poly higher, Kalshi cheap
+
+        if abs(lag) < 0.02:  # Kalshi already adjusted — no edge
+            return
+
+        # Signal: Polymarket informed flow detected, Kalshi lagging
+        if not self._signal_on_cooldown(state, kalshi_ticker, "informed_flow"):
+            direction = "YES" if lag > 0 else "NO"
+            logger.info(
+                "Informed flow: %s Poly trade %d@%.4f (move=%.4f) → Kalshi %s lag=%.4f → buy %s",
+                nm.ticker[:30], int(trade_size), trade_price,
+                price_move, kalshi_ticker, lag, direction,
+            )
+            # Trigger arb check which will find the cross-platform discrepancy
+            await self._fast_arb_check(kalshi_ticker, kalshi_market, trigger_source="poly_informed_flow")
+
     # ── Fast arb detection ─────────────────────────────────────────────
 
     def _signal_on_cooldown(self, state: _LiveState, ticker: str, signal_type: str) -> bool:
@@ -657,7 +816,8 @@ class EventEngine:
         if market.yes_ask > 0 and market.no_ask > 0:
             combined = market.yes_ask + market.no_ask
             if combined < 1.0:
-                fee = estimate_total_fee(market.yes_ask, market.no_ask, venue="kalshi")
+                use_maker = state.settings.execution.use_maker_orders
+                fee = estimate_total_fee(market.yes_ask, market.no_ask, venue="kalshi", maker=use_maker)
                 net_edge = (1.0 - combined) - fee - slippage_2
                 if net_edge > 0:
                     edge_pct = (net_edge / combined) * 100.0
@@ -799,6 +959,26 @@ class EventEngine:
                                     group, net_edge, edge_pct_3w,
                                 )
 
+        # ── Check 4: Volume momentum ──
+        flow = state.trade_flow.get(ticker)
+        if flow and flow.total_volume_5m >= 20:
+            if not self._signal_on_cooldown(state, ticker, "volume"):
+                vol_signal = check_volume_momentum(
+                    ticker, market,
+                    buy_volume=flow.buy_volume_5m,
+                    sell_volume=flow.sell_volume_5m,
+                    total_volume=flow.total_volume_5m,
+                    config=cfg,
+                )
+                if vol_signal is not None:
+                    state.signals_detected += 1
+                    loop = asyncio.get_event_loop()
+                    loop.run_in_executor(
+                        self._executor_pool,
+                        self._execute_volume_momentum,
+                        ticker, market, vol_signal,
+                    )
+
     # ── Execution (runs in thread pool) ────────────────────────────────
 
     def _execute_complement_arb(
@@ -884,6 +1064,15 @@ class EventEngine:
         )
 
         self._score_and_execute(signal, market, settings)
+
+    def _execute_volume_momentum(
+        self, ticker: str, market: NormalizedMarket, vol_signal: Signal,
+    ) -> None:
+        """Score, guard-check, and execute a volume momentum signal. Runs sync in thread pool."""
+        state = self._state
+        if state is None:
+            return
+        self._score_and_execute(vol_signal, market, state.settings)
 
     def _execute_xp_arb(
         self, ticker: str, k_market: NormalizedMarket, p_market: NormalizedMarket,
@@ -1702,6 +1891,7 @@ class EventEngine:
             "xp_pairs": len(state.xp_pairs) if state else 0,
             "three_way_groups": len(state.three_way_kalshi) if state else 0,
             "active_trade_flow_tickers": active_flow,
+            "poly_depth_tracked": len(state.poly_depth) if state else 0,
             "ticker_updates": state.ticker_updates if state else 0,
             "arb_checks": state.arb_checks if state else 0,
             "signals_detected": state.signals_detected if state else 0,

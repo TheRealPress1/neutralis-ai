@@ -1,7 +1,15 @@
-"""Complement arbitrage scanner for Kalshi binary markets.
+"""Settlement arb scanner for near-expiry markets.
 
-If yes_ask + no_ask < 1.0, buying both guarantees profit at settlement
-(minus fees). This scanner identifies such opportunities.
+Markets within 24h of close compress toward 0 or 1. Complement arbs in
+the final hours have much higher annualized ROI because the capital is
+locked for a shorter period. This scanner uses a relaxed edge threshold
+for short-duration opportunities.
+
+Strategy:
+  - Same as complement arb (yes_ask + no_ask < 1.0 after fees)
+  - But only for markets expiring within 24h
+  - Relaxed min_edge_pct (0.5% vs normal 1.0%)
+  - Higher priority due to guaranteed short-duration resolution
 """
 
 from __future__ import annotations
@@ -21,6 +29,12 @@ from neutralis.models import (
 
 logger = get_logger(__name__)
 
+# Relaxed threshold for settlement arbs — shorter lock-up compensates
+_SETTLEMENT_MIN_EDGE_PCT = 0.5
+# Only scan markets within this window
+_MAX_HOURS_TO_EXPIRY = 24.0
+_MIN_HOURS_TO_EXPIRY = 0.25  # 15 min minimum (avoid race with settlement)
+
 
 def _hours_until(dt: datetime | None) -> float | None:
     if dt is None:
@@ -28,20 +42,20 @@ def _hours_until(dt: datetime | None) -> float | None:
     now = datetime.now(timezone.utc)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    delta = dt - now
-    return delta.total_seconds() / 3600.0
+    return (dt - now).total_seconds() / 3600.0
 
 
-def scan_complement_arb(
+def scan_settlement_arb(
     markets: list[NormalizedMarket],
     config: PipelineConfig | None = None,
     *,
     maker: bool = False,
 ) -> list[Signal]:
-    """Scan normalized markets for complement arbitrage opportunities.
+    """Scan near-expiry markets for complement arb opportunities.
 
-    For each active binary market where yes_ask + no_ask < 1.0 (after fees),
-    emit a Signal with the computed edge.
+    Similar to scan_complement_arb but specifically targets markets
+    within 24h of settlement where prices compress toward 0/1 and
+    arb edges appear more frequently.
     """
     cfg = config or PipelineConfig()
     signals: list[Signal] = []
@@ -54,33 +68,34 @@ def scan_complement_arb(
         if m.yes_ask <= 0 or m.no_ask <= 0:
             continue
 
+        # Only near-expiry markets
         hours_left = _hours_until(m.expected_expiration) or _hours_until(m.close_time)
-        if hours_left is not None:
-            if hours_left < cfg.min_time_to_expiry_hours:
-                continue
-            if hours_left > cfg.max_time_to_expiry_hours:
-                continue
+        if hours_left is None:
+            continue
+        if hours_left < _MIN_HOURS_TO_EXPIRY or hours_left > _MAX_HOURS_TO_EXPIRY:
+            continue
 
         combined_cost = m.yes_ask + m.no_ask
-
         if combined_cost >= 1.0:
             continue
 
         gross_edge = 1.0 - combined_cost
         estimated_fee = estimate_total_fee(m.yes_ask, m.no_ask, venue=m.venue, maker=maker)
-        slippage = cfg.slippage_per_leg * 2  # two legs
+        slippage = cfg.slippage_per_leg * 2
         net_edge = gross_edge - estimated_fee - slippage
 
         if net_edge <= 0:
             continue
 
         edge_pct = (net_edge / combined_cost) * 100.0
-
-        if edge_pct < cfg.min_edge_pct:
+        if edge_pct < _SETTLEMENT_MIN_EDGE_PCT:
             continue
 
         if m.liquidity < cfg.min_liquidity_dollars:
             continue
+
+        # Annualized ROI — short duration means very high ROI
+        annualized_roi = (edge_pct / max(hours_left, 0.25)) * 8760.0  # % per year
 
         legs = (
             TradeLeg(
@@ -113,19 +128,13 @@ def scan_complement_arb(
 
         signals.append(signal)
         logger.info(
-            "Signal: %s  yes_ask=%.4f  no_ask=%.4f  edge=%.2f%%",
-            m.ticker,
-            m.yes_ask,
-            m.no_ask,
-            edge_pct,
-            extra={"ticker": m.ticker, "edge_pct": edge_pct},
+            "Settlement arb: %s yes=%.4f no=%.4f edge=%.2f%% hours=%.1f annROI=%.0f%%",
+            m.ticker, m.yes_ask, m.no_ask, edge_pct, hours_left, annualized_roi,
         )
 
     signals.sort(key=lambda s: s.edge_pct, reverse=True)
-
     logger.info(
-        "Scan complete: %d signals from %d markets",
-        len(signals),
-        len(markets),
+        "Settlement scan: %d signals from %d markets (<%dh window)",
+        len(signals), len(markets), int(_MAX_HOURS_TO_EXPIRY),
     )
     return signals

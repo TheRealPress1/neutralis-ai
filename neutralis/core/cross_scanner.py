@@ -15,6 +15,8 @@ def scan_cross_platform(
     pairs: list[MarketPair],
     config: MatchingConfig | None = None,
     pipeline_config: PipelineConfig | None = None,
+    *,
+    maker: bool = False,
 ) -> list[Signal]:
     """Scan matched market pairs for cross-venue arbitrage opportunities.
 
@@ -66,6 +68,7 @@ def scan_cross_platform(
             yes_venue=yes_venue,
             no_price=other_no,
             no_venue=no_venue,
+            maker=maker,
         )
         slippage = cfg_pipe.slippage_per_leg * 2  # two legs
         net_edge = gross_edge - estimated_fee - slippage

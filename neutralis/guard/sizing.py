@@ -1,4 +1,4 @@
-"""Position sizing with portfolio headroom awareness."""
+"""Position sizing with fractional Kelly criterion and portfolio headroom awareness."""
 
 from __future__ import annotations
 
@@ -7,6 +7,22 @@ from typing import Any
 from neutralis.categories import RISK_MULTIPLIERS, classify_market
 from neutralis.config import PipelineConfig, PortfolioConfig
 from neutralis.models import NormalizedMarket, PortfolioSnapshot, Signal
+
+# Use 25% Kelly for safety — full Kelly is too aggressive for correlated bets
+_KELLY_FRACTION = 0.25
+
+
+def _kelly_optimal(signal: Signal) -> float:
+    """Compute the optimal Kelly bet fraction for a signal.
+
+    For arbs (guaranteed payout): f* = net_edge / combined_cost
+    For directional (probabilistic): f* = edge_pct / 100
+    """
+    if signal.combined_cost > 0 and signal.net_edge > 0:
+        return signal.net_edge / signal.combined_cost
+    if signal.edge_pct > 0:
+        return signal.edge_pct / 100.0
+    return 0.0
 
 
 def compute_size(
@@ -18,16 +34,29 @@ def compute_size(
     category: str | None = None,
     category_overrides: dict[str, Any] | None = None,
 ) -> float:
-    """Compute suggested position size in dollars (per leg).
+    """Compute suggested position size in dollars (per leg) using fractional Kelly.
 
     Returns 0.0 if the signal should not be traded.
-    When portfolio state is provided, the size is clamped to respect
-    portfolio-level headroom (total, event, and ticker budgets).
-    When category info is provided, applies per-category multipliers.
+    Kelly criterion scales position with edge quality — higher edge = larger bet.
+    Still clamped to max_position_dollars, liquidity caps, and portfolio headroom.
     """
     cfg = config or PipelineConfig()
+    pcfg = portfolio_config or PortfolioConfig()
 
-    size = cfg.max_position_dollars
+    # ── Fractional Kelly base sizing ──
+    kelly = _kelly_optimal(signal)
+    if kelly <= 0:
+        # Fall back to edge-ratio scaling for signals without Kelly-compatible fields
+        size = cfg.max_position_dollars
+        if signal.edge_pct > 0 and cfg.min_edge_pct > 0:
+            edge_ratio = min(signal.edge_pct / (cfg.min_edge_pct * 3), 1.0)
+            size *= edge_ratio
+    else:
+        bankroll = pcfg.max_total_exposure_dollars
+        size = kelly * _KELLY_FRACTION * bankroll
+
+    # Cap at configured max per-position
+    size = min(size, cfg.max_position_dollars)
 
     # Apply per-category position multiplier
     if category and category_overrides and category in category_overrides:
@@ -41,16 +70,13 @@ def compute_size(
     if liquidity_cap > 0:
         size = min(size, liquidity_cap)
 
-    # Scale down if edge is close to minimum threshold
-    if signal.edge_pct > 0 and cfg.min_edge_pct > 0:
-        edge_ratio = signal.edge_pct / (cfg.min_edge_pct * 3)
-        edge_ratio = min(edge_ratio, 1.0)
-        size *= edge_ratio
+    # Confidence scaling: reduce size for low-confidence signals
+    if signal.confidence_score > 0:
+        confidence_factor = min(signal.confidence_score / 70.0, 1.0)
+        size *= confidence_factor
 
-    # Portfolio headroom clamping (v2)
+    # Portfolio headroom clamping
     if portfolio_snapshot is not None:
-        pcfg = portfolio_config or PortfolioConfig()
-
         # Total exposure headroom
         total_headroom = pcfg.max_total_exposure_dollars - portfolio_snapshot.total_exposure_dollars
         size = min(size, max(total_headroom, 0.0))
