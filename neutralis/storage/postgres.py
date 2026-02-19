@@ -1737,3 +1737,154 @@ class PostgresStorage:
         except Exception:
             self._safe_rollback()
             logger.warning("Failed to update automation metrics", exc_info=True)
+
+    # ------------------------------------------------------------------
+    # Performance Fees
+    # ------------------------------------------------------------------
+
+    def get_user_fee_state(self, user_id: str) -> dict | None:
+        """Return the fee state row for a user, or None if not found."""
+        rows = self._fetch_dicts(
+            "SELECT * FROM user_fee_state WHERE user_id = %(user_id)s",
+            {"user_id": user_id},
+        )
+        return rows[0] if rows else None
+
+    def upsert_user_fee_state(
+        self,
+        user_id: str,
+        high_water_mark: float,
+        cumulative_realized_pnl: float,
+        total_fees_accrued: float,
+        current_tier: str,
+    ) -> int:
+        """Create or update fee state for a user. Returns the row id."""
+        conn = self._ensure_connected()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO user_fee_state (
+                        user_id, high_water_mark, cumulative_realized_pnl,
+                        total_fees_accrued, current_tier
+                    ) VALUES (
+                        %(user_id)s, %(hwm)s, %(cum_pnl)s,
+                        %(fees)s, %(tier)s
+                    )
+                    ON CONFLICT (user_id) DO UPDATE SET
+                        high_water_mark = %(hwm)s,
+                        cumulative_realized_pnl = %(cum_pnl)s,
+                        total_fees_accrued = %(fees)s,
+                        current_tier = %(tier)s,
+                        updated_at = now()
+                    RETURNING id
+                    """,
+                    {
+                        "user_id": user_id,
+                        "hwm": high_water_mark,
+                        "cum_pnl": cumulative_realized_pnl,
+                        "fees": total_fees_accrued,
+                        "tier": current_tier,
+                    },
+                )
+                row = cur.fetchone()
+                assert row is not None
+                row_id: int = row[0]
+            conn.commit()
+        except Exception:
+            self._safe_rollback()
+            raise
+        return row_id
+
+    def append_fee_ledger(
+        self,
+        user_id: str,
+        position_id: str,
+        realized_pnl_delta: float,
+        cumulative_pnl_before: float,
+        cumulative_pnl_after: float,
+        hwm_before: float,
+        hwm_after: float,
+        fee_rate: float,
+        fee_amount: float,
+        tier_at_time: str,
+        notes: str | None = None,
+    ) -> int:
+        """Append an immutable fee ledger entry. Returns the row id."""
+        conn = self._ensure_connected()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO fee_ledger (
+                        user_id, position_id, realized_pnl_delta,
+                        cumulative_pnl_before, cumulative_pnl_after,
+                        hwm_before, hwm_after,
+                        fee_rate, fee_amount, tier_at_time, notes
+                    ) VALUES (
+                        %(user_id)s, %(position_id)s, %(realized_pnl_delta)s,
+                        %(cum_before)s, %(cum_after)s,
+                        %(hwm_before)s, %(hwm_after)s,
+                        %(fee_rate)s, %(fee_amount)s, %(tier)s, %(notes)s
+                    )
+                    RETURNING id
+                    """,
+                    {
+                        "user_id": user_id,
+                        "position_id": position_id,
+                        "realized_pnl_delta": realized_pnl_delta,
+                        "cum_before": cumulative_pnl_before,
+                        "cum_after": cumulative_pnl_after,
+                        "hwm_before": hwm_before,
+                        "hwm_after": hwm_after,
+                        "fee_rate": fee_rate,
+                        "fee_amount": fee_amount,
+                        "tier": tier_at_time,
+                        "notes": notes,
+                    },
+                )
+                row = cur.fetchone()
+                assert row is not None
+                ledger_id: int = row[0]
+            conn.commit()
+        except Exception:
+            self._safe_rollback()
+            raise
+        return ledger_id
+
+    def get_fee_ledger(self, user_id: str, limit: int = 50) -> list[dict]:
+        """Return recent fee ledger entries for a user."""
+        return self._fetch_dicts(
+            "SELECT * FROM fee_ledger "
+            "WHERE user_id = %(user_id)s "
+            "ORDER BY created_at DESC LIMIT %(limit)s",
+            {"user_id": user_id, "limit": limit},
+        )
+
+    def get_fee_summary(self, user_id: str) -> dict:
+        """Return aggregate fee stats for a user."""
+        rows = self._fetch_dicts(
+            """
+            SELECT
+                COALESCE(SUM(fee_amount), 0) AS total_fees,
+                COUNT(*) AS total_entries,
+                COUNT(*) FILTER (WHERE fee_amount > 0) AS fee_events,
+                COALESCE(MAX(hwm_after), 0) AS current_hwm,
+                COALESCE(
+                    (SELECT cumulative_pnl_after FROM fee_ledger
+                     WHERE user_id = %(user_id)s
+                     ORDER BY created_at DESC LIMIT 1),
+                    0
+                ) AS current_cumulative_pnl
+            FROM fee_ledger
+            WHERE user_id = %(user_id)s
+            """,
+            {"user_id": user_id},
+        )
+        return rows[0] if rows else {
+            "total_fees": 0.0,
+            "total_entries": 0,
+            "fee_events": 0,
+            "current_hwm": 0.0,
+            "current_cumulative_pnl": 0.0,
+        }

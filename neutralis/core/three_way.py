@@ -9,7 +9,9 @@ Works on both Kalshi (3 separate binary markets per event) and Polymarket
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
+from dataclasses import replace
 from datetime import datetime, timezone
 
 from neutralis.config import PipelineConfig
@@ -208,3 +210,118 @@ def scan_three_way_arb(
     signals.sort(key=lambda s: s.edge_pct, reverse=True)
     logger.info("3-way scan: %d signals from %d groups", len(signals), len(groups))
     return signals
+
+
+# ── Cross-venue three-way merge ──
+
+_LABEL_CLEAN_RE = re.compile(r"[^a-z0-9 ]")
+_LABEL_STRIP_SUFFIXES = ("wins", "win", "to win")
+
+
+def _canonical_label(label: str) -> str:
+    """Normalize outcome label for cross-venue matching.
+
+    'Aston Villa Wins' → 'aston villa'
+    'AVL' → 'avl'
+    'Draw' → 'draw'
+    """
+    s = label.strip().lower()
+    for suffix in _LABEL_STRIP_SUFFIXES:
+        if s.endswith(suffix):
+            s = s[: -len(suffix)].strip()
+    return _LABEL_CLEAN_RE.sub("", s).strip()
+
+
+def _pick_cheapest(kalshi_oc: ThreeWayOutcome, poly_oc: ThreeWayOutcome) -> ThreeWayOutcome:
+    """Return the outcome with the lower ask price (cheaper to buy)."""
+    if poly_oc.ask > 0 and (kalshi_oc.ask <= 0 or poly_oc.ask < kalshi_oc.ask):
+        return poly_oc
+    return kalshi_oc
+
+
+def merge_cross_venue_three_way(
+    kalshi_groups: list[ThreeWayGroup],
+    poly_groups: list[ThreeWayGroup],
+) -> list[ThreeWayGroup]:
+    """Match Kalshi and Polymarket 3-way groups and build hybrid groups.
+
+    For each matched pair, picks the cheapest ask per outcome across venues.
+    This exploits Polymarket's near-zero fees — shifting legs to Poly reduces
+    total fee burden.
+
+    Returns hybrid ThreeWayGroups with mixed venues (e.g. 2 Poly + 1 Kalshi).
+    """
+    if not kalshi_groups or not poly_groups:
+        return []
+
+    # Build lookup: canonical team labels -> poly group
+    # Each Poly group is indexed by the frozenset of its team labels (non-draw)
+    poly_by_teams: dict[frozenset[str], ThreeWayGroup] = {}
+    for pg in poly_groups:
+        team_labels = frozenset(
+            _canonical_label(oc.label)
+            for oc in (pg.outcome_a, pg.outcome_b)
+        )
+        if len(team_labels) == 2:  # Must have 2 distinct team labels
+            poly_by_teams[team_labels] = pg
+
+    merged: list[ThreeWayGroup] = []
+    for kg in kalshi_groups:
+        # Extract canonical team labels from Kalshi group
+        k_labels = frozenset(
+            _canonical_label(oc.label)
+            for oc in (kg.outcome_a, kg.outcome_b)
+        )
+        if len(k_labels) != 2:
+            continue
+
+        pg = poly_by_teams.get(k_labels)
+        if pg is None:
+            continue
+
+        # Match outcomes: align Kalshi A/B/Draw to Poly A/B/Draw by label
+        k_by_label = {
+            _canonical_label(kg.outcome_a.label): kg.outcome_a,
+            _canonical_label(kg.outcome_b.label): kg.outcome_b,
+        }
+        p_by_label = {
+            _canonical_label(pg.outcome_a.label): pg.outcome_a,
+            _canonical_label(pg.outcome_b.label): pg.outcome_b,
+        }
+
+        # Pick cheapest per outcome
+        best_outcomes = []
+        for label in k_labels:
+            k_oc = k_by_label.get(label)
+            p_oc = p_by_label.get(label)
+            if k_oc and p_oc:
+                best_outcomes.append(_pick_cheapest(k_oc, p_oc))
+            elif k_oc:
+                best_outcomes.append(k_oc)
+            else:
+                break  # Can't match — skip
+        if len(best_outcomes) != 2:
+            continue
+
+        best_draw = _pick_cheapest(kg.outcome_draw, pg.outcome_draw)
+
+        hybrid = ThreeWayGroup(
+            event_id=f"XV:{kg.event_id}",
+            venue="cross_venue",
+            title=kg.title,
+            outcome_a=best_outcomes[0],
+            outcome_b=best_outcomes[1],
+            outcome_draw=best_draw,
+            close_time=kg.close_time,
+            liquidity=min(kg.liquidity, pg.liquidity),
+        )
+
+        # Only include if the hybrid is cheaper than single-venue
+        if hybrid.combined_ask < kg.combined_ask:
+            merged.append(hybrid)
+
+    logger.info(
+        "Cross-venue 3-way merge: %d hybrid groups from %d Kalshi × %d Polymarket",
+        len(merged), len(kalshi_groups), len(poly_groups),
+    )
+    return merged

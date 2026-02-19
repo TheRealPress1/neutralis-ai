@@ -37,9 +37,11 @@ class PortfolioManager:
         self,
         storage: PostgresStorage,
         config: PortfolioConfig | None = None,
+        fee_accruer: object | None = None,
     ) -> None:
         self._storage = storage
         self._config = config or PortfolioConfig()
+        self._fee_accruer = fee_accruer  # PerformanceFeeAccruer (optional)
 
     def record_fill(
         self,
@@ -214,6 +216,20 @@ class PortfolioManager:
             exit_reason=exit_reason,
             exit_price=exit_price,
         )
+
+        # Accrue performance fee (non-blocking — failure never prevents closure)
+        if self._fee_accruer is not None:
+            try:
+                self._fee_accruer.accrue_on_close(
+                    position_id=position_id,
+                    realized_pnl=round(realized_pnl, 4),
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to accrue performance fee for position %s",
+                    position_id,
+                    exc_info=True,
+                )
 
         logger.info(
             "Position closed: %s %s %s | reason=%s P&L=$%.2f",

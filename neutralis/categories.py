@@ -211,6 +211,24 @@ def classify_sport(title: str, event_ticker: str = "") -> str | None:
     return None
 
 
+def classify_directional_category(title: str, event_ticker: str = "") -> str | None:
+    """Classify a market for the directional scanner.
+
+    Returns "sports", "crypto", "politics", or None.
+    Used to select per-category probability thresholds.
+    """
+    # Sports first (most common directional)
+    if classify_sport(title, event_ticker) is not None:
+        return "sports"
+
+    text = f"{title} {event_ticker}"
+    category = classify_market(text)
+    if category in ("crypto", "politics"):
+        return category
+
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Risk multipliers per risk level
 # ---------------------------------------------------------------------------

@@ -29,7 +29,7 @@ from neutralis.config import Settings, WebSocketConfig, load_settings, load_sett
 from neutralis.core.cross_scanner import scan_cross_platform
 from neutralis.core.matcher import MarketPair, match_markets
 from neutralis.core.scanners import scan_complement_arb
-from neutralis.core.three_way import group_kalshi_three_way
+from neutralis.core.three_way import group_kalshi_three_way, merge_cross_venue_three_way
 from neutralis.core.volume_scanner import check_volume_momentum
 from neutralis.core.scoring import score_signal
 from neutralis.core.features import compute_market_features, estimate_costs
@@ -57,7 +57,7 @@ from neutralis.venues.kalshi_normalize import normalize_market as kalshi_normali
 from neutralis.venues.kalshi_ws import KalshiWebSocket
 from neutralis.venues.market_cache import MarketCache
 from neutralis.venues.polymarket_client import PolymarketClient
-from neutralis.venues.polymarket_normalize import normalize_market as poly_normalize
+from neutralis.venues.polymarket_normalize import normalize_market as poly_normalize, normalize_three_way_market as poly_normalize_three_way
 from neutralis.venues.polymarket_ws import PolymarketWebSocket
 
 logger = get_logger("event_engine")
@@ -104,10 +104,12 @@ class _LiveState:
     poly_to_kalshi: dict[str, str]
     # Settings
     settings: Settings
-    # 3-way match groups: event_ticker -> ThreeWayGroup
+    # 3-way match groups: event_ticker -> ThreeWayGroup (includes cross-venue hybrids)
     three_way_kalshi: dict[str, ThreeWayGroup] = field(default_factory=dict)
     # Reverse lookup: kalshi_ticker -> event_ticker (for WS updates)
     ticker_to_three_way: dict[str, str] = field(default_factory=dict)
+    # Polymarket 3-way groups (for cross-venue merge on Kalshi refresh)
+    poly_three_way: list[ThreeWayGroup] = field(default_factory=list)
     # Trade flow tracking
     trade_flow: dict[str, TradeFlowStats] = field(default_factory=dict)
     # Polymarket orderbook depth: asset_id -> DepthSnapshot
@@ -347,18 +349,24 @@ class EventEngine:
             xp_pairs[pair.kalshi_market.ticker] = (pair, pair.polymarket_market.ticker)
             poly_to_kalshi[pair.polymarket_market.ticker] = pair.kalshi_market.ticker
 
-        # Group 3-way match markets
+        # Group 3-way match markets (single-venue + cross-venue)
         three_way_groups = group_kalshi_three_way(kalshi_markets)
+        poly_three_way = [g for g in (poly_normalize_three_way(raw) for raw in raw_poly) if g is not None]
+        xv_three_way = merge_cross_venue_three_way(three_way_groups, poly_three_way)
+        all_three_way = three_way_groups + xv_three_way
+
         three_way_kalshi: dict[str, ThreeWayGroup] = {}
         ticker_to_three_way: dict[str, str] = {}
-        for g in three_way_groups:
+        for g in all_three_way:
             three_way_kalshi[g.event_id] = g
             for oc in g.outcomes:
-                ticker_to_three_way[oc.ticker] = g.event_id
+                if oc.venue == "kalshi":  # Only Kalshi tickers trigger WS updates
+                    ticker_to_three_way[oc.ticker] = g.event_id
 
         logger.info(
-            "State built: %d Kalshi, %d Polymarket, %d pairs, %d 3-way matches",
-            len(kalshi_markets), len(poly_markets), len(pairs), len(three_way_kalshi),
+            "State built: %d Kalshi, %d Polymarket, %d pairs, %d 3-way matches (%d cross-venue)",
+            len(kalshi_markets), len(poly_markets), len(pairs),
+            len(three_way_kalshi), len(xv_three_way),
         )
 
         return _LiveState(
@@ -370,6 +378,7 @@ class EventEngine:
             settings=settings,
             three_way_kalshi=three_way_kalshi,
             ticker_to_three_way=ticker_to_three_way,
+            poly_three_way=poly_three_way,
         )
 
     def _build_focus_tickers(self, state: _LiveState) -> set[str]:
@@ -1562,11 +1571,13 @@ class EventEngine:
                         )
                         return False
 
-                    # Poll for fill
+                    # Poll for fill with exponential backoff
                     filled = False
                     deadline = time.monotonic() + timeout
+                    poll_delay = 0.05  # Start at 50ms
                     while time.monotonic() < deadline:
-                        time.sleep(0.5)
+                        time.sleep(poll_delay)
+                        poll_delay = min(poll_delay * 2, 1.0)  # 50→100→200→400→800→1000ms
                         check = k_exec.get_order(order_id)
                         check_order = check.get("order", {})
                         if check_order.get("status") == "executed":
@@ -1746,14 +1757,18 @@ class EventEngine:
             xp_pairs[pair.kalshi_market.ticker] = (pair, pair.polymarket_market.ticker)
             poly_to_kalshi[pair.polymarket_market.ticker] = pair.kalshi_market.ticker
 
-        # Re-group 3-way match markets
+        # Re-group 3-way match markets (single-venue + cross-venue)
         three_way_groups = group_kalshi_three_way(kalshi_markets)
+        xv_three_way = merge_cross_venue_three_way(three_way_groups, state.poly_three_way)
+        all_three_way = three_way_groups + xv_three_way
+
         three_way_kalshi: dict[str, ThreeWayGroup] = {}
         ticker_to_three_way: dict[str, str] = {}
-        for g in three_way_groups:
+        for g in all_three_way:
             three_way_kalshi[g.event_id] = g
             for oc in g.outcomes:
-                ticker_to_three_way[oc.ticker] = g.event_id
+                if oc.venue == "kalshi":
+                    ticker_to_three_way[oc.ticker] = g.event_id
 
         state.kalshi_markets = kalshi_markets
         state.kalshi_raw = kalshi_raw
@@ -1763,8 +1778,8 @@ class EventEngine:
         state.ticker_to_three_way = ticker_to_three_way
 
         logger.info(
-            "Kalshi refresh: %d markets, %d cross-platform pairs, %d 3-way groups",
-            len(kalshi_markets), len(xp_pairs), len(three_way_kalshi),
+            "Kalshi refresh: %d markets, %d cross-platform pairs, %d 3-way groups (%d cross-venue)",
+            len(kalshi_markets), len(xp_pairs), len(three_way_kalshi), len(xv_three_way),
         )
         return state
 
@@ -1825,12 +1840,28 @@ class EventEngine:
         state.xp_pairs = xp_pairs
         state.poly_to_kalshi = poly_to_kalshi
 
+        # Rebuild Polymarket 3-way groups and cross-venue hybrids
+        poly_three_way = [g for g in (poly_normalize_three_way(raw) for raw in raw_poly) if g is not None]
+        state.poly_three_way = poly_three_way
+        kalshi_groups = group_kalshi_three_way(state.kalshi_markets)
+        xv_three_way = merge_cross_venue_three_way(kalshi_groups, poly_three_way)
+        all_three_way = kalshi_groups + xv_three_way
+        three_way_kalshi: dict[str, ThreeWayGroup] = {}
+        ticker_to_three_way: dict[str, str] = {}
+        for g in all_three_way:
+            three_way_kalshi[g.event_id] = g
+            for oc in g.outcomes:
+                if oc.venue == "kalshi":
+                    ticker_to_three_way[oc.ticker] = g.event_id
+        state.three_way_kalshi = three_way_kalshi
+        state.ticker_to_three_way = ticker_to_three_way
+
         # Rebuild asset mappings for Poly WS
         self._build_poly_asset_mappings(state)
 
         logger.info(
-            "Polymarket refresh: %d markets, %d cross-platform pairs",
-            len(poly_markets), len(xp_pairs),
+            "Polymarket refresh: %d markets, %d pairs, %d 3-way (%d cross-venue)",
+            len(poly_markets), len(xp_pairs), len(three_way_kalshi), len(xv_three_way),
         )
 
     # ── Discrepancy flush ────────────────────────────────────────────

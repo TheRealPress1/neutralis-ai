@@ -104,6 +104,26 @@ class ExitConfig:
 
 
 @dataclass(frozen=True)
+class PerformanceFeeConfig:
+    enabled: bool = True
+    free_rate: float = 0.00
+    starter_rate: float = 0.12
+    pro_rate: float = 0.07
+    founder_rate: float = 0.00
+    min_fee_amount: float = 0.0001  # $0.0001 — skip dust entries
+
+    def rate_for_tier(self, tier: str) -> float:
+        """Return the fee rate for a subscription tier."""
+        rates = {
+            "free": self.free_rate,
+            "starter": self.starter_rate,
+            "pro": self.pro_rate,
+            "founder": self.founder_rate,
+        }
+        return rates.get(tier, self.free_rate)
+
+
+@dataclass(frozen=True)
 class DirectionalConfig:
     enabled: bool = True
     min_implied_probability: float = 0.80
@@ -116,6 +136,15 @@ class DirectionalConfig:
     max_open_positions: int = 30
     min_time_to_expiry_hours: float = 1.0
     max_time_to_expiry_hours: float = 168.0  # 7 days
+    # Per-category probability thresholds (override min_implied_probability)
+    # Crypto milestones are binary (BTC > $150k?) — 85% is very strong conviction
+    crypto_min_probability: float = 0.85
+    crypto_max_time_hours: float = 720.0  # 30 days (milestone markets resolve slower)
+    # Political markets have longer horizons — require higher conviction
+    politics_min_probability: float = 0.88
+    politics_max_time_hours: float = 2160.0  # 90 days
+    # Categories to scan (in addition to sports which is always on)
+    extra_categories: tuple[str, ...] = ("crypto", "politics")
 
 
 @dataclass(frozen=True)
@@ -255,6 +284,7 @@ class Settings:
     websocket: WebSocketConfig = field(default_factory=WebSocketConfig)
     polymarket_ws: PolymarketWSConfig = field(default_factory=PolymarketWSConfig)
     directional: DirectionalConfig = field(default_factory=DirectionalConfig)
+    performance_fees: PerformanceFeeConfig = field(default_factory=PerformanceFeeConfig)
 
 
 def load_settings() -> Settings:
@@ -299,4 +329,5 @@ def load_settings_with_profile(storage: object) -> Settings:
         market_filter=base.market_filter,
         websocket=base.websocket,
         polymarket_ws=base.polymarket_ws,
+        performance_fees=base.performance_fees,
     )

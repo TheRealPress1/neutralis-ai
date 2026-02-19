@@ -1,15 +1,17 @@
-"""High-probability directional scanner for sports markets.
+"""High-probability directional scanner for sports, crypto, and political markets.
 
-Identifies binary sports markets (tennis, soccer, basketball) where one side
-trades at >= 80% implied probability. Creates single-leg directional signals
-with a probability-based stop-loss floor.
+Identifies binary markets where one side trades at >= threshold implied probability.
+Per-category thresholds account for different market dynamics:
+  - Sports (tennis, soccer, basketball): 80% — frequent events, short resolution
+  - Crypto milestones (BTC > $150k?): 85% — binary milestones, longer horizons
+  - Politics (election outcomes, nominations): 88% — strong prior needed, long horizons
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from neutralis.categories import classify_sport
+from neutralis.categories import classify_directional_category
 from neutralis.config import DirectionalConfig
 from neutralis.fees import kalshi_fee_per_contract, polymarket_fee
 from neutralis.logging import get_logger
@@ -40,20 +42,33 @@ def _estimate_single_leg_fee(price: float, venue: str) -> float:
     return polymarket_fee(price)
 
 
+def _category_params(
+    category: str,
+    cfg: DirectionalConfig,
+) -> tuple[float, float]:
+    """Return (min_probability, max_time_hours) for the given category."""
+    if category == "crypto":
+        return cfg.crypto_min_probability, cfg.crypto_max_time_hours
+    if category == "politics":
+        return cfg.politics_min_probability, cfg.politics_max_time_hours
+    # sports (default)
+    return cfg.min_implied_probability, cfg.max_time_to_expiry_hours
+
+
 def scan_high_probability(
     markets: list[NormalizedMarket],
     config: DirectionalConfig | None = None,
 ) -> list[Signal]:
-    """Scan for high-probability directional opportunities in sports markets.
+    """Scan for high-probability directional opportunities.
 
-    For each active binary sports market where yes_ask >= threshold or
-    no_ask >= threshold, emit a single-leg Signal betting on the heavy favorite.
+    Scans sports markets by default, plus any categories enabled in
+    config.extra_categories (crypto, politics).
     """
     cfg = config or DirectionalConfig()
     if not cfg.enabled:
         return []
 
-    threshold = cfg.min_implied_probability
+    enabled_extras = set(cfg.extra_categories)
     signals: list[Signal] = []
 
     for m in markets:
@@ -62,21 +77,26 @@ def scan_high_probability(
         if m.status.value != "active":
             continue
 
-        # Sports filter
-        sport = classify_sport(m.title, m.event_ticker)
-        if sport is None:
+        # Category filter (sports always on, extras opt-in)
+        category = classify_directional_category(m.title, m.event_ticker)
+        if category is None:
             continue
+        if category != "sports" and category not in enabled_extras:
+            continue
+
+        # Per-category probability threshold and time horizon
+        threshold, max_hours = _category_params(category, cfg)
 
         # Liquidity filter
         if m.liquidity < cfg.min_liquidity_dollars:
             continue
 
-        # Time-to-expiry filter
+        # Time-to-expiry filter (per-category max)
         hours_left = _hours_until(m.expected_expiration) or _hours_until(m.close_time)
         if hours_left is not None:
             if hours_left < cfg.min_time_to_expiry_hours:
                 continue
-            if hours_left > cfg.max_time_to_expiry_hours:
+            if hours_left > max_hours:
                 continue
 
         # Check both sides for high-probability entry
@@ -128,8 +148,8 @@ def scan_high_probability(
 
             signals.append(signal)
             logger.info(
-                "Directional signal: %s %s %s_ask=%.4f edge=%.2f%% sport=%s",
-                m.ticker, side, side, entry_price, edge_pct, sport,
+                "Directional signal: %s %s %s_ask=%.4f edge=%.2f%% cat=%s",
+                m.ticker, side, side, entry_price, edge_pct, category,
             )
 
     signals.sort(key=lambda s: s.edge_pct, reverse=True)

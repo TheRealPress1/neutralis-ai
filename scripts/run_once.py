@@ -12,10 +12,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import os
+
 from neutralis.alerts.discord import DiscordNotifier
 from neutralis.config import load_settings, load_settings_with_profile
 from neutralis.execution.executor import PaperExecutor
 from neutralis.execution.models import TickContext
+from neutralis.fees.performance import PerformanceFeeAccruer
 from neutralis.profiles import load_active_profile
 from neutralis.core.cross_scanner import scan_cross_platform
 from neutralis.core.directional_scanner import scan_high_probability
@@ -24,7 +27,7 @@ from neutralis.core.features import compute_market_features, estimate_costs
 from neutralis.core.matcher import match_markets
 from neutralis.core.scanners import scan_complement_arb
 from neutralis.core.settlement_scanner import scan_settlement_arb
-from neutralis.core.three_way import group_kalshi_three_way, scan_three_way_arb
+from neutralis.core.three_way import group_kalshi_three_way, merge_cross_venue_three_way, scan_three_way_arb
 from neutralis.core.scoring import score_signal
 from neutralis.guard.decision import evaluate_directional_signal, evaluate_signal, select_portfolio
 from neutralis.guard.regime import apply_regime_to_pipeline, compute_regime
@@ -37,7 +40,7 @@ from neutralis.venues.kalshi_client import KalshiClient
 from neutralis.venues.kalshi_normalize import normalize_market as kalshi_normalize
 from neutralis.venues.market_cache import MarketCache
 from neutralis.venues.polymarket_client import PolymarketClient
-from neutralis.venues.polymarket_normalize import normalize_market as poly_normalize
+from neutralis.venues.polymarket_normalize import normalize_market as poly_normalize, normalize_three_way_market as poly_normalize_three_way
 
 logger = get_logger("pipeline")
 
@@ -151,6 +154,7 @@ def run_once(run_number: int = 0) -> RunStats:
         if profile and profile.category_overrides:
             category_overrides = profile.category_overrides
     notifier = DiscordNotifier(settings.alerts)
+    _user_id = os.environ.get("NEUTRALIS_USER_ID")
     start = time.monotonic()
 
     # Step 0: Settle resolved positions before scanning
@@ -169,7 +173,14 @@ def run_once(run_number: int = 0) -> RunStats:
     if settings.exits.enabled:
         logger.info("Step 0c: Evaluating exit strategies")
         with PostgresStorage(settings.db) as exit_storage:
-            exit_portfolio = PortfolioManager(exit_storage, settings.portfolio)
+            exit_fee_accruer = None
+            if settings.performance_fees.enabled and _user_id:
+                exit_fee_accruer = PerformanceFeeAccruer(
+                    exit_storage, settings.performance_fees, user_id=_user_id,
+                )
+            exit_portfolio = PortfolioManager(
+                exit_storage, settings.portfolio, fee_accruer=exit_fee_accruer,
+            )
             exits = exit_portfolio.evaluate_exits(
                 settings, settings.exits,
                 directional_config=settings.directional,
@@ -225,11 +236,17 @@ def run_once(run_number: int = 0) -> RunStats:
     use_maker = settings.execution.use_maker_orders
     complement_signals = scan_complement_arb(kalshi_markets, settings.pipeline, maker=use_maker)
 
-    # Step 3a2: 3-way (Dutch book) arb scan
+    # Step 3a2: 3-way (Dutch book) arb scan (single-venue + cross-venue)
     logger.info("Step 3a2: Running 3-way arb scanner")
     kalshi_by_ticker = {m.ticker: m for m in kalshi_markets}
     three_way_groups = group_kalshi_three_way(kalshi_by_ticker)
-    three_way_signals = scan_three_way_arb(three_way_groups, settings.pipeline, maker=use_maker)
+
+    # Polymarket 3-way groups (from raw data — not binary-only normalized markets)
+    poly_three_way = [g for g in (poly_normalize_three_way(raw) for raw in raw_poly) if g is not None]
+    xv_three_way = merge_cross_venue_three_way(three_way_groups, poly_three_way)
+    all_three_way_groups = three_way_groups + xv_three_way
+
+    three_way_signals = scan_three_way_arb(all_three_way_groups, settings.pipeline, maker=use_maker)
 
     # Step 3a3: Settlement arb scan (near-expiry markets, relaxed threshold)
     logger.info("Step 3a3: Running settlement arb scanner")
@@ -297,7 +314,14 @@ def run_once(run_number: int = 0) -> RunStats:
     # Step 4: Score, evaluate, rank, and store
     logger.info("Step 4: Scoring and evaluating signals")
     with PostgresStorage(settings.db) as storage:
-        portfolio = PortfolioManager(storage, settings.portfolio)
+        main_fee_accruer = None
+        if settings.performance_fees.enabled and _user_id:
+            main_fee_accruer = PerformanceFeeAccruer(
+                storage, settings.performance_fees, user_id=_user_id,
+            )
+        portfolio = PortfolioManager(
+            storage, settings.portfolio, fee_accruer=main_fee_accruer,
+        )
 
         # Save regime state and disagreement
         storage.save_regime_state(regime, regime_metrics, regime_params)

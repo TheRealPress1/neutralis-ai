@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import os
+
 from neutralis.config import Settings
+from neutralis.fees.performance import PerformanceFeeAccruer
 from neutralis.logging import get_logger
 from neutralis.models import Position, TradeSide
 from neutralis.portfolio.manager import PortfolioManager
@@ -191,7 +194,16 @@ def run_settlement(
 ) -> SettlementStats:
     """Check all open positions for resolved markets and settle them."""
     with PostgresStorage(settings.db) as storage:
-        portfolio = PortfolioManager(storage, settings.portfolio)
+        # Wire performance fee accruer if enabled and user_id is available
+        fee_accruer = None
+        user_id = os.environ.get("NEUTRALIS_USER_ID")
+        if settings.performance_fees.enabled and user_id:
+            fee_accruer = PerformanceFeeAccruer(
+                storage, settings.performance_fees, user_id=user_id,
+            )
+        portfolio = PortfolioManager(
+            storage, settings.portfolio, fee_accruer=fee_accruer,
+        )
         positions = storage.get_open_positions()
 
         if not positions:
