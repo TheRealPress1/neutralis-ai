@@ -191,15 +191,26 @@ def _settle_polymarket(
 def run_settlement(
     settings: Settings,
     notifier: DiscordNotifier | None = None,
+    storage: PostgresStorage | None = None,
+    user_id: str | None = None,
 ) -> SettlementStats:
-    """Check all open positions for resolved markets and settle them."""
-    with PostgresStorage(settings.db) as storage:
-        # Wire performance fee accruer if enabled and user_id is available
+    """Check all open positions for resolved markets and settle them.
+
+    If *storage* is provided, uses it (caller-managed connection).
+    Otherwise creates a fresh connection scoped to this function.
+    """
+    _own_storage = storage is None
+    if _own_storage:
+        storage = PostgresStorage(settings.db, user_id=user_id)
+        storage.connect()
+
+    try:
+        # Wire performance fee accruer if enabled
         fee_accruer = None
-        user_id = os.environ.get("NEUTRALIS_USER_ID")
-        if settings.performance_fees.enabled and user_id:
+        _uid = user_id or os.environ.get("NEUTRALIS_USER_ID")
+        if settings.performance_fees.enabled and _uid:
             fee_accruer = PerformanceFeeAccruer(
-                storage, settings.performance_fees, user_id=user_id,
+                storage, settings.performance_fees, user_id=_uid,
             )
         portfolio = PortfolioManager(
             storage, settings.portfolio, fee_accruer=fee_accruer,
@@ -240,3 +251,6 @@ def run_settlement(
             settled=total_settled,
             pnl=round(total_pnl, 4),
         )
+    finally:
+        if _own_storage:
+            storage.close()

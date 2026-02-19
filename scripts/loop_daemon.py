@@ -172,24 +172,34 @@ def main() -> None:
     # Start health endpoint
     _start_health_server(stats, cfg.health_port)
 
-    # Persistent DB connection for automation state checks
+    # Persistent DB connection for state checks
     _state_storage = PostgresStorage(settings.db)
     _state_storage.connect()
 
+    # Lazy import user credential loader
+    from neutralis.services.user_credentials import load_active_users as _load_users
+
     while not shutdown.is_set():
-        # ── Check automation state ──────────────────────────────
+        # ── Check for active users with automation running ──
         try:
-            auto_state = _state_storage.get_automation_state()
-            if auto_state:
-                if auto_state["status"] == "paused":
-                    logger.debug("Automation paused, skipping run")
+            active_users = _load_users(_state_storage)
+            if not active_users:
+                # Legacy fallback: check singleton automation state
+                auto_state = _state_storage.get_automation_state()
+                if auto_state:
+                    if auto_state["status"] == "paused":
+                        logger.debug("Automation paused, skipping run")
+                        shutdown.wait(cfg.scan_interval_sec)
+                        continue
+                    if auto_state["status"] == "killed":
+                        logger.info(
+                            "Automation killed: %s", auto_state.get("killed_reason")
+                        )
+                        break
+                else:
+                    logger.debug("No active users, sleeping")
                     shutdown.wait(cfg.scan_interval_sec)
                     continue
-                if auto_state["status"] == "killed":
-                    logger.info(
-                        "Automation killed: %s", auto_state.get("killed_reason")
-                    )
-                    break
         except Exception:
             logger.warning("Failed to check automation state", exc_info=True)
 

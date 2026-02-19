@@ -9,7 +9,7 @@ from uuid import uuid4
 import httpx
 
 from neutralis.config import ExecutionConfig, KalshiConfig
-from neutralis.execution.auth import load_private_key, sign_request
+from neutralis.execution.auth import load_private_key, load_private_key_from_pem_string, sign_request
 from neutralis.logging import get_logger
 
 logger = get_logger(__name__)
@@ -48,6 +48,27 @@ class KalshiExecutor:
             headers={"Accept": "application/json", "Content-Type": "application/json"},
         )
         self._last_request_ts: float = 0.0
+
+    @classmethod
+    def from_credentials(
+        cls,
+        api_key_id: str,
+        private_key_pem: str,
+        kalshi_config: KalshiConfig | None = None,
+    ) -> KalshiExecutor:
+        """Create executor from API key ID and PEM string (not env vars)."""
+        instance = cls.__new__(cls)
+        instance._cfg = kalshi_config or KalshiConfig()
+        instance._exec = ExecutionConfig()
+        instance._api_key = api_key_id
+        instance._private_key = load_private_key_from_pem_string(private_key_pem)
+        instance._http = httpx.Client(
+            base_url=instance._cfg.base_url,
+            timeout=httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0),
+            headers={"Accept": "application/json", "Content-Type": "application/json"},
+        )
+        instance._last_request_ts = 0.0
+        return instance
 
     def _sign_request(self, method: str, path: str) -> dict[str, str]:
         full_path = "/trade-api/v2" + path

@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Single-pass pipeline: fetch -> normalize -> scan -> match -> score -> rank -> store."""
+"""Single-pass pipeline: fetch -> normalize -> scan -> match -> score -> rank -> store.
+
+Multi-tenant architecture:
+    scan_markets()                   — shared market scan (runs once per tick)
+    evaluate_and_execute_for_user()  — per-user evaluation and execution
+    run_once()                       — orchestrator: scan → iterate users
+"""
 
 from __future__ import annotations
 
@@ -9,13 +15,14 @@ import time
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import os
 
 from neutralis.alerts.discord import DiscordNotifier
-from neutralis.config import load_settings, load_settings_with_profile
+from neutralis.config import Settings, load_settings, load_settings_with_profile
 from neutralis.execution.executor import PaperExecutor
 from neutralis.execution.models import TickContext
 from neutralis.fees.performance import PerformanceFeeAccruer
@@ -34,6 +41,7 @@ from neutralis.guard.regime import apply_regime_to_pipeline, compute_regime
 from neutralis.logging import get_logger
 from neutralis.models import Decision, DecisionVerdict, MarketType, NormalizedMarket, Signal
 from neutralis.portfolio.manager import PortfolioManager
+from neutralis.services.user_credentials import load_active_users, load_user_credentials
 from neutralis.settlement.settler import run_settlement
 from neutralis.storage.postgres import PostgresStorage
 from neutralis.venues.kalshi_client import KalshiClient
@@ -72,6 +80,32 @@ class RunStats:
     directional_signals: int = 0
     orders_created: int = 0
     fills_created: int = 0
+    users_processed: int = 0
+
+
+@dataclass
+class ScanResult:
+    """Shared scan output — computed once per tick, reused for every user."""
+    kalshi_markets: list[NormalizedMarket]
+    poly_markets: list[NormalizedMarket]
+    raw_kalshi: list[dict]
+    raw_poly: list[dict]
+    complement_signals: list[Signal]
+    three_way_signals: list[Signal]
+    xp_signals: list[Signal]
+    directional_signals: list[Signal]
+    pairs: list  # MarketPair
+    enriched_markets: dict[str, NormalizedMarket]
+    kalshi_by_ticker: dict[str, NormalizedMarket]
+    regime: str
+    regime_metrics: dict
+    regime_params: dict
+    pipeline_cfg: Any  # PipelineConfig after regime adjustment
+    di_overall: float
+    di_by_category: dict
+    di_sample: int
+    min_confidence: int
+    match_ids: dict[str, int]  # populated during first user's store pass
 
 
 def _score_signal(
@@ -96,26 +130,14 @@ def _score_signal(
     )
 
 
-def _fetch_cached_kalshi(settings) -> list[dict]:
-    """Fetch Kalshi markets with caching and incremental updates.
-
-    Strategy:
-    - First run: Fetch from priority series (~200-500 markets, ~10s), cache them.
-    - Subsequent runs: Incremental via min_updated_ts (0-5 pages, <5s).
-    - Every 5 min: Full series re-fetch to catch any gaps.
-
-    NOTE: The general get_all_active_markets() is unreliable for cross-platform
-    matching — Kalshi has >50k active markets and the 50-page cap (50k) misses
-    tournament winner markets (soccer, politics) that are the main overlap with
-    Polymarket.
-    """
+def _fetch_cached_kalshi(settings: Settings) -> list[dict]:
+    """Fetch Kalshi markets with caching and incremental updates."""
     filter_cfg = settings.market_filter
 
     with KalshiClient(settings.kalshi) as client:
         if _market_cache.is_empty or _market_cache.needs_full_refresh(
             filter_cfg.full_refresh_interval_sec
         ):
-            # Targeted series fetch — fast and reliable
             all_raw = client.fetch_priority_series(filter_cfg.priority_series)
             _market_cache.update_bulk(all_raw)
             _market_cache.mark_full_refresh()
@@ -124,9 +146,7 @@ def _fetch_cached_kalshi(settings) -> list[dict]:
                 _market_cache.size,
             )
         elif filter_cfg.incremental_updates and _market_cache.last_update_epoch > 0:
-            # Incremental: only recently changed markets
             updated = client.get_markets_updated_since(_market_cache.last_update_epoch)
-            # Add active markets, remove settled/closed from cache
             active = [m for m in updated if m.get("status") == "active"]
             for m in updated:
                 if m.get("status") != "active" and m.get("ticker"):
@@ -140,67 +160,18 @@ def _fetch_cached_kalshi(settings) -> list[dict]:
     return _market_cache.get_all()
 
 
-def run_once(run_number: int = 0) -> RunStats:
-    base_settings = load_settings()
+# ---------------------------------------------------------------------------
+# Phase 1: Shared market scan (runs once per tick)
+# ---------------------------------------------------------------------------
 
-    # Generate tick context for idempotency
-    tick_ts = datetime.now(timezone.utc)
-    tick_id = f"tick_{run_number}_{tick_ts.strftime('%Y-%m-%dT%H:%MZ')}"
-    tick_ctx = TickContext(tick_id=tick_id, run_number=run_number, timestamp=tick_ts)
-    category_overrides = None
-    with PostgresStorage(base_settings.db) as profile_storage:
-        settings = load_settings_with_profile(profile_storage)
-        profile = load_active_profile(profile_storage)
-        if profile and profile.category_overrides:
-            category_overrides = profile.category_overrides
-    notifier = DiscordNotifier(settings.alerts)
-    _user_id = os.environ.get("NEUTRALIS_USER_ID")
-    start = time.monotonic()
+def scan_markets(settings: Settings) -> ScanResult:
+    """Fetch, normalize, match, and detect arb signals.
 
-    # Step 0: Settle resolved positions before scanning
-    logger.info("Step 0: Checking for resolved markets")
-    settlement = run_settlement(settings, notifier=notifier)
+    This is venue-level work — identical for all users.  Run once per tick.
+    """
+    use_maker = settings.execution.use_maker_orders
 
-    # Step 0b: Mark open positions to market (unrealized P&L)
-    logger.info("Step 0b: Marking positions to market")
-    with PostgresStorage(settings.db) as mtm_storage:
-        mtm_portfolio = PortfolioManager(mtm_storage, settings.portfolio)
-        marked_positions = mtm_portfolio.mark_to_market(settings)
-
-    # Step 0c: Evaluate exit strategies for open positions
-    exit_count = 0
-    exit_pnl = 0.0
-    if settings.exits.enabled:
-        logger.info("Step 0c: Evaluating exit strategies")
-        with PostgresStorage(settings.db) as exit_storage:
-            exit_fee_accruer = None
-            if settings.performance_fees.enabled and _user_id:
-                exit_fee_accruer = PerformanceFeeAccruer(
-                    exit_storage, settings.performance_fees, user_id=_user_id,
-                )
-            exit_portfolio = PortfolioManager(
-                exit_storage, settings.portfolio, fee_accruer=exit_fee_accruer,
-            )
-            exits = exit_portfolio.evaluate_exits(
-                settings, settings.exits,
-                directional_config=settings.directional,
-            )
-            for pos, reason, price in exits:
-                closed = exit_portfolio.execute_exit(pos, reason, price)
-                exit_count += 1
-                exit_pnl += closed.realized_pnl
-                notifier.notify_exit(
-                    ticker=pos.ticker,
-                    side=pos.side.value,
-                    venue=pos.venue,
-                    exit_reason=reason,
-                    exit_price=price,
-                    pnl=closed.realized_pnl,
-                )
-            if exit_count > 0:
-                logger.info("Exits: %d positions closed, P&L=$%.2f", exit_count, exit_pnl)
-
-    # Step 1a: Fetch active markets from Kalshi (filtered if cache available)
+    # Step 1a: Fetch active markets from Kalshi
     logger.info("Step 1a: Fetching active markets from Kalshi")
     if settings.market_filter.enabled and _market_cache is not None:
         raw_kalshi = _fetch_cached_kalshi(settings)
@@ -233,25 +204,20 @@ def run_once(run_number: int = 0) -> RunStats:
 
     # Step 3a: Complement arb scan (Kalshi only)
     logger.info("Step 3a: Running complement arb scanner")
-    use_maker = settings.execution.use_maker_orders
     complement_signals = scan_complement_arb(kalshi_markets, settings.pipeline, maker=use_maker)
 
-    # Step 3a2: 3-way (Dutch book) arb scan (single-venue + cross-venue)
+    # Step 3a2: 3-way (Dutch book) arb scan
     logger.info("Step 3a2: Running 3-way arb scanner")
     kalshi_by_ticker = {m.ticker: m for m in kalshi_markets}
     three_way_groups = group_kalshi_three_way(kalshi_by_ticker)
-
-    # Polymarket 3-way groups (from raw data — not binary-only normalized markets)
     poly_three_way = [g for g in (poly_normalize_three_way(raw) for raw in raw_poly) if g is not None]
     xv_three_way = merge_cross_venue_three_way(three_way_groups, poly_three_way)
     all_three_way_groups = three_way_groups + xv_three_way
-
     three_way_signals = scan_three_way_arb(all_three_way_groups, settings.pipeline, maker=use_maker)
 
-    # Step 3a3: Settlement arb scan (near-expiry markets, relaxed threshold)
+    # Step 3a3: Settlement arb scan
     logger.info("Step 3a3: Running settlement arb scanner")
     settlement_signals = scan_settlement_arb(kalshi_markets, settings.pipeline, maker=use_maker)
-    # Merge with complement signals (avoid duplicates — settlement scanner uses same SignalType)
     settlement_tickers = {s.ticker for s in complement_signals}
     for s in settlement_signals:
         if s.ticker not in settlement_tickers:
@@ -265,19 +231,13 @@ def run_once(run_number: int = 0) -> RunStats:
     logger.info("Step 3c: Scanning matched pairs for price discrepancies")
     xp_signals = scan_cross_platform(pairs, settings.matching, pipeline_config=settings.pipeline, maker=use_maker)
 
-    # Step 3f: High-probability directional scan (sports markets)
+    # Step 3f: High-probability directional scan
     directional_signals: list[Signal] = []
     if settings.directional.enabled:
         logger.info("Step 3f: Running directional scanner on sports markets")
         all_normalized = kalshi_markets + poly_markets
         directional_signals = scan_high_probability(all_normalized, settings.directional)
         logger.info("Directional scanner: %d signals found", len(directional_signals))
-
-    # Alert on signals found
-    if complement_signals or three_way_signals or xp_signals:
-        notifier.notify_signals(
-            len(complement_signals) + len(three_way_signals), len(xp_signals), len(pairs),
-        )
 
     # Step 3d: Orderbook enrichment for complement arb signals
     enriched_markets: dict[str, NormalizedMarket] = {}
@@ -311,24 +271,154 @@ def run_once(run_number: int = 0) -> RunStats:
         pipeline_cfg.min_edge_pct, min_confidence,
     )
 
-    # Step 4: Score, evaluate, rank, and store
-    logger.info("Step 4: Scoring and evaluating signals")
-    with PostgresStorage(settings.db) as storage:
+    return ScanResult(
+        kalshi_markets=kalshi_markets,
+        poly_markets=poly_markets,
+        raw_kalshi=raw_kalshi,
+        raw_poly=raw_poly,
+        complement_signals=complement_signals,
+        three_way_signals=three_way_signals,
+        xp_signals=xp_signals,
+        directional_signals=directional_signals,
+        pairs=pairs,
+        enriched_markets=enriched_markets,
+        kalshi_by_ticker=kalshi_by_ticker,
+        regime=regime,
+        regime_metrics=regime_metrics,
+        regime_params=regime_params,
+        pipeline_cfg=pipeline_cfg,
+        di_overall=di_overall,
+        di_by_category=di_by_category,
+        di_sample=di_sample,
+        min_confidence=min_confidence,
+        match_ids={},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Per-user evaluation and execution
+# ---------------------------------------------------------------------------
+
+@dataclass
+class UserRunResult:
+    """Per-user stats from a single tick."""
+    user_id: str
+    decisions_pass: int = 0
+    decisions_reject: int = 0
+    decisions_selected: int = 0
+    open_positions: int = 0
+    total_exposure: float = 0.0
+    positions_settled: int = 0
+    settlement_pnl: float = 0.0
+    marked_positions: int = 0
+    exits_triggered: int = 0
+    exit_pnl: float = 0.0
+    orders_created: int = 0
+    fills_created: int = 0
+
+
+def evaluate_and_execute_for_user(
+    user: dict,
+    scan: ScanResult,
+    settings: Settings,
+    notifier: DiscordNotifier,
+    tick_ctx: TickContext,
+) -> UserRunResult:
+    """Run settlement, MTM, exits, scoring, guard, and execution for one user.
+
+    All DB writes are scoped to ``user["user_id"]``.
+    """
+    uid = user["user_id"]
+    email = user.get("email", "?")
+    logger.info("── Processing user %s (%s) ──", uid[:8], email)
+
+    result = UserRunResult(user_id=uid)
+
+    with PostgresStorage(settings.db, user_id=uid) as storage:
+        # ── Step 0: Settle resolved positions ──
+        settlement = run_settlement(
+            settings, notifier=notifier, storage=storage, user_id=uid,
+        )
+        result.positions_settled = settlement.settled
+        result.settlement_pnl = settlement.pnl
+
+        # ── Step 0b: Mark to market ──
+        mtm_portfolio = PortfolioManager(storage, settings.portfolio)
+        result.marked_positions = mtm_portfolio.mark_to_market(settings)
+
+        # ── Step 0c: Evaluate exits ──
+        if settings.exits.enabled:
+            fee_accruer = None
+            if settings.performance_fees.enabled:
+                fee_accruer = PerformanceFeeAccruer(
+                    storage, settings.performance_fees, user_id=uid,
+                )
+            exit_portfolio = PortfolioManager(
+                storage, settings.portfolio, fee_accruer=fee_accruer,
+            )
+            exits = exit_portfolio.evaluate_exits(
+                settings, settings.exits,
+                directional_config=settings.directional,
+            )
+            for pos, reason, price in exits:
+                closed = exit_portfolio.execute_exit(pos, reason, price)
+                result.exits_triggered += 1
+                result.exit_pnl += closed.realized_pnl
+                notifier.notify_exit(
+                    ticker=pos.ticker,
+                    side=pos.side.value,
+                    venue=pos.venue,
+                    exit_reason=reason,
+                    exit_price=price,
+                    pnl=closed.realized_pnl,
+                )
+            if result.exits_triggered > 0:
+                logger.info(
+                    "Exits: %d positions closed, P&L=$%.2f",
+                    result.exits_triggered, result.exit_pnl,
+                )
+
+        # ── Step 4: Score, evaluate, rank, execute ──
         main_fee_accruer = None
-        if settings.performance_fees.enabled and _user_id:
+        if settings.performance_fees.enabled:
             main_fee_accruer = PerformanceFeeAccruer(
-                storage, settings.performance_fees, user_id=_user_id,
+                storage, settings.performance_fees, user_id=uid,
             )
         portfolio = PortfolioManager(
             storage, settings.portfolio, fee_accruer=main_fee_accruer,
         )
 
-        # Save regime state and disagreement
-        storage.save_regime_state(regime, regime_metrics, regime_params)
-        if di_sample > 0:
-            storage.save_disagreement_index(di_overall, di_by_category, di_sample)
+        # Save regime state & disagreement (global, saved once — first user)
+        if not scan.match_ids:  # first user stores shared data
+            storage_global = PostgresStorage(settings.db)
+            storage_global.connect()
+            try:
+                storage_global.save_regime_state(
+                    scan.regime, scan.regime_metrics, scan.regime_params,
+                )
+                if scan.di_sample > 0:
+                    storage_global.save_disagreement_index(
+                        scan.di_overall, scan.di_by_category, scan.di_sample,
+                    )
+                # Store cross-platform matches (global data)
+                for pair in scan.pairs:
+                    k_snap = storage_global.save_market_snapshot(pair.kalshi_market)
+                    p_snap = storage_global.save_market_snapshot(pair.polymarket_market)
+                    mid = storage_global.save_market_match(pair, k_snap, p_snap)
+                    key = f"{pair.kalshi_market.ticker}:{pair.polymarket_market.ticker}"
+                    scan.match_ids[key] = mid
 
-        # Snapshot portfolio state once — all signals evaluated against same baseline
+                for signal in scan.xp_signals:
+                    xp = signal.cross_platform
+                    if xp is None:
+                        continue
+                    key = f"{xp.kalshi_ticker}:{xp.polymarket_id}"
+                    mid = scan.match_ids.get(key)
+                    storage_global.save_cross_platform_signal(signal, match_id=mid)
+            finally:
+                storage_global.close()
+
+        # Portfolio snapshot baseline for this user
         portfolio_snapshot = portfolio.get_snapshot()
         logger.info(
             "Portfolio baseline: %d open, $%.2f exposure",
@@ -336,63 +426,82 @@ def run_once(run_number: int = 0) -> RunStats:
             portfolio_snapshot.total_exposure_dollars,
         )
 
-        # Set up live executor if enabled
-        live_executor = None
-        if settings.execution.live_trading_enabled and settings.execution.kalshi_api_key_id:
-            try:
-                from neutralis.execution.kalshi import KalshiExecutor
-                live_executor = KalshiExecutor(settings.kalshi, settings.execution)
-                balance = live_executor.get_balance()
-                if balance < settings.execution.balance_floor_dollars:
-                    logger.warning(
-                        "Kalshi balance $%.2f below floor $%.2f, falling back to paper",
-                        balance, settings.execution.balance_floor_dollars,
+        # ── Initialize executors from user's credentials ──
+        live_kalshi = None
+        live_poly = None
+        try:
+            from neutralis.execution.kalshi import KalshiExecutor
+            from neutralis.execution.polymarket import PolymarketExecutor
+
+            creds = load_user_credentials(storage, uid)
+
+            if creds.kalshi and settings.execution.live_trading_enabled:
+                try:
+                    live_kalshi = KalshiExecutor.from_credentials(
+                        creds.kalshi.api_key_id,
+                        creds.kalshi.private_key_pem,
+                        settings.kalshi,
                     )
-                    live_executor.close()
-                    live_executor = None
-                else:
-                    logger.info("Live execution enabled: Kalshi balance $%.2f", balance)
-            except Exception:
-                logger.warning("Failed to initialize Kalshi executor, falling back to paper", exc_info=True)
-                live_executor = None
+                    balance = live_kalshi.get_balance()
+                    if balance < settings.execution.balance_floor_dollars:
+                        logger.warning(
+                            "Kalshi balance $%.2f below floor $%.2f, falling back to paper",
+                            balance, settings.execution.balance_floor_dollars,
+                        )
+                        live_kalshi.close()
+                        live_kalshi = None
+                    else:
+                        logger.info("Live Kalshi execution ready: $%.2f", balance)
+                except Exception:
+                    logger.warning("Failed to init Kalshi executor for %s", uid[:8], exc_info=True)
+                    live_kalshi = None
+
+            if creds.polymarket and settings.execution.live_trading_enabled:
+                try:
+                    live_poly = PolymarketExecutor.from_credentials(
+                        api_key=creds.polymarket.api_key,
+                        api_secret=creds.polymarket.api_secret,
+                        passphrase=creds.polymarket.passphrase,
+                        funder_address=creds.polymarket.funder_address,
+                    )
+                    logger.info("Live Polymarket execution ready for %s", uid[:8])
+                except Exception:
+                    logger.warning("Failed to init Polymarket executor for %s", uid[:8], exc_info=True)
+                    live_poly = None
+        except Exception:
+            logger.warning("Failed to load credentials for %s", uid[:8], exc_info=True)
+
+        # ── Load user's risk profile overrides ──
+        category_overrides = None
+        profile = load_active_profile(storage)
+        if profile and profile.category_overrides:
+            category_overrides = profile.category_overrides
 
         # Build unified list of (scored_signal, market) pairs
         signal_market_pairs: list[tuple[Signal, NormalizedMarket]] = []
 
-        # 4a: Score complement arb signals
-        for signal in complement_signals:
-            market = enriched_markets.get(signal.ticker, signal.market_snapshot)
+        # Score complement arb signals
+        for signal in scan.complement_signals:
+            market = scan.enriched_markets.get(signal.ticker, signal.market_snapshot)
             if market is None:
                 continue
             scored = _score_signal(signal, market, storage)
             signal_market_pairs.append((scored, market))
 
-        # 4a2: Score 3-way arb signals (use first leg's ticker for market lookup)
-        for signal in three_way_signals:
+        # Score 3-way arb signals
+        for signal in scan.three_way_signals:
             first_leg_ticker = signal.legs[0].ticker if signal.legs else signal.ticker
-            market = kalshi_by_ticker.get(first_leg_ticker) or signal.market_snapshot
+            market = scan.kalshi_by_ticker.get(first_leg_ticker) or signal.market_snapshot
             if market is None:
                 continue
             scored = _score_signal(signal, market, storage)
             signal_market_pairs.append((scored, market))
 
-        # 4b: Store cross-platform matches and score xp signals
-        match_ids: dict[str, int] = {}
-        for pair in pairs:
-            k_snap = storage.save_market_snapshot(pair.kalshi_market)
-            p_snap = storage.save_market_snapshot(pair.polymarket_market)
-            mid = storage.save_market_match(pair, k_snap, p_snap)
-            key = f"{pair.kalshi_market.ticker}:{pair.polymarket_market.ticker}"
-            match_ids[key] = mid
-
-        for signal in xp_signals:
+        # Score cross-platform signals
+        for signal in scan.xp_signals:
             xp = signal.cross_platform
             if xp is None:
                 continue
-            key = f"{xp.kalshi_ticker}:{xp.polymarket_id}"
-            mid = match_ids.get(key)
-            storage.save_cross_platform_signal(signal, match_id=mid)
-
             market = signal.market_snapshot
             if market is None:
                 continue
@@ -400,23 +509,14 @@ def run_once(run_number: int = 0) -> RunStats:
             scored = _score_signal(signal, market, storage, match_score=match_conf)
             signal_market_pairs.append((scored, market))
 
-        # Set up PaperExecutor (used by both directional and arb paths)
+        # Paper executor for this user
         paper_executor = PaperExecutor(storage, portfolio)
-        total_orders = 0
-        total_fills = 0
 
-        # 4a3: Score and evaluate directional signals (isolated portfolio)
+        # ── Directional signals (isolated portfolio) ──
         directional_selected = 0
-        if directional_signals:
-            dir_snapshot = portfolio.get_snapshot_filtered(
-                "high_probability_directional",
-            )
-            logger.info(
-                "Directional portfolio: %d open, $%.2f exposure",
-                dir_snapshot.open_position_count,
-                dir_snapshot.total_exposure_dollars,
-            )
-            for signal in directional_signals:
+        if scan.directional_signals:
+            dir_snapshot = portfolio.get_snapshot_filtered("high_probability_directional")
+            for signal in scan.directional_signals:
                 market = signal.market_snapshot
                 if market is None:
                     continue
@@ -428,42 +528,32 @@ def run_once(run_number: int = 0) -> RunStats:
                     scored, market, settings.directional,
                     portfolio_snapshot=dir_snapshot,
                 )
-                decision_id = storage.save_decision(decision)
+                storage.save_decision(decision)
 
                 if decision.verdict == DecisionVerdict.PASS:
                     directional_selected += 1
                     exec_result = paper_executor.execute(
-                        scored, decision, decision_id, tick_ctx, market=market,
+                        scored, decision, 0, tick_ctx, market=market,
                     )
-                    total_orders += len(exec_result.orders)
-                    total_fills += len(exec_result.fills)
-                    # Refresh directional snapshot after each fill
-                    dir_snapshot = portfolio.get_snapshot_filtered(
-                        "high_probability_directional",
-                    )
+                    result.orders_created += len(exec_result.orders)
+                    result.fills_created += len(exec_result.fills)
+                    dir_snapshot = portfolio.get_snapshot_filtered("high_probability_directional")
 
-            logger.info(
-                "Directional: %d signals, %d selected",
-                len(directional_signals), directional_selected,
-            )
-
-        # 4c: Evaluate all signals through guard (provisional)
+        # ── Guard evaluation (provisional) ──
         provisional: list[tuple[Signal, Decision]] = []
-        snapshot_ids: dict[str, int] = {}  # signal_id -> snapshot_id
         pass_count = 0
         reject_count = 0
 
         for scored_signal, market in signal_market_pairs:
             snap_id = storage.save_market_snapshot(market)
             storage.save_signal(scored_signal, snapshot_id=snap_id)
-            snapshot_ids[scored_signal.id] = snap_id
 
             decision = evaluate_signal(
-                scored_signal, market, pipeline_cfg,
+                scored_signal, market, scan.pipeline_cfg,
                 portfolio_snapshot=portfolio_snapshot,
                 portfolio_config=settings.portfolio,
                 category_overrides=category_overrides,
-                regime_params=regime_params,
+                regime_params=scan.regime_params,
             )
             provisional.append((scored_signal, decision))
             if decision.verdict == DecisionVerdict.PASS:
@@ -471,15 +561,15 @@ def run_once(run_number: int = 0) -> RunStats:
             else:
                 reject_count += 1
 
-        # 4d: Ranked selection — pick the best signals that fit
+        # ── Ranked selection ──
         ranked = select_portfolio(
             provisional,
             portfolio_snapshot,
             portfolio_config=settings.portfolio,
-            min_confidence=min_confidence,
+            min_confidence=scan.min_confidence,
         )
 
-        # 4e: Save decisions and fill only selected (via PaperExecutor)
+        # ── Execute selected signals ──
         selected_count = 0
         for signal, decision in ranked:
             decision_id = storage.save_decision(decision)
@@ -489,7 +579,7 @@ def run_once(run_number: int = 0) -> RunStats:
 
                 # Attempt live Kalshi execution if enabled
                 live_results = None
-                if live_executor is not None:
+                if live_kalshi is not None:
                     kalshi_only = all(
                         (leg.venue or "kalshi") == "kalshi" for leg in signal.legs
                     )
@@ -506,7 +596,7 @@ def run_once(run_number: int = 0) -> RunStats:
                             leg_dollars = min(leg_dollars, settings.execution.max_order_dollars)
                             count = max(1, math.floor(leg_dollars / leg.price_dollars))
                             try:
-                                resp = live_executor.place_order(
+                                resp = live_kalshi.place_order(
                                     leg.ticker, leg.side, price_cents, count,
                                 )
                                 order = resp.get("order", {})
@@ -530,19 +620,17 @@ def run_once(run_number: int = 0) -> RunStats:
                             live_results = results
 
                 if live_results is not None:
-                    # Live execution succeeded — record via portfolio directly
                     portfolio.record_fill(
                         signal, decision, decision_id,
                         is_paper=False, execution_results=live_results,
                     )
                 else:
-                    # Paper execution — use PaperExecutor with slippage simulation
-                    market = enriched_markets.get(signal.ticker, signal.market_snapshot)
+                    market = scan.enriched_markets.get(signal.ticker, signal.market_snapshot)
                     exec_result = paper_executor.execute(
                         signal, decision, decision_id, tick_ctx, market=market,
                     )
-                    total_orders += len(exec_result.orders)
-                    total_fills += len(exec_result.fills)
+                    result.orders_created += len(exec_result.orders)
+                    result.fills_created += len(exec_result.fills)
                 portfolio_snapshot = portfolio.get_snapshot()
                 for leg in signal.legs:
                     notifier.notify_fill(
@@ -553,61 +641,162 @@ def run_once(run_number: int = 0) -> RunStats:
                         price=leg.price_dollars,
                     )
 
-        # 4f: Portfolio summary
+        # ── Final snapshot ──
         snapshot = portfolio.get_snapshot()
+        result.decisions_pass = pass_count
+        result.decisions_reject = reject_count
+        result.decisions_selected = selected_count
+        result.open_positions = snapshot.open_position_count
+        result.total_exposure = snapshot.total_exposure_dollars
+
         logger.info(
-            "Portfolio: %d open positions, $%.2f total exposure",
+            "User %s: %d open, $%.2f exposure, %d pass (%d selected), %d reject",
+            uid[:8],
             snapshot.open_position_count,
             snapshot.total_exposure_dollars,
+            pass_count, selected_count, reject_count,
         )
 
-    if live_executor is not None:
-        live_executor.close()
+    # Clean up live executors
+    if live_kalshi is not None:
+        live_kalshi.close()
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator
+# ---------------------------------------------------------------------------
+
+def run_once(run_number: int = 0) -> RunStats:
+    base_settings = load_settings()
+
+    # Generate tick context for idempotency
+    tick_ts = datetime.now(timezone.utc)
+    tick_id = f"tick_{run_number}_{tick_ts.strftime('%Y-%m-%dT%H:%MZ')}"
+    tick_ctx = TickContext(tick_id=tick_id, run_number=run_number, timestamp=tick_ts)
+
+    with PostgresStorage(base_settings.db) as profile_storage:
+        settings = load_settings_with_profile(profile_storage)
+
+    notifier = DiscordNotifier(settings.alerts)
+    start = time.monotonic()
+
+    # Phase 1: Shared market scan
+    scan = scan_markets(settings)
+
+    # Alert on signals found
+    if scan.complement_signals or scan.three_way_signals or scan.xp_signals:
+        notifier.notify_signals(
+            len(scan.complement_signals) + len(scan.three_way_signals),
+            len(scan.xp_signals),
+            len(scan.pairs),
+        )
+
+    # Phase 2: Load active users and iterate
+    with PostgresStorage(settings.db) as global_storage:
+        users = load_active_users(global_storage)
+
+    if not users:
+        # Fallback: run in legacy single-user mode (env-var credentials)
+        logger.info("No active users found, running in legacy single-user mode")
+        _user_id = os.environ.get("NEUTRALIS_USER_ID")
+        if _user_id:
+            users = [{"user_id": _user_id, "email": "env", "is_founder": True}]
+        else:
+            logger.warning("No users and no NEUTRALIS_USER_ID — nothing to do")
+            elapsed = (time.monotonic() - start) * 1000
+            return RunStats(
+                duration_ms=elapsed,
+                kalshi_markets=len(scan.kalshi_markets),
+                poly_markets=len(scan.poly_markets),
+                regime=scan.regime,
+            )
+
+    logger.info("Processing %d active users", len(users))
+
+    # Aggregate stats across all users
+    total_pass = 0
+    total_reject = 0
+    total_selected = 0
+    total_settled = 0
+    total_settlement_pnl = 0.0
+    total_marked = 0
+    total_exits = 0
+    total_exit_pnl = 0.0
+    total_orders = 0
+    total_fills = 0
+    last_open = 0
+    last_exposure = 0.0
+
+    for user in users:
+        try:
+            user_result = evaluate_and_execute_for_user(
+                user, scan, settings, notifier, tick_ctx,
+            )
+            total_pass += user_result.decisions_pass
+            total_reject += user_result.decisions_reject
+            total_selected += user_result.decisions_selected
+            total_settled += user_result.positions_settled
+            total_settlement_pnl += user_result.settlement_pnl
+            total_marked += user_result.marked_positions
+            total_exits += user_result.exits_triggered
+            total_exit_pnl += user_result.exit_pnl
+            total_orders += user_result.orders_created
+            total_fills += user_result.fills_created
+            last_open = user_result.open_positions
+            last_exposure = user_result.total_exposure
+        except Exception:
+            logger.exception(
+                "Pipeline error for user %s", user.get("user_id", "?")[:8],
+            )
 
     elapsed = (time.monotonic() - start) * 1000
     logger.info(
         "Pipeline complete: %d complement, %d 3-way, %d cross-platform, %d directional, "
-        "%d matches, %d pass (%d selected), %d reject, regime=%s, %.0fms",
-        len(complement_signals),
-        len(three_way_signals),
-        len(xp_signals),
-        len(directional_signals),
-        len(pairs),
-        pass_count,
-        selected_count,
-        reject_count,
-        regime,
+        "%d matches, %d pass (%d selected), %d reject, %d users, regime=%s, %.0fms",
+        len(scan.complement_signals),
+        len(scan.three_way_signals),
+        len(scan.xp_signals),
+        len(scan.directional_signals),
+        len(scan.pairs),
+        total_pass,
+        total_selected,
+        total_reject,
+        len(users),
+        scan.regime,
         elapsed,
         extra={"duration_ms": elapsed},
     )
 
     stats = RunStats(
         duration_ms=elapsed,
-        kalshi_markets=len(kalshi_markets),
-        poly_markets=len(poly_markets),
-        complement_signals=len(complement_signals),
-        three_way_signals=len(three_way_signals),
-        cross_platform_signals=len(xp_signals),
-        directional_signals=len(directional_signals),
-        matches=len(pairs),
-        decisions_pass=pass_count,
-        decisions_reject=reject_count,
-        decisions_selected=selected_count,
-        open_positions=snapshot.open_position_count,
-        total_exposure=snapshot.total_exposure_dollars,
-        positions_settled=settlement.settled,
-        settlement_pnl=settlement.pnl,
-        marked_positions=marked_positions,
-        exits_triggered=exit_count,
-        exit_pnl=exit_pnl,
-        regime=regime,
-        disagreement_index=di_overall,
+        kalshi_markets=len(scan.kalshi_markets),
+        poly_markets=len(scan.poly_markets),
+        complement_signals=len(scan.complement_signals),
+        three_way_signals=len(scan.three_way_signals),
+        cross_platform_signals=len(scan.xp_signals),
+        directional_signals=len(scan.directional_signals),
+        matches=len(scan.pairs),
+        decisions_pass=total_pass,
+        decisions_reject=total_reject,
+        decisions_selected=total_selected,
+        open_positions=last_open,
+        total_exposure=last_exposure,
+        positions_settled=total_settled,
+        settlement_pnl=total_settlement_pnl,
+        marked_positions=total_marked,
+        exits_triggered=total_exits,
+        exit_pnl=total_exit_pnl,
+        regime=scan.regime,
+        disagreement_index=scan.di_overall,
         orders_created=total_orders,
         fills_created=total_fills,
+        users_processed=len(users),
     )
 
     # Alert if anything interesting happened
-    if selected_count > 0 or settlement.settled > 0 or exit_count > 0:
+    if total_selected > 0 or total_settled > 0 or total_exits > 0:
         notifier.notify_pipeline_summary(stats)
 
     return stats

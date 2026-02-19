@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
 import type {
@@ -38,44 +39,55 @@ export async function GET(request: Request) {
 
   if (!type) return err("Missing ?type= parameter");
 
+  // Authenticate: get the current user from session cookies
+  const authClient = await createClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return err("Unauthorized", 401);
+  const userId = user.id;
+
+  // Service client for bypassing RLS (we filter by user_id ourselves)
   const supabase = createServiceClient();
 
   try {
     switch (type) {
+      // Per-user data (scoped by userId)
       case "stats":
-        return json(await getStats(supabase));
+        return json(await getStats(supabase, userId));
       case "positions":
-        return json(await getPositions(supabase, searchParams));
+        return json(await getPositions(supabase, searchParams, userId));
       case "signals":
-        return json(await getSignals(supabase, searchParams));
+        return json(await getSignals(supabase, searchParams, userId));
       case "decisions":
-        return json(await getDecisions(supabase, searchParams));
+        return json(await getDecisions(supabase, searchParams, userId));
+      case "analytics-summary":
+        return json(await getAnalyticsSummary(supabase, userId));
+      case "pnl-timeline":
+        return json(await getPnLTimeline(supabase, searchParams, userId));
+      case "breakdown":
+        return json(await getBreakdown(supabase, userId));
+      case "guard-stats":
+        return json(await getGuardStats(supabase, userId));
+      case "enriched-signals":
+        return json(await getEnrichedSignals(supabase, searchParams, userId));
+      case "orders":
+        return json(await getOrders(supabase, searchParams, userId));
+      case "fills":
+        return json(await getFills(supabase, searchParams, userId));
+      case "execution-stats":
+        return json(await getExecutionStats(supabase, userId));
+      case "decision-reasons":
+        return json(await getDecisionReasons(supabase, searchParams, userId));
+      case "automation-state":
+        return json(await getAutomationState(supabase, userId));
+
+      // Global data (not user-scoped)
       case "matches":
         return json(await getMatches(supabase, searchParams));
       case "arb-signals":
         return json(await getArbSignals(supabase, searchParams));
-      case "analytics-summary":
-        return json(await getAnalyticsSummary(supabase));
-      case "pnl-timeline":
-        return json(await getPnLTimeline(supabase, searchParams));
-      case "breakdown":
-        return json(await getBreakdown(supabase));
-      case "guard-stats":
-        return json(await getGuardStats(supabase));
-      case "enriched-signals":
-        return json(await getEnrichedSignals(supabase, searchParams));
       case "regime":
         return json(await getRegime(supabase));
-      case "orders":
-        return json(await getOrders(supabase, searchParams));
-      case "fills":
-        return json(await getFills(supabase, searchParams));
-      case "execution-stats":
-        return json(await getExecutionStats(supabase));
-      case "decision-reasons":
-        return json(await getDecisionReasons(supabase, searchParams));
-      case "automation-state":
-        return json(await getAutomationState(supabase));
+
       default:
         return err(`Unknown type: ${type}`);
     }
@@ -89,11 +101,12 @@ export async function GET(request: Request) {
 
 type SB = ReturnType<typeof createServiceClient>;
 
-async function getStats(supabase: SB): Promise<PortfolioStats> {
+async function getStats(supabase: SB, userId: string): Promise<PortfolioStats> {
   const { data: openData } = await supabase
     .from("positions")
     .select("size_dollars")
-    .eq("status", "open");
+    .eq("status", "open")
+    .eq("user_id", userId);
 
   const openPositions = openData?.length ?? 0;
   const totalExposure = openData?.reduce((s, r) => s + (r.size_dollars ?? 0), 0) ?? 0;
@@ -101,7 +114,8 @@ async function getStats(supabase: SB): Promise<PortfolioStats> {
   const { data: closedData } = await supabase
     .from("positions")
     .select("realized_pnl")
-    .eq("status", "closed");
+    .eq("status", "closed")
+    .eq("user_id", userId);
 
   const totalTrades = closedData?.length ?? 0;
   const totalRealizedPnl = closedData?.reduce((s, r) => s + (r.realized_pnl ?? 0), 0) ?? 0;
@@ -121,7 +135,7 @@ async function getStats(supabase: SB): Promise<PortfolioStats> {
   };
 }
 
-async function getPositions(supabase: SB, params: URLSearchParams): Promise<Position[]> {
+async function getPositions(supabase: SB, params: URLSearchParams, userId: string): Promise<Position[]> {
   const status = params.get("status") ?? "open";
   const limit = Math.min(Number(params.get("limit") ?? 50), 200);
 
@@ -129,36 +143,36 @@ async function getPositions(supabase: SB, params: URLSearchParams): Promise<Posi
     .from("positions")
     .select("*")
     .eq("status", status)
+    .eq("user_id", userId)
     .order("opened_at", { ascending: false })
     .limit(limit);
 
   return (data ?? []) as Position[];
 }
 
-async function getSignals(supabase: SB, params: URLSearchParams): Promise<Signal[]> {
+async function getSignals(supabase: SB, params: URLSearchParams, userId: string): Promise<Signal[]> {
   const limit = Math.min(Number(params.get("limit") ?? 20), 200);
 
   const { data } = await supabase
     .from("signals")
     .select("*")
+    .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit);
 
   return (data ?? []) as Signal[];
 }
 
-async function getDecisions(supabase: SB, params: URLSearchParams): Promise<Decision[]> {
+async function getDecisions(supabase: SB, params: URLSearchParams, userId: string): Promise<Decision[]> {
   const limit = Math.min(Number(params.get("limit") ?? 20), 200);
 
-  // Supabase doesn't support joins directly in .select() across tables that aren't
-  // foreign-key related with PostgREST conventions. decisions.signal_id -> signals.id
-  // is a FK, so we can use the embedded syntax.
   const { data } = await supabase
     .from("decisions")
     .select(`
       id, signal_id, verdict, guard_results, suggested_size, created_at,
       signals ( ticker, edge_pct, signal_type )
     `)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -216,11 +230,12 @@ async function getArbSignals(supabase: SB, params: URLSearchParams): Promise<Arb
   })) as ArbSignal[];
 }
 
-async function getAnalyticsSummary(supabase: SB): Promise<AnalyticsSummary> {
+async function getAnalyticsSummary(supabase: SB, userId: string): Promise<AnalyticsSummary> {
   const { data: closed } = await supabase
     .from("positions")
     .select("realized_pnl, closed_at")
-    .eq("status", "closed");
+    .eq("status", "closed")
+    .eq("user_id", userId);
 
   if (!closed || closed.length === 0) {
     return {
@@ -274,7 +289,7 @@ async function getAnalyticsSummary(supabase: SB): Promise<AnalyticsSummary> {
   };
 }
 
-async function getPnLTimeline(supabase: SB, params: URLSearchParams): Promise<DailyPnL[]> {
+async function getPnLTimeline(supabase: SB, params: URLSearchParams, userId: string): Promise<DailyPnL[]> {
   const days = Math.min(Number(params.get("days") ?? 30), 365);
   const since = new Date(Date.now() - days * 86400000).toISOString();
 
@@ -282,6 +297,7 @@ async function getPnLTimeline(supabase: SB, params: URLSearchParams): Promise<Da
     .from("positions")
     .select("realized_pnl, closed_at")
     .eq("status", "closed")
+    .eq("user_id", userId)
     .gte("closed_at", since)
     .order("closed_at", { ascending: true });
 
@@ -300,7 +316,7 @@ async function getPnLTimeline(supabase: SB, params: URLSearchParams): Promise<Da
     .map(([date, v]) => ({ date, pnl: v.pnl, losses: v.losses }));
 }
 
-async function getBreakdown(supabase: SB): Promise<{
+async function getBreakdown(supabase: SB, userId: string): Promise<{
   by_category: CategoryBreakdown[];
   by_venue: VenueBreakdown[];
   pnl_distribution: PnLBucket[];
@@ -308,7 +324,8 @@ async function getBreakdown(supabase: SB): Promise<{
   const { data: closed } = await supabase
     .from("positions")
     .select("realized_pnl, category, venue")
-    .eq("status", "closed");
+    .eq("status", "closed")
+    .eq("user_id", userId);
 
   if (!closed || closed.length === 0) {
     return { by_category: [], by_venue: [], pnl_distribution: [] };
@@ -351,10 +368,11 @@ async function getBreakdown(supabase: SB): Promise<{
   return { by_category, by_venue, pnl_distribution };
 }
 
-async function getGuardStats(supabase: SB): Promise<GuardStat[]> {
+async function getGuardStats(supabase: SB, userId: string): Promise<GuardStat[]> {
   const { data } = await supabase
     .from("decisions")
     .select("guard_results")
+    .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(1000);
 
@@ -379,7 +397,7 @@ async function getGuardStats(supabase: SB): Promise<GuardStat[]> {
     .sort((a, b) => b.rejection_rate - a.rejection_rate);
 }
 
-async function getEnrichedSignals(supabase: SB, params: URLSearchParams): Promise<EnrichedSignal[]> {
+async function getEnrichedSignals(supabase: SB, params: URLSearchParams, userId: string): Promise<EnrichedSignal[]> {
   const limit = Math.min(Number(params.get("limit") ?? 50), 200);
 
   const { data } = await supabase
@@ -388,6 +406,7 @@ async function getEnrichedSignals(supabase: SB, params: URLSearchParams): Promis
       id, ticker, signal_type, confidence_score, edge_pct, roi_per_day, created_at,
       decisions ( verdict, selected, guard_results, allocation_reasons )
     `)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -423,13 +442,14 @@ async function getRegime(supabase: SB): Promise<RegimeState> {
   return data as RegimeState;
 }
 
-async function getOrders(supabase: SB, params: URLSearchParams): Promise<Order[]> {
+async function getOrders(supabase: SB, params: URLSearchParams, userId: string): Promise<Order[]> {
   const limit = Math.min(Number(params.get("limit") ?? 50), 200);
   const status = params.get("status");
 
   let query = supabase
     .from("orders")
     .select("id, ticker, venue, side, decision_id, status, requested_price, requested_size_dollars, filled_size_dollars, avg_fill_price, slippage_bps, fees_dollars, created_at")
+    .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -441,7 +461,7 @@ async function getOrders(supabase: SB, params: URLSearchParams): Promise<Order[]
   return (data ?? []) as Order[];
 }
 
-async function getFills(supabase: SB, params: URLSearchParams): Promise<Fill[]> {
+async function getFills(supabase: SB, params: URLSearchParams, userId: string): Promise<Fill[]> {
   const limit = Math.min(Number(params.get("limit") ?? 50), 200);
 
   const { data } = await supabase
@@ -450,6 +470,7 @@ async function getFills(supabase: SB, params: URLSearchParams): Promise<Fill[]> 
       id, order_id, fill_number, price, quantity, size_dollars, fee_dollars, slippage_bps, created_at,
       orders ( ticker, side, requested_price )
     `)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -469,10 +490,11 @@ async function getFills(supabase: SB, params: URLSearchParams): Promise<Fill[]> 
   })) as Fill[];
 }
 
-async function getExecutionStats(supabase: SB): Promise<ExecutionStats> {
+async function getExecutionStats(supabase: SB, userId: string): Promise<ExecutionStats> {
   const { data } = await supabase
     .from("orders")
-    .select("status, slippage_bps, fees_dollars");
+    .select("status, slippage_bps, fees_dollars")
+    .eq("user_id", userId);
 
   if (!data || data.length === 0) {
     return { total_orders: 0, filled: 0, partial: 0, cancelled: 0, avg_slippage_bps: 0, total_fees: 0 };
@@ -495,7 +517,7 @@ async function getExecutionStats(supabase: SB): Promise<ExecutionStats> {
   };
 }
 
-async function getDecisionReasons(supabase: SB, params: URLSearchParams): Promise<DecisionReasons | null> {
+async function getDecisionReasons(supabase: SB, params: URLSearchParams, userId: string): Promise<DecisionReasons | null> {
   const id = params.get("id");
   if (!id) return null;
 
@@ -506,6 +528,7 @@ async function getDecisionReasons(supabase: SB, params: URLSearchParams): Promis
       signals ( ticker, edge_pct, confidence_score, roi_per_day, time_to_resolution_days, features_json )
     `)
     .eq("id", Number(id))
+    .eq("user_id", userId)
     .single();
 
   if (!data) return null;
@@ -528,21 +551,22 @@ async function getDecisionReasons(supabase: SB, params: URLSearchParams): Promis
   } as DecisionReasons;
 }
 
-async function getAutomationState(supabase: SB): Promise<AutomationState> {
+async function getAutomationState(supabase: SB, userId: string): Promise<AutomationState> {
   const { data } = await supabase
     .from("automation_state")
     .select("*")
-    .order("id", { ascending: true })
+    .eq("user_id", userId)
     .limit(1)
     .single();
 
   if (data) return data as AutomationState;
 
-  // No row exists yet — create one in "paused" state
+  // No row exists yet — create one in "paused" state for this user
   const now = new Date().toISOString();
   const { data: created } = await supabase
     .from("automation_state")
     .insert({
+      user_id: userId,
       status: "paused",
       kill_switch: false,
       daily_loss_dollars: 0,
@@ -556,7 +580,7 @@ async function getAutomationState(supabase: SB): Promise<AutomationState> {
 
   if (created) return created as AutomationState;
 
-  // Fallback if insert also fails (e.g. table doesn't exist)
+  // Fallback if insert also fails
   return {
     id: 0,
     status: "paused",

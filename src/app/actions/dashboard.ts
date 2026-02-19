@@ -1,5 +1,6 @@
 "use server";
 
+import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import type { AutomationState, RiskProfile } from "@/types/api";
 
@@ -9,13 +10,19 @@ export async function setAutomationStatus(
   action: "start" | "pause" | "kill",
   reason?: string,
 ): Promise<{ data?: AutomationState; error?: string }> {
+  // Authenticate
+  const authClient = await createClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
+  const userId = user.id;
+
   const supabase = createServiceClient();
 
-  // Get current state (or create initial row)
+  // Get current state for this user (or create initial row)
   let { data: current } = await supabase
     .from("automation_state")
     .select("*")
-    .order("id", { ascending: true })
+    .eq("user_id", userId)
     .limit(1)
     .single();
 
@@ -23,6 +30,7 @@ export async function setAutomationStatus(
     const { data: created } = await supabase
       .from("automation_state")
       .insert({
+        user_id: userId,
         status: "paused",
         kill_switch: false,
         daily_loss_dollars: 0,
@@ -74,6 +82,7 @@ export async function setAutomationStatus(
     .from("automation_state")
     .update(updates)
     .eq("id", current.id)
+    .eq("user_id", userId)
     .select()
     .single();
 

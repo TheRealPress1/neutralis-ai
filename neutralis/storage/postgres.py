@@ -26,11 +26,17 @@ logger = get_logger(__name__)
 
 
 class PostgresStorage:
-    """Write-only storage for pipeline outputs."""
+    """Write-only storage for pipeline outputs.
 
-    def __init__(self, config: DatabaseConfig) -> None:
+    When ``user_id`` is set, all per-user tables (positions, trades, signals,
+    decisions, automation_state) are scoped to that user.  Global tables
+    (market_snapshots, regime_states, etc.) are unaffected.
+    """
+
+    def __init__(self, config: DatabaseConfig, user_id: str | None = None) -> None:
         self._dsn = config.dsn
         self._conn: Optional[psycopg.Connection] = None
+        self._user_id: str | None = user_id
 
     def connect(self) -> None:
         self._conn = psycopg.connect(self._dsn)
@@ -62,6 +68,21 @@ class PostgresStorage:
             self.connect()
         assert self._conn is not None
         return self._conn
+
+    # -- User-scoping helpers --
+
+    def _user_filter(self) -> str:
+        """SQL fragment: `` AND user_id = %(uid)s`` when user-scoped, else ``""``."""
+        return " AND user_id = %(uid)s" if self._user_id else ""
+
+    def _user_where(self) -> str:
+        """SQL fragment: ``WHERE user_id = %(uid)s`` when user-scoped, else ``""``."""
+        return " WHERE user_id = %(uid)s" if self._user_id else ""
+
+    @property
+    def _uid_params(self) -> dict:
+        """Params dict containing ``uid`` when user-scoped, else empty."""
+        return {"uid": self._user_id} if self._user_id else {}
 
     def save_market_snapshot(self, m: NormalizedMarket) -> int:
         """Insert a market snapshot row. Returns the generated id."""
@@ -141,7 +162,8 @@ class PostgresStorage:
                     snapshot_id, created_at,
                     confidence_score, time_to_resolution_days,
                     roi_per_day, features_json,
-                    implied_probability, entry_side, probability_floor
+                    implied_probability, entry_side, probability_floor,
+                    user_id
                 ) VALUES (
                     %(id)s, %(signal_type)s, %(ticker)s, %(event_ticker)s,
                     %(yes_ask)s, %(no_ask)s, %(combined_cost)s,
@@ -149,7 +171,8 @@ class PostgresStorage:
                     %(snapshot_id)s, %(created_at)s,
                     %(confidence_score)s, %(time_to_resolution_days)s,
                     %(roi_per_day)s, %(features_json)s::jsonb,
-                    %(implied_probability)s, %(entry_side)s, %(probability_floor)s
+                    %(implied_probability)s, %(entry_side)s, %(probability_floor)s,
+                    %(uid)s
                 )
                 """,
                 {
@@ -172,6 +195,7 @@ class PostgresStorage:
                     "implied_probability": signal.implied_probability or None,
                     "entry_side": signal.entry_side or None,
                     "probability_floor": signal.probability_floor or None,
+                    "uid": self._user_id,
                 },
             )
         conn.commit()
@@ -201,11 +225,13 @@ class PostgresStorage:
                 INSERT INTO decisions (
                     signal_id, verdict, guard_results,
                     suggested_size, created_at,
-                    selected, selection_score, allocation_reasons
+                    selected, selection_score, allocation_reasons,
+                    user_id
                 ) VALUES (
                     %(signal_id)s, %(verdict)s, %(guard_results)s::jsonb,
                     %(suggested_size)s, %(created_at)s,
-                    %(selected)s, %(selection_score)s, %(allocation_reasons)s::jsonb
+                    %(selected)s, %(selection_score)s, %(allocation_reasons)s::jsonb,
+                    %(uid)s
                 )
                 RETURNING id
                 """,
@@ -218,6 +244,7 @@ class PostgresStorage:
                     "selected": decision.selected,
                     "selection_score": decision.selection_score,
                     "allocation_reasons": allocation_reasons_json,
+                    "uid": self._user_id,
                 },
             )
             row = cur.fetchone()
@@ -360,11 +387,13 @@ class PostgresStorage:
                 INSERT INTO trades (
                     id, signal_id, decision_id, ticker, event_ticker,
                     venue, side, price, size_dollars, quantity,
-                    is_paper, order_id, fill_price, created_at
+                    is_paper, order_id, fill_price, created_at,
+                    user_id
                 ) VALUES (
                     %(id)s, %(signal_id)s, %(decision_id)s, %(ticker)s, %(event_ticker)s,
                     %(venue)s, %(side)s, %(price)s, %(size_dollars)s, %(quantity)s,
-                    %(is_paper)s, %(order_id)s, %(fill_price)s, %(created_at)s
+                    %(is_paper)s, %(order_id)s, %(fill_price)s, %(created_at)s,
+                    %(uid)s
                 )
                 """,
                 {
@@ -382,6 +411,7 @@ class PostgresStorage:
                     "order_id": trade.order_id,
                     "fill_price": trade.fill_price,
                     "created_at": trade.created_at,
+                    "uid": self._user_id,
                 },
             )
         conn.commit()
@@ -398,14 +428,14 @@ class PostgresStorage:
                     entry_price, size_dollars, quantity,
                     realized_pnl, unrealized_pnl, trade_count,
                     opened_at, closed_at, category, exit_reason, exit_price,
-                    signal_type, hwm_pnl_pct
+                    signal_type, hwm_pnl_pct, user_id
                 ) VALUES (
                     %(id)s, %(ticker)s, %(event_ticker)s, %(venue)s, %(side)s, %(status)s,
                     %(entry_price)s, %(size_dollars)s, %(quantity)s,
                     %(realized_pnl)s, %(unrealized_pnl)s, %(trade_count)s,
                     %(opened_at)s, %(closed_at)s, %(category)s,
                     %(exit_reason)s, %(exit_price)s,
-                    %(signal_type)s, %(hwm_pnl_pct)s
+                    %(signal_type)s, %(hwm_pnl_pct)s, %(uid)s
                 )
                 """,
                 {
@@ -428,6 +458,7 @@ class PostgresStorage:
                     "exit_price": position.exit_price,
                     "signal_type": position.signal_type,
                     "hwm_pnl_pct": position.hwm_pnl_pct,
+                    "uid": self._user_id,
                 },
             )
         conn.commit()
@@ -524,12 +555,13 @@ class PostgresStorage:
         conn.commit()
 
     def get_open_positions(self) -> list[Position]:
-        """Return all open positions."""
+        """Return all open positions (scoped by user_id when set)."""
         conn = self._ensure_connected()
         with conn.cursor() as cur:
             cur.execute(
                 f"SELECT {self._POSITION_COLS} FROM positions "
-                "WHERE status = 'open' ORDER BY opened_at"
+                f"WHERE status = 'open'{self._user_filter()} ORDER BY opened_at",
+                self._uid_params,
             )
             rows = cur.fetchall()
         return [self._row_to_position(row) for row in rows]
@@ -543,8 +575,8 @@ class PostgresStorage:
             cur.execute(
                 f"SELECT {self._POSITION_COLS} FROM positions "
                 "WHERE ticker = %(ticker)s AND venue = %(venue)s "
-                "AND side = %(side)s AND status = 'open'",
-                {"ticker": ticker, "venue": venue, "side": side.value},
+                f"AND side = %(side)s AND status = 'open'{self._user_filter()}",
+                {"ticker": ticker, "venue": venue, "side": side.value, **self._uid_params},
             )
             row = cur.fetchone()
         return self._row_to_position(row) if row else None
@@ -566,8 +598,8 @@ class PostgresStorage:
         with conn.cursor() as cur:
             cur.execute(
                 f"SELECT {self._POSITION_COLS} FROM positions "
-                "WHERE event_ticker = %(event_ticker)s AND status = 'open'",
-                {"event_ticker": event_ticker},
+                f"WHERE event_ticker = %(event_ticker)s AND status = 'open'{self._user_filter()}",
+                {"event_ticker": event_ticker, **self._uid_params},
             )
             rows = cur.fetchall()
         return [self._row_to_position(row) for row in rows]
@@ -578,8 +610,8 @@ class PostgresStorage:
         with conn.cursor() as cur:
             cur.execute(
                 f"SELECT {self._POSITION_COLS} FROM positions "
-                "WHERE ticker = %(ticker)s AND status = 'open'",
-                {"ticker": ticker},
+                f"WHERE ticker = %(ticker)s AND status = 'open'{self._user_filter()}",
+                {"ticker": ticker, **self._uid_params},
             )
             rows = cur.fetchall()
         return [self._row_to_position(row) for row in rows]
@@ -590,9 +622,9 @@ class PostgresStorage:
         with conn.cursor() as cur:
             cur.execute(
                 f"SELECT {self._POSITION_COLS} FROM positions "
-                "WHERE signal_type = %(signal_type)s AND status = 'open' "
+                f"WHERE signal_type = %(signal_type)s AND status = 'open'{self._user_filter()} "
                 "ORDER BY opened_at",
-                {"signal_type": signal_type},
+                {"signal_type": signal_type, **self._uid_params},
             )
             rows = cur.fetchall()
         return [self._row_to_position(row) for row in rows]
@@ -611,8 +643,9 @@ class PostgresStorage:
 
     def get_recent_signals(self, limit: int = 50) -> list[dict]:
         return self._fetch_dicts(
-            "SELECT * FROM signals ORDER BY created_at DESC LIMIT %(limit)s",
-            {"limit": limit},
+            f"SELECT * FROM signals WHERE 1=1{self._user_filter()} "
+            "ORDER BY created_at DESC LIMIT %(limit)s",
+            {"limit": limit, **self._uid_params},
         )
 
     def get_recent_decisions(
@@ -622,28 +655,30 @@ class PostgresStorage:
             return self._fetch_dicts(
                 "SELECT d.*, s.ticker, s.edge_pct, s.signal_type "
                 "FROM decisions d JOIN signals s ON d.signal_id = s.id "
-                "WHERE d.verdict = %(verdict)s "
+                f"WHERE d.verdict = %(verdict)s{self._user_filter().replace('user_id', 'd.user_id')} "
                 "ORDER BY d.created_at DESC LIMIT %(limit)s",
-                {"verdict": verdict, "limit": limit},
+                {"verdict": verdict, "limit": limit, **self._uid_params},
             )
         return self._fetch_dicts(
             "SELECT d.*, s.ticker, s.edge_pct, s.signal_type "
             "FROM decisions d JOIN signals s ON d.signal_id = s.id "
+            f"WHERE 1=1{self._user_filter().replace('user_id', 'd.user_id')} "
             "ORDER BY d.created_at DESC LIMIT %(limit)s",
-            {"limit": limit},
+            {"limit": limit, **self._uid_params},
         )
 
     def get_recent_trades(self, limit: int = 50) -> list[dict]:
         return self._fetch_dicts(
-            "SELECT * FROM trades ORDER BY created_at DESC LIMIT %(limit)s",
-            {"limit": limit},
+            f"SELECT * FROM trades WHERE 1=1{self._user_filter()} "
+            "ORDER BY created_at DESC LIMIT %(limit)s",
+            {"limit": limit, **self._uid_params},
         )
 
     def get_closed_positions(self, limit: int = 50) -> list[dict]:
         return self._fetch_dicts(
-            "SELECT * FROM positions WHERE status = 'closed' "
+            f"SELECT * FROM positions WHERE status = 'closed'{self._user_filter()} "
             "ORDER BY closed_at DESC LIMIT %(limit)s",
-            {"limit": limit},
+            {"limit": limit, **self._uid_params},
         )
 
     def get_recent_matches(self, limit: int = 50) -> list[dict]:
@@ -663,8 +698,10 @@ class PostgresStorage:
     def get_portfolio_stats(self) -> dict:
         """Aggregate portfolio statistics."""
         conn = self._ensure_connected()
+        uf = self._user_filter()
+        p = self._uid_params
         with conn.cursor() as cur:
-            cur.execute("""
+            cur.execute(f"""
                 SELECT
                     COUNT(*) FILTER (WHERE status = 'open') AS open_positions,
                     COUNT(*) FILTER (WHERE status = 'closed') AS closed_positions,
@@ -673,10 +710,11 @@ class PostgresStorage:
                     COUNT(*) FILTER (WHERE status = 'closed' AND realized_pnl > 0) AS wins,
                     COUNT(*) FILTER (WHERE status = 'closed' AND realized_pnl <= 0) AS losses
                 FROM positions
-            """)
+                WHERE 1=1{uf}
+            """, p)
             row = cur.fetchone()
 
-            cur.execute("SELECT COUNT(*) FROM trades")
+            cur.execute(f"SELECT COUNT(*) FROM trades WHERE 1=1{uf}", p)
             trade_count = cur.fetchone()[0]  # type: ignore[index]
 
         return {
@@ -695,7 +733,7 @@ class PostgresStorage:
     def get_daily_pnl(self, days: int = 90) -> list[dict]:
         """Daily realized P&L for closed positions over the last N days."""
         return self._fetch_dicts(
-            """
+            f"""
             SELECT
                 DATE(closed_at) AS date,
                 SUM(realized_pnl) AS pnl,
@@ -705,15 +743,16 @@ class PostgresStorage:
             FROM positions
             WHERE status = 'closed'
               AND closed_at >= now() - make_interval(days => %(days)s)
+              {self._user_filter()}
             GROUP BY DATE(closed_at)
             ORDER BY date
             """,
-            {"days": days},
+            {"days": days, **self._uid_params},
         )
 
     def get_category_breakdown(self) -> list[dict]:
         """P&L and trade counts per market category."""
-        return self._fetch_dicts("""
+        return self._fetch_dicts(f"""
             SELECT
                 category,
                 COUNT(*) AS total_trades,
@@ -722,14 +761,14 @@ class PostgresStorage:
                 COALESCE(SUM(realized_pnl), 0) AS total_pnl,
                 COALESCE(AVG(realized_pnl), 0) AS avg_pnl
             FROM positions
-            WHERE status = 'closed'
+            WHERE status = 'closed'{self._user_filter()}
             GROUP BY category
             ORDER BY total_pnl DESC
-        """)
+        """, self._uid_params)
 
     def get_venue_breakdown(self) -> list[dict]:
         """P&L and trade counts per venue."""
-        return self._fetch_dicts("""
+        return self._fetch_dicts(f"""
             SELECT
                 venue,
                 COUNT(*) AS total_trades,
@@ -737,16 +776,17 @@ class PostgresStorage:
                 SUM(CASE WHEN realized_pnl <= 0 THEN 1 ELSE 0 END) AS losses,
                 COALESCE(SUM(realized_pnl), 0) AS total_pnl
             FROM positions
-            WHERE status = 'closed'
+            WHERE status = 'closed'{self._user_filter()}
             GROUP BY venue
-        """)
+        """, self._uid_params)
 
     def get_analytics_summary(self) -> dict:
         """Aggregate analytics: total P&L, best/worst day, max drawdown, avg trade."""
-        rows = self._fetch_dicts("""
+        uf = self._user_filter()
+        rows = self._fetch_dicts(f"""
             WITH daily AS (
                 SELECT DATE(closed_at) AS d, SUM(realized_pnl) AS pnl
-                FROM positions WHERE status = 'closed'
+                FROM positions WHERE status = 'closed'{uf}
                 GROUP BY DATE(closed_at)
             ),
             cumulative AS (
@@ -761,40 +801,40 @@ class PostgresStorage:
                 FROM cumulative
             )
             SELECT
-                (SELECT COALESCE(SUM(realized_pnl), 0) FROM positions WHERE status = 'closed')
+                (SELECT COALESCE(SUM(realized_pnl), 0) FROM positions WHERE status = 'closed'{uf})
                     AS total_pnl,
-                (SELECT COUNT(*) FROM positions WHERE status = 'closed')
+                (SELECT COUNT(*) FROM positions WHERE status = 'closed'{uf})
                     AS total_closed,
                 (SELECT COALESCE(MAX(pnl), 0) FROM daily) AS best_day,
                 (SELECT COALESCE(MIN(pnl), 0) FROM daily) AS worst_day,
                 (SELECT COALESCE(MIN(dd), 0) FROM drawdown) AS max_drawdown,
-                (SELECT COALESCE(AVG(realized_pnl), 0) FROM positions WHERE status = 'closed')
+                (SELECT COALESCE(AVG(realized_pnl), 0) FROM positions WHERE status = 'closed'{uf})
                     AS avg_trade_pnl,
                 (SELECT COALESCE(AVG(realized_pnl), 0) FROM positions
-                    WHERE status = 'closed' AND realized_pnl > 0) AS avg_win,
+                    WHERE status = 'closed' AND realized_pnl > 0{uf}) AS avg_win,
                 (SELECT COALESCE(ABS(AVG(realized_pnl)), 0) FROM positions
-                    WHERE status = 'closed' AND realized_pnl <= 0) AS avg_loss
-        """)
+                    WHERE status = 'closed' AND realized_pnl <= 0{uf}) AS avg_loss
+        """, self._uid_params)
         return rows[0] if rows else {}
 
     def get_pnl_distribution(self, bucket_size: float = 5.0) -> list[dict]:
         """Histogram of realized P&L values."""
         return self._fetch_dicts(
-            """
+            f"""
             SELECT
                 FLOOR(realized_pnl / %(bucket)s) * %(bucket)s AS bucket_start,
                 COUNT(*) AS count
             FROM positions
-            WHERE status = 'closed'
+            WHERE status = 'closed'{self._user_filter()}
             GROUP BY bucket_start
             ORDER BY bucket_start
             """,
-            {"bucket": bucket_size},
+            {"bucket": bucket_size, **self._uid_params},
         )
 
     def get_guard_effectiveness(self) -> list[dict]:
         """Rejection rate per guard name from decisions."""
-        return self._fetch_dicts("""
+        return self._fetch_dicts(f"""
             SELECT
                 g->>'guard_name' AS guard_name,
                 COUNT(*) AS total_evaluations,
@@ -805,9 +845,10 @@ class PostgresStorage:
                     / NULLIF(COUNT(*), 0), 4
                 ) AS rejection_rate
             FROM decisions, jsonb_array_elements(guard_results) AS g
+            WHERE 1=1{self._user_filter().replace('user_id', 'decisions.user_id')}
             GROUP BY g->>'guard_name'
             ORDER BY rejections DESC
-        """)
+        """, self._uid_params)
 
     # -- Signal feed & regime queries --
 
@@ -820,8 +861,10 @@ class PostgresStorage:
     ) -> list[dict]:
         """Signals joined with their latest decision, for the live feed."""
         where_clauses = ["s.confidence_score >= %(min_confidence)s"]
-        params: dict = {"limit": limit, "min_confidence": min_confidence}
+        params: dict = {"limit": limit, "min_confidence": min_confidence, **self._uid_params}
 
+        if self._user_id:
+            where_clauses.append("s.user_id = %(uid)s")
         if signal_type:
             where_clauses.append("s.signal_type = %(signal_type)s")
             params["signal_type"] = signal_type
@@ -1225,13 +1268,14 @@ class PostgresStorage:
         """Return recent orders, optionally filtered by status."""
         if status:
             return self._fetch_dicts(
-                "SELECT * FROM orders WHERE status = %(status)s "
+                f"SELECT * FROM orders WHERE status = %(status)s{self._user_filter()} "
                 "ORDER BY created_at DESC LIMIT %(limit)s",
-                {"status": status, "limit": limit},
+                {"status": status, "limit": limit, **self._uid_params},
             )
         return self._fetch_dicts(
-            "SELECT * FROM orders ORDER BY created_at DESC LIMIT %(limit)s",
-            {"limit": limit},
+            f"SELECT * FROM orders WHERE 1=1{self._user_filter()} "
+            "ORDER BY created_at DESC LIMIT %(limit)s",
+            {"limit": limit, **self._uid_params},
         )
 
     def get_fills_for_order(self, order_id: str) -> list[dict]:
@@ -1244,16 +1288,18 @@ class PostgresStorage:
 
     def get_recent_fills(self, limit: int = 50) -> list[dict]:
         """Return recent fills joined with order fields."""
+        uf = self._user_filter().replace("user_id", "f.user_id") if self._user_id else ""
         return self._fetch_dicts(
-            """
+            f"""
             SELECT f.*, o.ticker, o.venue, o.side, o.event_ticker,
                    o.requested_price
             FROM fills f
             JOIN orders o ON f.order_id = o.id
+            WHERE 1=1{uf}
             ORDER BY f.created_at DESC
             LIMIT %(limit)s
             """,
-            {"limit": limit},
+            {"limit": limit, **self._uid_params},
         )
 
     def get_decision_with_reasons(self, decision_id: int) -> dict | None:
@@ -1275,7 +1321,7 @@ class PostgresStorage:
         """Aggregate execution statistics across all orders."""
         conn = self._ensure_connected()
         with conn.cursor() as cur:
-            cur.execute("""
+            cur.execute(f"""
                 SELECT
                     COUNT(*) AS total_orders,
                     COUNT(*) FILTER (WHERE status = 'filled') AS filled,
@@ -1285,7 +1331,8 @@ class PostgresStorage:
                         AS avg_slippage_bps,
                     COALESCE(SUM(fees_dollars), 0) AS total_fees
                 FROM orders
-            """)
+                WHERE 1=1{self._user_filter()}
+            """, self._uid_params)
             row = cur.fetchone()
 
         if row is None:
@@ -1665,13 +1712,20 @@ class PostgresStorage:
     """
 
     def get_automation_state(self) -> dict | None:
-        """Return the singleton automation state row, or None."""
+        """Return the automation state row (scoped by user_id when set)."""
         conn = self._ensure_connected()
         try:
-            with conn.cursor() as cur:
-                cur.execute(
-                    f"SELECT {self._AUTOMATION_COLS} FROM automation_state ORDER BY id LIMIT 1"
+            if self._user_id:
+                sql = (
+                    f"SELECT {self._AUTOMATION_COLS} FROM automation_state "
+                    "WHERE user_id = %(uid)s LIMIT 1"
                 )
+                params = {"uid": self._user_id}
+            else:
+                sql = f"SELECT {self._AUTOMATION_COLS} FROM automation_state ORDER BY id LIMIT 1"
+                params = {}
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
                 row = cur.fetchone()
             conn.commit()
         except Exception:
@@ -1686,11 +1740,11 @@ class PostgresStorage:
         status: str,
         reason: str | None = None,
     ) -> dict:
-        """Update the singleton automation state and return the updated row."""
+        """Update the automation state and return the updated row."""
         conn = self._ensure_connected()
 
         set_parts = ["status = %(status)s", "updated_at = NOW()"]
-        params: dict = {"status": status}
+        params: dict = {"status": status, **self._uid_params}
 
         if status == "running":
             set_parts += [
@@ -1706,10 +1760,15 @@ class PostgresStorage:
             ]
             params["reason"] = reason
 
+        if self._user_id:
+            where = "WHERE user_id = %(uid)s"
+        else:
+            where = "WHERE id = (SELECT id FROM automation_state ORDER BY id LIMIT 1)"
+
         sql = f"""
             UPDATE automation_state
             SET {', '.join(set_parts)}
-            WHERE id = (SELECT id FROM automation_state ORDER BY id LIMIT 1)
+            {where}
             RETURNING {self._AUTOMATION_COLS}
         """
         try:
@@ -1733,21 +1792,26 @@ class PostgresStorage:
     ) -> None:
         """Update the risk metrics on the automation state row."""
         conn = self._ensure_connected()
+        if self._user_id:
+            where = "WHERE user_id = %(uid)s"
+        else:
+            where = "WHERE id = (SELECT id FROM automation_state ORDER BY id LIMIT 1)"
         try:
             with conn.cursor() as cur:
                 cur.execute(
-                    """
+                    f"""
                     UPDATE automation_state
                     SET daily_loss_dollars = %(daily_loss)s,
                         peak_portfolio_value = %(peak_value)s,
                         max_drawdown_dollars = %(max_drawdown)s,
                         updated_at = NOW()
-                    WHERE id = (SELECT id FROM automation_state ORDER BY id LIMIT 1)
+                    {where}
                     """,
                     {
                         "daily_loss": daily_loss,
                         "peak_value": peak_value,
                         "max_drawdown": max_drawdown,
+                        **self._uid_params,
                     },
                 )
             conn.commit()

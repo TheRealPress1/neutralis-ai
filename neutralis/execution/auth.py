@@ -24,6 +24,15 @@ def load_private_key(path_str: str) -> rsa.RSAPrivateKey:
     return key
 
 
+def load_private_key_from_pem_string(pem_str: str) -> rsa.RSAPrivateKey:
+    """Load an RSA private key from a PEM string (e.g. decrypted from DB)."""
+    pem_data = pem_str.encode("utf-8")
+    key = serialization.load_pem_private_key(pem_data, password=None)
+    if not isinstance(key, rsa.RSAPrivateKey):
+        raise TypeError("Expected RSA private key")
+    return key
+
+
 def sign_request(
     private_key: rsa.RSAPrivateKey,
     api_key: str,

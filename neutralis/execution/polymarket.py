@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 from py_clob_client.client import ClobClient
-from py_clob_client.clob_types import MarketOrderArgs, OrderArgs, OrderType
+from py_clob_client.clob_types import ApiCreds, MarketOrderArgs, OrderArgs, OrderType
 
 from neutralis.config import ExecutionConfig
 from neutralis.logging import get_logger
@@ -47,6 +47,42 @@ class PolymarketExecutor:
         logger.info("Polymarket executor initialized (address=%s)", self._exec.polymarket_funder_address[:10])
 
         self._last_request_ts: float = 0.0
+
+    @classmethod
+    def from_credentials(
+        cls,
+        api_key: str,
+        api_secret: str,
+        passphrase: str,
+        funder_address: str,
+        private_key: str = "",
+        signature_type: int = 0,
+    ) -> PolymarketExecutor:
+        """Create executor from pre-derived API credentials (not env vars).
+
+        Used by the multi-tenant pipeline to initialize per-user executors
+        from decrypted credentials stored in the database.
+        """
+        instance = cls.__new__(cls)
+        instance._exec = None  # not needed when using direct credentials
+
+        client = ClobClient(
+            "https://clob.polymarket.com",
+            key=private_key or "",
+            chain_id=137,
+            signature_type=signature_type,
+            funder=funder_address,
+        )
+        client.set_api_creds(ApiCreds(
+            api_key=api_key,
+            api_secret=api_secret,
+            api_passphrase=passphrase,
+        ))
+        instance._client = client
+        instance._last_request_ts = 0.0
+
+        logger.info("Polymarket executor initialized from credentials (address=%s)", funder_address[:10])
+        return instance
 
     def _throttle(self) -> None:
         elapsed = time.monotonic() - self._last_request_ts
