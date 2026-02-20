@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { createHash } from "crypto";
+import { tryEncrypt } from "@/lib/encryption";
 
 import type {
   PortfolioStats,
@@ -79,6 +81,21 @@ export async function GET(request: Request) {
         return json(await getDecisionReasons(supabase, searchParams, userId));
       case "automation-state":
         return json(await getAutomationState(supabase, userId));
+
+      // Encryption key diagnostic (admin only)
+      case "enc-check": {
+        const keyHex = process.env.API_KEY_ENC_KEY ?? "";
+        const fingerprint = keyHex
+          ? createHash("sha256").update(keyHex).digest("hex").slice(0, 16)
+          : "missing";
+        const testToken = tryEncrypt("neutralis-enc-ok");
+        return json({
+          fingerprint,
+          key_length: keyHex.length,
+          test_token: testToken,
+          configured: keyHex.length === 64,
+        });
+      }
 
       // Global data (not user-scoped)
       case "matches":
