@@ -328,7 +328,7 @@ def evaluate_and_execute_for_user(
 
     All DB writes are scoped to ``user["user_id"]``.
     """
-    uid = user["user_id"]
+    uid = str(user["user_id"])
     email = user.get("email", "?")
     logger.info("── Processing user %s (%s) ──", uid[:8], email)
 
@@ -748,7 +748,7 @@ def run_once(run_number: int = 0) -> RunStats:
             last_exposure = user_result.total_exposure
         except Exception:
             logger.exception(
-                "Pipeline error for user %s", user.get("user_id", "?")[:8],
+                "Pipeline error for user %s", str(user.get("user_id", "?"))[:8],
             )
 
     elapsed = (time.monotonic() - start) * 1000
