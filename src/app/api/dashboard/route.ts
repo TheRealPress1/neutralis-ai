@@ -92,6 +92,7 @@ export async function GET(request: Request) {
         return json({
           fingerprint,
           key_length: keyHex.length,
+          key_preview: keyHex.slice(0, 8),
           test_token: testToken,
           configured: keyHex.length === 64,
         });
