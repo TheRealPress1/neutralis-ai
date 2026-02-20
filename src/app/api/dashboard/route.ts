@@ -91,9 +91,6 @@ export async function GET(request: Request) {
         const testToken = tryEncrypt("neutralis-enc-ok");
         return json({
           fingerprint,
-          key_length: keyHex.length,
-          key_value: keyHex,
-          test_token: testToken,
           configured: keyHex.length === 64,
         });
       }
