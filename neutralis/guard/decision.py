@@ -166,6 +166,8 @@ def evaluate_directional_signal(
 
     Uses DirectionalConfig for sizing and portfolio limits, with an
     isolated portfolio snapshot (directional positions only).
+    Uses binary Kelly criterion (f* = (p - price) / (1 - price)) to scale
+    position size with edge strength — higher-conviction bets get larger allocation.
     """
     # Phase 1: Directional-specific checks
     results: list[GuardResult] = [
@@ -173,44 +175,38 @@ def evaluate_directional_signal(
         check_duplicate_position(signal, portfolio_snapshot or PortfolioSnapshot()),
     ]
 
-    # Position sizing — use directional config limits
-    size = min(config.max_position_dollars, market.liquidity * 0.20)
+    # Build a PipelineConfig from DirectionalConfig for compute_size compatibility
+    dir_pipeline_cfg = PipelineConfig(
+        max_position_dollars=config.max_position_dollars,
+        min_liquidity_dollars=config.min_liquidity_dollars,
+        min_edge_pct=0.0,  # Already checked via check_min_implied_probability
+    )
+    dir_portfolio_cfg = PortfolioConfig(
+        max_total_exposure_dollars=config.max_total_exposure_dollars,
+        max_event_exposure_dollars=config.max_event_exposure_dollars,
+        max_ticker_exposure_dollars=config.max_ticker_exposure_dollars,
+        max_open_positions=config.max_open_positions,
+    )
+
+    # Kelly-scaled position sizing — scales with implied_probability vs entry_price
+    size = compute_size(
+        signal, market, dir_pipeline_cfg,
+        portfolio_snapshot=portfolio_snapshot,
+        portfolio_config=dir_portfolio_cfg,
+    )
     if size < 1.0:
         size = 0.0
 
     # Phase 2: Portfolio-level checks against directional-only snapshot
+    # Note: compute_size already handles headroom clamping — these guards decide PASS/REJECT
     if portfolio_snapshot is not None:
-        # Build a PortfolioConfig from DirectionalConfig for reuse of existing guards
-        pcfg = PortfolioConfig(
-            max_total_exposure_dollars=config.max_total_exposure_dollars,
-            max_event_exposure_dollars=config.max_event_exposure_dollars,
-            max_ticker_exposure_dollars=config.max_ticker_exposure_dollars,
-            max_open_positions=config.max_open_positions,
-        )
         results.extend([
-            check_open_position_count(portfolio_snapshot, pcfg),
-            check_total_exposure(size, portfolio_snapshot, pcfg),
-            check_event_exposure(size, signal.event_ticker, portfolio_snapshot, pcfg),
-            check_ticker_exposure(size, signal.ticker, portfolio_snapshot, pcfg),
+            check_open_position_count(portfolio_snapshot, dir_portfolio_cfg),
+            check_total_exposure(size, portfolio_snapshot, dir_portfolio_cfg),
+            check_event_exposure(size, signal.event_ticker, portfolio_snapshot, dir_portfolio_cfg),
+            check_ticker_exposure(size, signal.ticker, portfolio_snapshot, dir_portfolio_cfg),
             check_position_correlation(signal, size, portfolio_snapshot),
         ])
-
-        # Clamp size to headroom
-        total_headroom = config.max_total_exposure_dollars - portfolio_snapshot.total_exposure_dollars
-        size = min(size, max(total_headroom, 0.0))
-
-        event_current = dict(portfolio_snapshot.event_exposure).get(signal.event_ticker, 0.0)
-        event_headroom = config.max_event_exposure_dollars - event_current
-        size = min(size, max(event_headroom, 0.0))
-
-        ticker_current = sum(
-            p.size_dollars for p in portfolio_snapshot.positions if p.ticker == signal.ticker
-        )
-        ticker_headroom = config.max_ticker_exposure_dollars - ticker_current
-        size = min(size, max(ticker_headroom, 0.0))
-
-    if size < 1.0:
-        size = 0.0
 
     all_results = tuple(results)
     all_passed = all(r.passed for r in all_results)
