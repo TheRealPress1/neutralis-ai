@@ -266,6 +266,7 @@ def run_backtest(
     clock_start = time.monotonic()
 
     base = load_settings()
+    use_maker = base.execution.use_maker_orders
     pipeline_cfg = _apply_overrides(base.pipeline, pipeline_overrides)
     portfolio_cfg = _apply_overrides(base.portfolio, portfolio_overrides)
     matching_cfg = _apply_overrides(base.matching, matching_overrides)
@@ -313,11 +314,11 @@ def run_backtest(
             _try_exits(portfolio, all_markets, exit_cfg, ts, hwm=hwm)
 
             # Complement arb scan (Kalshi)
-            complement_signals = scan_complement_arb(kalshi_markets, pipeline_cfg)
+            complement_signals = scan_complement_arb(kalshi_markets, pipeline_cfg, maker=use_maker)
 
             # Cross-platform matching + scanning
             pairs = match_markets(kalshi_markets, poly_markets, matching_cfg)
-            xp_signals = scan_cross_platform(pairs, matching_cfg, pipeline_config=pipeline_cfg)
+            xp_signals = scan_cross_platform(pairs, matching_cfg, pipeline_config=pipeline_cfg, maker=use_maker)
 
             # Compute regime for this time step
             di_overall = 0.0

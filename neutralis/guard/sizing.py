@@ -15,11 +15,40 @@ _KELLY_FRACTION = 0.25
 def _kelly_optimal(signal: Signal) -> float:
     """Compute the optimal Kelly bet fraction for a signal.
 
-    For arbs (guaranteed payout): f* = net_edge / combined_cost
-    For directional (probabilistic): f* = edge_pct / 100
+    For arbs (guaranteed payout):
+        f* = net_edge / combined_cost
+        This is exact — arbs are risk-free given execution, so Kelly
+        reduces to the net return per dollar invested.
+
+    For directional (binary prediction market bet):
+        f* = (p - q) / b  where p = win probability, q = 1-p, b = net odds
+        For a market where you pay `entry_price` and collect $1.00 on win:
+            b = (1 - entry_price) / entry_price  (net odds per dollar wagered)
+        Substituting: f* = (p - entry_price) / (1 - entry_price)
+        This is only valid when p > entry_price (positive edge exists).
+
+    Falls back to edge_pct / 100 when implied_probability is unavailable.
     """
+    # Directional signals: use binary Kelly when we have a true probability estimate.
+    # Check this BEFORE the arb formula — directional signals also carry combined_cost
+    # and net_edge but they don't represent a risk-free arb; the binary formula is correct.
+    if signal.implied_probability > 0 and signal.entry_side:
+        p = signal.implied_probability
+        # Use the ask price for the side we're buying
+        if signal.entry_side == "yes":
+            entry_price = signal.yes_ask if signal.yes_ask > 0 else signal.combined_cost
+        else:
+            entry_price = signal.no_ask if signal.no_ask > 0 else signal.combined_cost
+
+        if 0 < entry_price < 1.0 and p > entry_price:
+            return (p - entry_price) / (1.0 - entry_price)
+        return 0.0
+
+    # Arb signals: exact Kelly is net_edge / cost (risk-free, so this is precise)
     if signal.combined_cost > 0 and signal.net_edge > 0:
         return signal.net_edge / signal.combined_cost
+
+    # Fallback for signals without probability estimates
     if signal.edge_pct > 0:
         return signal.edge_pct / 100.0
     return 0.0
