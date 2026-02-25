@@ -1,0 +1,46 @@
+# Frontend (not needed in Python containers)
+node_modules/
+.next/
+src/
+public/
+*.ts
+*.tsx
+*.css
+tsconfig.json
+next.config.ts
+tailwind.config.ts
+postcss.config.mjs
+package.json
+package-lock.json
+
+# Git
+.git/
+.gitignore
+
+# Env/secrets (injected at runtime via env_file)
+.env*
+!.env.example
+*.pem
+*.key
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+venv/
+.venv/
+
+# IDE / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Tests (not needed in prod image)
+tests/
+coverage/
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
