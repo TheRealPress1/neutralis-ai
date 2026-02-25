@@ -19,7 +19,7 @@ import websockets
 from websockets.asyncio.client import ClientConnection
 
 from neutralis.config import ExecutionConfig, WebSocketConfig
-from neutralis.execution.auth import load_private_key, ws_auth_headers
+from neutralis.execution.auth import load_private_key, load_private_key_from_pem_string, ws_auth_headers
 from neutralis.logging import get_logger
 
 logger = get_logger(__name__)
@@ -55,7 +55,28 @@ class KalshiWebSocket:
 
         # Load auth credentials
         self._api_key = exec_config.kalshi_api_key_id
-        self._private_key = load_private_key(exec_config.kalshi_private_key_path)
+        self._private_key = load_private_key(exec_config.kalshi_private_key_path) if exec_config.kalshi_private_key_path else None
+
+    @classmethod
+    def from_credentials(
+        cls,
+        ws_config: WebSocketConfig,
+        api_key_id: str,
+        private_key_pem: str,
+    ) -> KalshiWebSocket:
+        """Create from decrypted DB credentials (no env vars needed)."""
+        instance = cls.__new__(cls)
+        instance._ws_cfg = ws_config
+        instance._exec_cfg = None
+        instance._ws = None
+        instance._handlers = {}
+        instance._subscribed_tickers = set()
+        instance._sub_id = 0
+        instance._running = False
+        instance._reconnect_delay = ws_config.reconnect_delay_sec
+        instance._api_key = api_key_id
+        instance._private_key = load_private_key_from_pem_string(private_key_pem)
+        return instance
 
     def on(self, msg_type: str, handler: MsgHandler) -> None:
         """Register a handler for a message type (e.g. 'ticker', 'fill', 'trade')."""

@@ -148,10 +148,17 @@ class EventEngine:
         4. If arb → score → guard → execute
     """
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        kalshi_key_id: str = "",
+        kalshi_pem: str = "",
+    ) -> None:
         self._settings = settings
         self._ws_cfg = settings.websocket
         self._poly_ws_cfg = settings.polymarket_ws
+        self._kalshi_key_id = kalshi_key_id
+        self._kalshi_pem = kalshi_pem
         self._ws: KalshiWebSocket | None = None
         self._poly_ws: PolymarketWebSocket | None = None
         self._state: _LiveState | None = None
@@ -183,7 +190,12 @@ class EventEngine:
         logger.info("Focus set: %d tickers for WS subscription", len(focus_tickers))
 
         # Step 3: Connect WebSocket and subscribe
-        self._ws = KalshiWebSocket(self._ws_cfg, self._settings.execution)
+        if self._kalshi_pem:
+            self._ws = KalshiWebSocket.from_credentials(
+                self._ws_cfg, self._kalshi_key_id, self._kalshi_pem,
+            )
+        else:
+            self._ws = KalshiWebSocket(self._ws_cfg, self._settings.execution)
         self._ws.on("ticker", self._on_ticker)
         self._ws.on("fill", self._on_fill)
         self._ws.on("trade", self._on_trade)

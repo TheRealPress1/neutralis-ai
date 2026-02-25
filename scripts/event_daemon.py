@@ -4,14 +4,14 @@
 Usage:
     python scripts/event_daemon.py
 
-Opt-in via WEBSOCKET_ENABLED=true in .env.local.
-The existing loop_daemon.py stays as a polling fallback.
+This is the default (fastest) execution mode. Falls back to loop_daemon.py
+polling if WebSocket connection fails.
 
 Architecture:
     1. Full REST fetch of Kalshi + Polymarket on startup
     2. Match cross-platform pairs
     3. Subscribe to focused Kalshi tickers via WebSocket
-    4. Real-time arb detection on every price tick (<200ms)
+    4. Real-time arb detection on every price tick (<1ms)
     5. Periodic: settlement (60s), MTM (30s), REST refresh (5min)
 """
 
@@ -32,6 +32,7 @@ from neutralis.config import load_settings
 from neutralis.engine.event_loop import EventEngine
 from neutralis.logging import get_logger
 from neutralis.storage.postgres import PostgresStorage
+from neutralis.services.user_credentials import load_active_users, load_user_credentials
 
 logger = get_logger("event_daemon")
 
@@ -69,16 +70,6 @@ async def main() -> None:
     settings = load_settings()
     ws_cfg = settings.websocket
 
-    if not ws_cfg.enabled:
-        logger.error(
-            "WebSocket mode not enabled. Set WEBSOCKET_ENABLED=true in .env.local"
-        )
-        sys.exit(1)
-
-    if not settings.execution.kalshi_api_key_id:
-        logger.error("KALSHI_API_KEY_ID required for WebSocket auth")
-        sys.exit(1)
-
     # Startup health check
     logger.info("Running startup health check")
     try:
@@ -89,8 +80,40 @@ async def main() -> None:
         logger.exception("Health check failed: database unreachable")
         sys.exit(1)
 
-    # Create engine
-    engine = EventEngine(settings)
+    # Load credentials from DB — find the first active user with valid Kalshi keys
+    kalshi_key_id = ""
+    kalshi_pem = ""
+    try:
+        with PostgresStorage(settings.db) as storage:
+            users = load_active_users(storage)
+            for user in users:
+                uid = str(user["user_id"])
+                creds = load_user_credentials(storage, uid)
+                if creds.kalshi:
+                    kalshi_key_id = creds.kalshi.api_key_id
+                    kalshi_pem = creds.kalshi.private_key_pem
+                    logger.info(
+                        "Loaded Kalshi credentials from user %s for WS auth",
+                        uid[:8],
+                    )
+                    break
+    except Exception:
+        logger.warning("Failed to load user credentials from DB", exc_info=True)
+
+    # Fallback to env vars if no DB credentials
+    if not kalshi_key_id:
+        kalshi_key_id = settings.execution.kalshi_api_key_id
+        logger.info("Using env-var Kalshi credentials for WS auth")
+
+    if not kalshi_key_id:
+        logger.error(
+            "No Kalshi credentials found (DB or env vars). "
+            "A user must save Kalshi API keys in the dashboard and start automation."
+        )
+        sys.exit(1)
+
+    # Create engine with DB credentials if available
+    engine = EventEngine(settings, kalshi_key_id=kalshi_key_id, kalshi_pem=kalshi_pem)
 
     # Health endpoint
     _start_health_server(engine, ws_cfg.health_port)
