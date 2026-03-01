@@ -333,25 +333,26 @@ async function fetchKalshiBalance(
 
 async function fetchPolymarketBalance(
   apiKey: string,
-  secret: string,
+  _secret: string,
   walletPrivateKey: string,
   walletAddress: string,
 ): Promise<{ balance: number } | null> {
   try {
-    if (!apiKey || !secret || !walletAddress) return null;
+    if (!walletPrivateKey || !walletAddress) return null;
 
-    const { createHmac } = await import("crypto");
+    // Use L2 auth (wallet signature) — no passphrase needed
+    const { privateKeyToAccount } = await import("viem/accounts");
+    const key = (walletPrivateKey.startsWith("0x") ? walletPrivateKey : `0x${walletPrivateKey}`) as `0x${string}`;
+    const account = privateKeyToAccount(key);
+
     const timestamp = Math.floor(Date.now() / 1000).toString();
-    const hmac = createHmac("sha256", Buffer.from(secret, "base64"));
-    hmac.update(timestamp + "GET" + "/balance-allowance");
-    const sig = hmac.digest("base64");
+    const msgToSign = timestamp + "GET" + "/balance-allowance";
+    const signature = await account.signMessage({ message: msgToSign });
 
-    // walletPrivateKey is stored for the Python daemon's create_or_derive_api_creds();
-    // we pass empty passphrase in the header since derivation happens server-side
     const res = await fetch("https://clob.polymarket.com/balance-allowance", {
       headers: {
-        "POLY-ADDRESS": walletAddress,
-        "POLY-SIGNATURE": sig,
+        "POLY-ADDRESS": account.address,
+        "POLY-SIGNATURE": signature,
         "POLY-TIMESTAMP": timestamp,
         "POLY-API-KEY": apiKey,
         "POLY-PASSPHRASE": "",
@@ -361,7 +362,6 @@ async function fetchPolymarketBalance(
     if (!res.ok) return null;
 
     const data = await res.json();
-    // Balance is returned as a string in USDC (6 decimals)
     const bal = typeof data.balance === "string" ? parseFloat(data.balance) : (data.balance ?? 0);
     return { balance: bal };
   } catch {
@@ -477,26 +477,25 @@ async function fetchKalshiPositions(
 
 async function fetchPolymarketPositions(
   apiKey: string,
-  secret: string,
+  _secret: string,
   walletPrivateKey: string,
   walletAddress: string,
 ): Promise<ExchangePosition[]> {
   try {
-    if (!apiKey || !secret || !walletAddress) return [];
+    if (!walletPrivateKey || !walletAddress) return [];
 
-    const { createHmac } = await import("crypto");
+    const { privateKeyToAccount } = await import("viem/accounts");
+    const key = (walletPrivateKey.startsWith("0x") ? walletPrivateKey : `0x${walletPrivateKey}`) as `0x${string}`;
+    const account = privateKeyToAccount(key);
+
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const reqPath = "/positions";
-    const hmac = createHmac("sha256", Buffer.from(secret, "base64"));
-    hmac.update(timestamp + "GET" + reqPath);
-    const sig = hmac.digest("base64");
+    const signature = await account.signMessage({ message: timestamp + "GET" + reqPath });
 
-    // walletPrivateKey is stored for the Python daemon's create_or_derive_api_creds();
-    // we pass empty passphrase in the header since derivation happens server-side
     const res = await fetch(`https://clob.polymarket.com${reqPath}`, {
       headers: {
-        "POLY-ADDRESS": walletAddress,
-        "POLY-SIGNATURE": sig,
+        "POLY-ADDRESS": account.address,
+        "POLY-SIGNATURE": signature,
         "POLY-TIMESTAMP": timestamp,
         "POLY-API-KEY": apiKey,
         "POLY-PASSPHRASE": "",
