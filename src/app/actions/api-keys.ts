@@ -80,26 +80,47 @@ export async function getApiKeys() {
   const decrypted = (data ?? []).map((row) => ({
     ...row,
     api_secret: tryDecrypt(row.api_secret),
-    private_key_pem: tryDecrypt(row.private_key_pem),
+    // Never expose wallet private key to client — server-side only
+    private_key_pem: row.platform === "polymarket_wallet"
+      ? (row.private_key_pem ? "[set]" : "")
+      : tryDecrypt(row.private_key_pem),
   }));
 
   return { keys: decrypted };
 }
 
-export async function saveWalletAddress(address: string) {
+export async function saveWalletAddress(address: string, privateKey?: string) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
+  // Auto-derive wallet address from private key if address not provided
+  let resolvedAddress = address;
+  if (!resolvedAddress && privateKey) {
+    try {
+      const { privateKeyToAccount } = await import("viem/accounts");
+      const key = (privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`) as `0x${string}`;
+      resolvedAddress = privateKeyToAccount(key).address;
+    } catch {
+      return { error: "Could not derive wallet address from private key. Check the key format." };
+    }
+  }
+  if (!resolvedAddress) return { error: "Wallet address is required" };
+
+  const encPrivateKey = privateKey ? tryEncrypt(privateKey) : "";
+  if (encPrivateKey === null) {
+    return { error: "Encryption is not configured. Please contact support." };
+  }
+
   const { error } = await supabase.from("user_api_keys").upsert(
     {
       user_id: user.id,
       platform: "polymarket_wallet",
-      api_key_id: address,
+      api_key_id: resolvedAddress,
       api_secret: "",
-      private_key_pem: "",
+      private_key_pem: encPrivateKey,
       is_valid: true,
     },
     { onConflict: "user_id,platform" },
@@ -179,12 +200,12 @@ export async function validateKalshiKey(
 export async function validatePolymarketKey(
   apiKey: string,
   secret: string,
-  passphrase: string,
+  passphrase?: string,
 ): Promise<{ valid: boolean; error?: string }> {
   try {
     // Polymarket CLOB API key validation — check if credentials parse correctly
-    if (!apiKey || !secret || !passphrase) {
-      return { valid: false, error: "All three fields are required" };
+    if (!apiKey || !secret) {
+      return { valid: false, error: "API Key and API Secret are required" };
     }
 
     // Validate format: API key should be a non-empty string,
@@ -208,7 +229,8 @@ export async function validatePolymarketKey(
         "POLY-SIGNATURE": sig,
         "POLY-TIMESTAMP": timestamp,
         "POLY-API-KEY": apiKey,
-        "POLY-PASSPHRASE": passphrase,
+        // Passphrase is optional; the Python daemon derives it from the wallet private key
+        "POLY-PASSPHRASE": passphrase ?? "",
       },
     });
 
@@ -258,7 +280,8 @@ export async function testConnection(
   if (platform === "kalshi") {
     result = await validateKalshiKey(keyId, pem);
   } else if (platform === "polymarket") {
-    result = await validatePolymarketKey(keyId, secret, pem);
+    // Passphrase is no longer stored; validate with key + secret only
+    result = await validatePolymarketKey(keyId, secret);
   } else {
     return { valid: false, error: "Unknown platform" };
   }
@@ -327,11 +350,11 @@ async function fetchKalshiBalance(
 async function fetchPolymarketBalance(
   apiKey: string,
   secret: string,
-  passphrase: string,
+  walletPrivateKey: string,
   walletAddress: string,
 ): Promise<{ balance: number } | null> {
   try {
-    if (!apiKey || !secret || !passphrase || !walletAddress) return null;
+    if (!apiKey || !secret || !walletAddress) return null;
 
     const { createHmac } = await import("crypto");
     const timestamp = Math.floor(Date.now() / 1000).toString();
@@ -339,13 +362,15 @@ async function fetchPolymarketBalance(
     hmac.update(timestamp + "GET" + "/balance-allowance");
     const sig = hmac.digest("base64");
 
+    // walletPrivateKey is stored for the Python daemon's create_or_derive_api_creds();
+    // we pass empty passphrase in the header since derivation happens server-side
     const res = await fetch("https://clob.polymarket.com/balance-allowance", {
       headers: {
         "POLY-ADDRESS": walletAddress,
         "POLY-SIGNATURE": sig,
         "POLY-TIMESTAMP": timestamp,
         "POLY-API-KEY": apiKey,
-        "POLY-PASSPHRASE": passphrase,
+        "POLY-PASSPHRASE": "",
       },
     });
 
@@ -390,7 +415,7 @@ export async function fetchBalances(): Promise<ExchangeBalances> {
       ? fetchPolymarketBalance(
           polyRow.api_key_id,
           tryDecrypt(polyRow.api_secret),
-          tryDecrypt(polyRow.private_key_pem),
+          tryDecrypt(walletRow.private_key_pem),
           walletRow.api_key_id,
         )
       : null,
@@ -469,11 +494,11 @@ async function fetchKalshiPositions(
 async function fetchPolymarketPositions(
   apiKey: string,
   secret: string,
-  passphrase: string,
+  walletPrivateKey: string,
   walletAddress: string,
 ): Promise<ExchangePosition[]> {
   try {
-    if (!apiKey || !secret || !passphrase || !walletAddress) return [];
+    if (!apiKey || !secret || !walletAddress) return [];
 
     const { createHmac } = await import("crypto");
     const timestamp = Math.floor(Date.now() / 1000).toString();
@@ -482,13 +507,15 @@ async function fetchPolymarketPositions(
     hmac.update(timestamp + "GET" + reqPath);
     const sig = hmac.digest("base64");
 
+    // walletPrivateKey is stored for the Python daemon's create_or_derive_api_creds();
+    // we pass empty passphrase in the header since derivation happens server-side
     const res = await fetch(`https://clob.polymarket.com${reqPath}`, {
       headers: {
         "POLY-ADDRESS": walletAddress,
         "POLY-SIGNATURE": sig,
         "POLY-TIMESTAMP": timestamp,
         "POLY-API-KEY": apiKey,
-        "POLY-PASSPHRASE": passphrase,
+        "POLY-PASSPHRASE": "",
       },
     });
 
@@ -540,7 +567,7 @@ export async function fetchLivePositions(): Promise<LivePositions> {
       ? fetchPolymarketPositions(
           polyRow.api_key_id,
           tryDecrypt(polyRow.api_secret),
-          tryDecrypt(polyRow.private_key_pem),
+          tryDecrypt(walletRow.private_key_pem),
           walletRow.api_key_id,
         )
       : [],

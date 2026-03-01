@@ -91,8 +91,17 @@ function PolymarketHelpTooltip() {
                 >
                   polymarket.com &rarr; Settings &rarr; Builder
                 </a>{" "}
-                and click &quot;Create New&quot; to generate your API Key, Secret, and
-                Passphrase.
+                and click &quot;Create New&quot; to generate your API Key and Secret.
+                Then enter your wallet private key from{" "}
+                <a
+                  href="https://reveal.magic.link/polymarket"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#e8e9ea] underline underline-offset-2 hover:text-white"
+                >
+                  reveal.magic.link/polymarket
+                </a>
+                .
               </li>
             </ol>
           </div>
@@ -122,7 +131,7 @@ export default function ApiKeyManager() {
   const [kalshiPem, setKalshiPem] = useState("");
   const [polyKey, setPolyKey] = useState("");
   const [polySecret, setPolySecret] = useState("");
-  const [polyPassphrase, setPolyPassphrase] = useState("");
+  const [polyWalletKey, setPolyWalletKey] = useState("");
 
   async function load() {
     const result = await getApiKeys();
@@ -186,15 +195,16 @@ export default function ApiKeyManager() {
         private_key_pem: kalshiPem.trim(),
       });
     } else {
-      if (!polyKey || !polySecret || !polyPassphrase) {
-        setError("API Key, API Secret, and Passphrase are all required.");
+      if (!polyKey || !polySecret || !polyWalletKey) {
+        setError("API Key, API Secret, and Wallet Private Key are all required.");
         return;
       }
       keyData.push({
         platform: "polymarket",
         api_key_id: polyKey.trim(),
         api_secret: polySecret.trim(),
-        private_key_pem: polyPassphrase.trim(),
+        // Passphrase is no longer stored — derived by Python daemon from wallet private key
+        private_key_pem: "",
       });
     }
 
@@ -207,7 +217,6 @@ export default function ApiKeyManager() {
         validation = await validatePolymarketKey(
           polyKey.trim(),
           polySecret.trim(),
-          polyPassphrase.trim(),
         );
       }
 
@@ -218,12 +227,24 @@ export default function ApiKeyManager() {
         return;
       }
 
+      // For polymarket: also save the wallet private key to the polymarket_wallet row
+      if (platform === "polymarket") {
+        const walletResult = await saveWalletAddress(
+          savedWalletAddress ?? address ?? "",
+          polyWalletKey.trim(),
+        );
+        if (walletResult.error) {
+          setError(walletResult.error);
+          return;
+        }
+      }
+
       setEditing(null);
       setKalshiKeyId("");
       setKalshiPem("");
       setPolyKey("");
       setPolySecret("");
-      setPolyPassphrase("");
+      setPolyWalletKey("");
       await load();
 
       if (validation.valid) {
@@ -551,7 +572,10 @@ export default function ApiKeyManager() {
                 Secret: <span className="text-[#e8e9ea]">configured</span>
               </p>
               <p className="text-xs text-[#a1a8b3]">
-                Passphrase: <span className="text-[#e8e9ea]">configured</span>
+                Wallet Private Key:{" "}
+                <span className="text-[#e8e9ea]">
+                  {walletKey?.private_key_pem ? "configured" : "not set"}
+                </span>
               </p>
               {polymarketKey.updated_at && (
                 <p className="text-xs text-[#6b7280]">
@@ -621,15 +645,27 @@ export default function ApiKeyManager() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
-                    Passphrase
+                    Wallet Private Key
                   </label>
                   <input
                     type="password"
-                    value={polyPassphrase}
-                    onChange={(e) => setPolyPassphrase(e.target.value)}
+                    value={polyWalletKey}
+                    onChange={(e) => setPolyWalletKey(e.target.value)}
                     className={INPUT_CLASS}
-                    placeholder="Your Polymarket CLOB passphrase"
+                    placeholder="0x..."
                   />
+                  <p className="mt-1 text-xs text-[#6b7280]">
+                    Your Magic.link wallet private key (from{" "}
+                    <a
+                      href="https://reveal.magic.link/polymarket"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline underline-offset-2 hover:text-[#9ca3af]"
+                    >
+                      reveal.magic.link/polymarket
+                    </a>
+                    )
+                  </p>
                 </div>
                 <div className="flex gap-2 pt-1">
                   <button
