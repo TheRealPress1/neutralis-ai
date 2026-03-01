@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { encrypt, decrypt, tryEncrypt } from "@/lib/encryption";
-import { createSign, constants as cryptoConstants } from "crypto";
+import { createSign, createHmac, constants as cryptoConstants } from "crypto";
 import { rateLimit, SENSITIVE_LIMIT, getClientIp } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 
@@ -110,7 +110,15 @@ export async function saveWalletAddress(address: string, privateKey?: string) {
   if (!resolvedAddress) return { error: "Wallet address is required" };
 
   // Only overwrite private_key_pem if a new key is provided — preserve existing on Update
-  const upsertData: Record<string, unknown> = {
+  type UpsertRow = {
+    user_id: string;
+    platform: string;
+    api_key_id: string;
+    api_secret: string;
+    is_valid: boolean;
+    private_key_pem?: string;
+  };
+  const upsertData: UpsertRow = {
     user_id: user.id,
     platform: "polymarket_wallet",
     api_key_id: resolvedAddress,
@@ -335,34 +343,87 @@ async function fetchKalshiBalance(
   }
 }
 
-async function fetchPolymarketBalance(
-  apiKey: string,
-  _secret: string,
+/** Derive Polymarket CLOB credentials from wallet private key via EIP-712 L1 auth */
+async function derivePolymarketCreds(
   walletPrivateKey: string,
-  walletAddress: string,
-): Promise<{ balance: number } | null> {
+): Promise<{ apiKey: string; secret: string; passphrase: string; address: string } | null> {
   try {
-    if (!walletPrivateKey || !walletAddress) return null;
+    const { privateKeyToAccount, signTypedData } = await import("viem/accounts");
+    const pk = (walletPrivateKey.startsWith("0x") ? walletPrivateKey : `0x${walletPrivateKey}`) as `0x${string}`;
+    const account = privateKeyToAccount(pk);
+    const ts = Math.floor(Date.now() / 1000);
 
-    // Use L2 auth (wallet signature) — no passphrase needed
-    const { privateKeyToAccount } = await import("viem/accounts");
-    const key = (walletPrivateKey.startsWith("0x") ? walletPrivateKey : `0x${walletPrivateKey}`) as `0x${string}`;
-    const account = privateKeyToAccount(key);
-
-    const timestamp = Math.floor(Date.now() / 1000).toString();
-    const msgToSign = timestamp + "GET" + "/balance-allowance";
-    const signature = await account.signMessage({ message: msgToSign });
-
-    const res = await fetch("https://clob.polymarket.com/balance-allowance", {
-      headers: {
-        "POLY-ADDRESS": account.address,
-        "POLY-SIGNATURE": signature,
-        "POLY-TIMESTAMP": timestamp,
-        "POLY-API-KEY": apiKey,
-        "POLY-PASSPHRASE": "",
+    const sig = await signTypedData({
+      privateKey: pk,
+      domain: { name: "ClobAuthDomain", version: "1", chainId: 137 },
+      types: {
+        ClobAuth: [
+          { name: "address", type: "address" },
+          { name: "timestamp", type: "string" },
+          { name: "nonce", type: "uint256" },
+          { name: "message", type: "string" },
+        ],
+      },
+      primaryType: "ClobAuth",
+      message: {
+        address: account.address,
+        timestamp: String(ts),
+        nonce: BigInt(0),
+        message: "This message attests that I control the given wallet",
       },
     });
 
+    const res = await fetch("https://clob.polymarket.com/auth/derive-api-key", {
+      headers: {
+        POLY_ADDRESS: account.address,
+        POLY_SIGNATURE: sig,
+        POLY_TIMESTAMP: String(ts),
+        POLY_NONCE: "0",
+      },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.apiKey) return null;
+    return { apiKey: data.apiKey, secret: data.secret, passphrase: data.passphrase, address: account.address };
+  } catch {
+    return null;
+  }
+}
+
+/** Build L2 HMAC headers for Polymarket CLOB requests */
+function buildPolyL2Headers(
+  creds: { apiKey: string; secret: string; passphrase: string; address: string },
+  method: string,
+  path: string,
+  body = "",
+): Record<string, string> {
+  const ts = Math.floor(Date.now() / 1000);
+  const secretBytes = Buffer.from(creds.secret, "base64");
+  const msg = String(ts) + method.toUpperCase() + path + (body || "");
+  const hmacSig = createHmac("sha256", secretBytes).update(msg).digest("base64url");
+  return {
+    POLY_ADDRESS: creds.address,
+    POLY_SIGNATURE: hmacSig,
+    POLY_TIMESTAMP: String(ts),
+    POLY_API_KEY: creds.apiKey,
+    POLY_PASSPHRASE: creds.passphrase,
+  };
+}
+
+async function fetchPolymarketBalance(
+  _apiKey: string,
+  _secret: string,
+  walletPrivateKey: string,
+  _walletAddress: string,
+): Promise<{ balance: number } | null> {
+  try {
+    if (!walletPrivateKey) return null;
+
+    const creds = await derivePolymarketCreds(walletPrivateKey);
+    if (!creds) return null;
+
+    const headers = buildPolyL2Headers(creds, "GET", "/balance-allowance");
+    const res = await fetch("https://clob.polymarket.com/balance-allowance", { headers });
     if (!res.ok) return null;
 
     const data = await res.json();
@@ -480,31 +541,19 @@ async function fetchKalshiPositions(
 }
 
 async function fetchPolymarketPositions(
-  apiKey: string,
+  _apiKey: string,
   _secret: string,
   walletPrivateKey: string,
-  walletAddress: string,
+  _walletAddress: string,
 ): Promise<ExchangePosition[]> {
   try {
-    if (!walletPrivateKey || !walletAddress) return [];
+    if (!walletPrivateKey) return [];
 
-    const { privateKeyToAccount } = await import("viem/accounts");
-    const key = (walletPrivateKey.startsWith("0x") ? walletPrivateKey : `0x${walletPrivateKey}`) as `0x${string}`;
-    const account = privateKeyToAccount(key);
+    const creds = await derivePolymarketCreds(walletPrivateKey);
+    if (!creds) return [];
 
-    const timestamp = Math.floor(Date.now() / 1000).toString();
-    const reqPath = "/positions";
-    const signature = await account.signMessage({ message: timestamp + "GET" + reqPath });
-
-    const res = await fetch(`https://clob.polymarket.com${reqPath}`, {
-      headers: {
-        "POLY-ADDRESS": account.address,
-        "POLY-SIGNATURE": signature,
-        "POLY-TIMESTAMP": timestamp,
-        "POLY-API-KEY": apiKey,
-        "POLY-PASSPHRASE": "",
-      },
-    });
+    const headers = buildPolyL2Headers(creds, "GET", "/positions");
+    const res = await fetch("https://clob.polymarket.com/positions", { headers });
 
     if (!res.ok) return [];
 
