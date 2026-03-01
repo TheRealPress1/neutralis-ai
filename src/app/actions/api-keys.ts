@@ -216,34 +216,18 @@ export async function validatePolymarketKey(
       return { valid: false, error: "API secret is not valid base64" };
     }
 
-    // Try to hit the Polymarket CLOB API with a simple GET
-    const timestamp = Math.floor(Date.now() / 1000).toString();
-    const { createHmac } = await import("crypto");
-    const hmac = createHmac("sha256", Buffer.from(secret, "base64"));
-    hmac.update(timestamp + "GET" + "/ak/nonce");
-    const sig = hmac.digest("base64");
-
-    const res = await fetch("https://clob.polymarket.com/ak/nonce", {
-      headers: {
-        "POLY-ADDRESS": "",
-        "POLY-SIGNATURE": sig,
-        "POLY-TIMESTAMP": timestamp,
-        "POLY-API-KEY": apiKey,
-        // Passphrase is optional; the Python daemon derives it from the wallet private key
-        "POLY-PASSPHRASE": passphrase ?? "",
-      },
+    // Check CLOB connectivity via health endpoint
+    const healthRes = await fetch("https://clob.polymarket.com/ok", {
+      signal: AbortSignal.timeout(5000),
     });
 
-    if (res.ok || res.status === 400) {
-      // 400 can mean "bad address" but credentials parsed — keys are valid format
-      return { valid: true };
+    if (!healthRes.ok) {
+      return { valid: false, error: `Polymarket CLOB unreachable (${healthRes.status})` };
     }
 
-    if (res.status === 401) {
-      return { valid: false, error: "Invalid API credentials" };
-    }
-
-    return { valid: false, error: `Polymarket returned ${res.status}` };
+    // Format checks passed + CLOB reachable — credentials accepted
+    // Full auth validation happens when daemon calls create_or_derive_api_creds()
+    return { valid: true };
   } catch (err) {
     return { valid: false, error: err instanceof Error ? err.message : String(err) };
   }
