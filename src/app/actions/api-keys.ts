@@ -109,20 +109,24 @@ export async function saveWalletAddress(address: string, privateKey?: string) {
   }
   if (!resolvedAddress) return { error: "Wallet address is required" };
 
-  const encPrivateKey = privateKey ? tryEncrypt(privateKey) : "";
-  if (encPrivateKey === null) {
-    return { error: "Encryption is not configured. Please contact support." };
+  // Only overwrite private_key_pem if a new key is provided — preserve existing on Update
+  const upsertData: Record<string, unknown> = {
+    user_id: user.id,
+    platform: "polymarket_wallet",
+    api_key_id: resolvedAddress,
+    api_secret: "",
+    is_valid: true,
+  };
+  if (privateKey) {
+    const encPrivateKey = tryEncrypt(privateKey);
+    if (encPrivateKey === null) {
+      return { error: "Encryption is not configured. Please contact support." };
+    }
+    upsertData.private_key_pem = encPrivateKey;
   }
 
   const { error } = await supabase.from("user_api_keys").upsert(
-    {
-      user_id: user.id,
-      platform: "polymarket_wallet",
-      api_key_id: resolvedAddress,
-      api_secret: "",
-      private_key_pem: encPrivateKey,
-      is_valid: true,
-    },
+    upsertData,
     { onConflict: "user_id,platform" },
   );
 
