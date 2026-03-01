@@ -380,6 +380,7 @@ async function derivePolymarketCreds(
         POLY_TIMESTAMP: String(ts),
         POLY_NONCE: "0",
       },
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return null;
     const data = await res.json();
@@ -466,7 +467,7 @@ export async function fetchBalances(): Promise<ExchangeBalances> {
           tryDecrypt(polyRow.api_secret),
           tryDecrypt(walletRow.private_key_pem),
           walletRow.api_key_id,
-        )
+        ).then((b) => b ?? { balance: 0 })  // credentials exist → show $0 on fetch failure
       : null,
   ]);
 
