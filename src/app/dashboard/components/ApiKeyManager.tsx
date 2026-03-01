@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useTransition, useRef } from "react";
-import { useAccount, useConnect, useDisconnect } from "wagmi";
 import {
   getApiKeys,
   saveApiKeys,
@@ -67,9 +66,8 @@ function PolymarketHelpTooltip() {
             </p>
             <ol className="text-xs text-[#9ca3af] space-y-2 list-decimal list-inside">
               <li>
-                <span className="font-medium text-[#e8e9ea]">Connect your wallet</span>{" "}
-                &mdash; use MetaMask to link the wallet associated with your
-                Polymarket account. If you signed up via email, export your key at{" "}
+                <span className="font-medium text-[#e8e9ea]">Get your wallet private key</span>{" "}
+                &mdash; go to{" "}
                 <a
                   href="https://reveal.magic.link/polymarket"
                   target="_blank"
@@ -78,7 +76,7 @@ function PolymarketHelpTooltip() {
                 >
                   reveal.magic.link/polymarket
                 </a>{" "}
-                and import it into MetaMask first.
+                and export your private key. (Sign up via Apple or email? This is your Magic.link key.)
               </li>
               <li>
                 <span className="font-medium text-[#e8e9ea]">Get CLOB credentials</span>{" "}
@@ -92,16 +90,6 @@ function PolymarketHelpTooltip() {
                   polymarket.com &rarr; Settings &rarr; Builder
                 </a>{" "}
                 and click &quot;Create New&quot; to generate your API Key and Secret.
-                Then enter your wallet private key from{" "}
-                <a
-                  href="https://reveal.magic.link/polymarket"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#e8e9ea] underline underline-offset-2 hover:text-white"
-                >
-                  reveal.magic.link/polymarket
-                </a>
-                .
               </li>
             </ol>
           </div>
@@ -120,11 +108,6 @@ export default function ApiKeyManager() {
   const [isPending, startTransition] = useTransition();
   const [testing, setTesting] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Wallet state from wagmi
-  const { address, isConnected } = useAccount();
-  const { connect, connectors, isPending: isConnecting } = useConnect();
-  const { disconnect } = useDisconnect();
 
   // Form state
   const [kalshiKeyId, setKalshiKeyId] = useState("");
@@ -150,25 +133,14 @@ export default function ApiKeyManager() {
     init();
   }, []);
 
-  // Save wallet address when connected
-  useEffect(() => {
-    if (isConnected && address) {
-      startTransition(async () => {
-        const result = await saveWalletAddress(address);
-        if (result.error) setError(result.error);
-        else await load();
-      });
-    }
-  }, [isConnected, address]);
-
   const kalshiKey = keys.find((k) => k.platform === "kalshi");
   const polymarketKey = keys.find((k) => k.platform === "polymarket");
   const walletKey = keys.find((k) => k.platform === "polymarket_wallet");
   const savedWalletAddress = walletKey?.api_key_id;
 
   // Determine overall Polymarket connection status
-  const polyFullyConnected = !!polymarketKey && (!!savedWalletAddress || isConnected);
-  const polyPartial = !!polymarketKey || !!savedWalletAddress || isConnected;
+  const polyFullyConnected = !!polymarketKey && !!savedWalletAddress;
+  const polyPartial = !!polymarketKey || !!savedWalletAddress;
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -230,7 +202,7 @@ export default function ApiKeyManager() {
       // For polymarket: also save the wallet private key to the polymarket_wallet row
       if (platform === "polymarket") {
         const walletResult = await saveWalletAddress(
-          savedWalletAddress ?? address ?? "",
+          savedWalletAddress ?? "",
           polyWalletKey.trim(),
         );
         if (walletResult.error) {
@@ -290,14 +262,6 @@ export default function ApiKeyManager() {
         setEditing(null);
         await load();
       }
-    });
-  }
-
-  function handleDisconnectWallet() {
-    disconnect();
-    startTransition(async () => {
-      await deleteApiKey("polymarket_wallet");
-      await load();
     });
   }
 
@@ -494,70 +458,10 @@ export default function ApiKeyManager() {
           )}
         </div>
 
-        {/* Step 1: Wallet Connection */}
+        {/* CLOB API Credentials */}
         <div className="mt-4">
           <p className="text-xs font-medium text-[#a1a8b3] mb-2">
-            Step 1 — Connect Wallet
-          </p>
-
-          {isConnected && address ? (
-            <div className="flex items-center justify-between rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                <span className="font-mono text-sm text-[#e8e9ea]">
-                  {maskAddress(address)}
-                </span>
-                <span className="text-xs text-[#6b7280]">Polygon</span>
-              </div>
-              <button
-                onClick={handleDisconnectWallet}
-                className="text-xs text-red-400 hover:text-red-300 transition-colors"
-              >
-                Disconnect
-              </button>
-            </div>
-          ) : savedWalletAddress && !isConnected ? (
-            <div className="flex items-center justify-between rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-amber-400" />
-                <span className="font-mono text-sm text-[#e8e9ea]">
-                  {maskAddress(savedWalletAddress)}
-                </span>
-                <span className="text-xs text-[#6b7280]">saved</span>
-              </div>
-              <div className="flex gap-2">
-                {connectors.map((connector) => (
-                  <button
-                    key={connector.uid}
-                    onClick={() => connect({ connector })}
-                    disabled={isConnecting}
-                    className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors"
-                  >
-                    Reconnect
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {connectors.map((connector) => (
-                <button
-                  key={connector.uid}
-                  onClick={() => connect({ connector })}
-                  disabled={isConnecting}
-                  className="rounded-lg border border-[#2a2d31] bg-[#1a1d21] px-4 py-2.5 text-xs font-medium text-[#e8e9ea] hover:border-[#e8e9ea]/30 hover:bg-[#22262d] disabled:opacity-50 transition-colors"
-                >
-                  {isConnecting ? "Connecting..." : connector.name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Step 2: CLOB API Credentials */}
-        <div className="mt-5 pt-4 border-t border-[#1a1d21]">
-          <p className="text-xs font-medium text-[#a1a8b3] mb-2">
-            Step 2 — CLOB API Credentials
+            CLOB API Credentials
           </p>
 
           {polymarketKey && editing !== "polymarket" ? (
