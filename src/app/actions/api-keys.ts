@@ -80,7 +80,10 @@ export async function getApiKeys() {
   const decrypted = (data ?? []).map((row) => ({
     ...row,
     api_secret: tryDecrypt(row.api_secret),
-    private_key_pem: tryDecrypt(row.private_key_pem),
+    // Never expose wallet private key to client — server-side only
+    private_key_pem: row.platform === "polymarket_wallet"
+      ? (row.private_key_pem ? "[set]" : "")
+      : tryDecrypt(row.private_key_pem),
   }));
 
   return { keys: decrypted };
@@ -93,6 +96,19 @@ export async function saveWalletAddress(address: string, privateKey?: string) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
+  // Auto-derive wallet address from private key if address not provided
+  let resolvedAddress = address;
+  if (!resolvedAddress && privateKey) {
+    try {
+      const { privateKeyToAccount } = await import("viem/accounts");
+      const key = (privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`) as `0x${string}`;
+      resolvedAddress = privateKeyToAccount(key).address;
+    } catch {
+      return { error: "Could not derive wallet address from private key. Check the key format." };
+    }
+  }
+  if (!resolvedAddress) return { error: "Wallet address is required" };
+
   const encPrivateKey = privateKey ? tryEncrypt(privateKey) : "";
   if (encPrivateKey === null) {
     return { error: "Encryption is not configured. Please contact support." };
@@ -102,7 +118,7 @@ export async function saveWalletAddress(address: string, privateKey?: string) {
     {
       user_id: user.id,
       platform: "polymarket_wallet",
-      api_key_id: address,
+      api_key_id: resolvedAddress,
       api_secret: "",
       private_key_pem: encPrivateKey,
       is_valid: true,
