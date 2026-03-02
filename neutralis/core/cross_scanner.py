@@ -90,12 +90,17 @@ def scan_cross_platform(
             continue  # No arb exists
 
         # Deduct per-venue fees from each leg
+        # Determine Polymarket fee tiers for each leg
+        yes_tier = (k if yes_venue == "kalshi" else p).poly_fee_tier
+        no_tier = (k if no_venue == "kalshi" else p).poly_fee_tier
         estimated_fee = estimate_cross_platform_fee(
             yes_price=favored_yes,
             yes_venue=yes_venue,
             no_price=other_no,
             no_venue=no_venue,
             maker=maker,
+            yes_fee_tier=yes_tier,
+            no_fee_tier=no_tier,
         )
         slippage = cfg_pipe.slippage_per_leg * 2  # two legs
         net_edge = gross_edge - estimated_fee - slippage

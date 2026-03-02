@@ -2,11 +2,13 @@
 
 Kalshi: taker fee = 0.07 * P * (1 - P) per contract, capped at $0.0175
         maker fee = 0.0175 * P * (1 - P) per contract, capped at ~$0.0044
-Polymarket: zero fees on most markets (political, sports, etc.)
-            15-min crypto markets have taker fees, but we skip those.
+Polymarket: category-specific fees (most markets zero, crypto/some sports have fees).
+  Source: https://docs.polymarket.com/trading/fees (Mar 2026)
 """
 
 from __future__ import annotations
+
+import re
 
 
 # -- Kalshi fee schedule --
@@ -51,20 +53,92 @@ def kalshi_fee(
     return kalshi_fee_per_contract(price, maker=maker) * contracts
 
 
-_POLYMARKET_TAKER_RATE = 0.0001  # 0.01% taker fee (Polymarket US, CFTC-regulated)
+# -- Polymarket fee schedule --
+# Source: https://docs.polymarket.com/trading/fees (Mar 2026)
+#
+# Fee tiers:
+#   "standard" — zero fees (political, entertainment, most sports)
+#   "crypto"   — fee = C * 0.25 * (P*(1-P))^2, max ~1.56% at P=0.50
+#   "sports_fee" — fee = C * 0.0175 * P*(1-P), max ~0.44% at P=0.50 (NCAAB, Serie A)
+#
+# Maker rebates (20-25%) exist but we don't count on them for edge estimation.
+
+_POLY_CRYPTO_FEE_RATE = 0.25
+_POLY_CRYPTO_EXPONENT = 2
+_POLY_SPORTS_FEE_RATE = 0.0175
+_POLY_SPORTS_EXPONENT = 1
+
+# Keywords for classifying Polymarket fee tiers from market title/event ticker
+_CRYPTO_KEYWORDS_RE = re.compile(
+    r"\b(bitcoin|btc|ethereum|eth|solana|sol|xrp|crypto|defi|"
+    r"altcoin|dogecoin|doge|cardano|ada|polkadot|dot|avalanche|avax|"
+    r"chainlink|link|litecoin|ltc|bnb|binance)\b",
+    re.IGNORECASE,
+)
+_CRYPTO_PRICE_RE = re.compile(r"\$\d+k?\b", re.IGNORECASE)  # "$150k", "$100000"
+
+_SPORTS_FEE_KEYWORDS_RE = re.compile(
+    r"\b(ncaab|ncaa basketball|college basketball|march madness|"
+    r"serie a|seriea|serie_a)\b",
+    re.IGNORECASE,
+)
+
+
+def classify_poly_fee_tier(title: str, event_ticker: str = "") -> str:
+    """Determine Polymarket fee tier from market title/event ticker.
+
+    Returns:
+        "crypto" — crypto markets (all timeframes)
+        "sports_fee" — NCAAB, Serie A
+        "standard" — everything else (zero fees)
+    """
+    combined = f"{title} {event_ticker}"
+
+    if _CRYPTO_KEYWORDS_RE.search(combined):
+        return "crypto"
+    # Catch crypto price milestone markets like "Will BTC hit $150k?"
+    if _CRYPTO_PRICE_RE.search(combined) and "bitcoin" in combined.lower():
+        return "crypto"
+
+    if _SPORTS_FEE_KEYWORDS_RE.search(combined):
+        return "sports_fee"
+
+    return "standard"
+
+
+def polymarket_fee_per_contract(
+    price: float,
+    *,
+    fee_tier: str = "standard",
+) -> float:
+    """Per-contract Polymarket fee based on market fee tier.
+
+    Fee tiers (from Polymarket docs):
+    - "standard": Zero fees (political, entertainment, most sports)
+    - "crypto": 0.25 * (P*(1-P))^2, max ~$0.0156 at P=0.50
+    - "sports_fee": 0.0175 * P*(1-P), max ~$0.0044 at P=0.50 (NCAAB, Serie A)
+    """
+    if price <= 0 or price >= 1.0:
+        return 0.0
+
+    pq = price * (1.0 - price)
+
+    if fee_tier == "crypto":
+        return round(_POLY_CRYPTO_FEE_RATE * pq ** _POLY_CRYPTO_EXPONENT, 6)
+    if fee_tier == "sports_fee":
+        return round(_POLY_SPORTS_FEE_RATE * pq ** _POLY_SPORTS_EXPONENT, 6)
+    # standard — zero fees
+    return 0.0
 
 
 def polymarket_fee(
     price: float,
     contracts: int = 1,
+    *,
+    fee_tier: str = "standard",
 ) -> float:
-    """Polymarket fee — 0.01% taker fee on all markets.
-
-    Negligible for most trades but adds accuracy on tight arbs.
-    """
-    if price <= 0:
-        return 0.0
-    return round(price * contracts * _POLYMARKET_TAKER_RATE, 6)
+    """Total Polymarket fee for N contracts."""
+    return polymarket_fee_per_contract(price, fee_tier=fee_tier) * contracts
 
 
 def estimate_total_fee(
@@ -74,6 +148,7 @@ def estimate_total_fee(
     contracts: int = 1,
     *,
     maker: bool = False,
+    fee_tier: str = "standard",
 ) -> float:
     """Total estimated fee for a complement arb (buying both YES and NO).
 
@@ -86,8 +161,8 @@ def estimate_total_fee(
         )
     if venue == "polymarket":
         return (
-            polymarket_fee(yes_price, contracts)
-            + polymarket_fee(no_price, contracts)
+            polymarket_fee(yes_price, contracts, fee_tier=fee_tier)
+            + polymarket_fee(no_price, contracts, fee_tier=fee_tier)
         )
     # Unknown venue — conservative estimate using Kalshi taker rates
     return (
@@ -104,6 +179,8 @@ def estimate_cross_platform_fee(
     contracts: int = 1,
     *,
     maker: bool = False,
+    yes_fee_tier: str = "standard",
+    no_fee_tier: str = "standard",
 ) -> float:
     """Total estimated fee for a cross-platform arb (YES on one venue, NO on another).
 
@@ -113,12 +190,12 @@ def estimate_cross_platform_fee(
     if yes_venue == "kalshi":
         yes_fee = kalshi_fee(yes_price, contracts, maker=maker)
     else:
-        yes_fee = polymarket_fee(yes_price, contracts)
+        yes_fee = polymarket_fee(yes_price, contracts, fee_tier=yes_fee_tier)
 
     if no_venue == "kalshi":
         no_fee = kalshi_fee(no_price, contracts, maker=maker)
     else:
-        no_fee = polymarket_fee(no_price, contracts)
+        no_fee = polymarket_fee(no_price, contracts, fee_tier=no_fee_tier)
 
     return yes_fee + no_fee
 
@@ -129,17 +206,16 @@ def estimate_three_way_fee(
     contracts: int = 1,
     *,
     maker: bool = False,
+    fee_tiers: tuple[str, str, str] = ("standard", "standard", "standard"),
 ) -> float:
     """Total fee for a 3-leg Dutch book arb (buy all 3 outcomes).
 
-    Each leg's fee depends on the venue:
-    - Kalshi legs pay the standard parabolic fee (maker or taker)
-    - Polymarket legs are free
+    Each leg's fee depends on the venue and fee tier.
     """
     total = 0.0
-    for price, venue in zip(prices, venues):
+    for price, venue, tier in zip(prices, venues, fee_tiers):
         if venue == "kalshi":
             total += kalshi_fee(price, contracts, maker=maker)
         else:
-            total += polymarket_fee(price, contracts)
+            total += polymarket_fee(price, contracts, fee_tier=tier)
     return total

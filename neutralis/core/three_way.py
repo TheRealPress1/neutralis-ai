@@ -15,7 +15,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 
 from neutralis.config import PipelineConfig
-from neutralis.fees import estimate_three_way_fee
+from neutralis.fees import classify_poly_fee_tier, estimate_three_way_fee
 from neutralis.logging import get_logger
 from neutralis.models import (
     NormalizedMarket,
@@ -162,7 +162,9 @@ def scan_three_way_arb(
         gross_edge = 1.0 - combined
         prices = (group.outcome_a.ask, group.outcome_b.ask, group.outcome_draw.ask)
         venues = (group.venue, group.venue, group.venue)
-        fee = estimate_three_way_fee(prices, venues, maker=maker)
+        tier = classify_poly_fee_tier(group.title, group.event_id)
+        fee_tiers = (tier, tier, tier)
+        fee = estimate_three_way_fee(prices, venues, maker=maker, fee_tiers=fee_tiers)
         net_edge = gross_edge - fee - (cfg.slippage_per_leg * 3)
 
         if net_edge <= 0:

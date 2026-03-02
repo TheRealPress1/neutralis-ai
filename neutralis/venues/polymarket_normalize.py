@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 from typing import Any, Optional
 
+from neutralis.fees import classify_poly_fee_tier
 from neutralis.logging import get_logger
 from neutralis.models import MarketStatus, MarketType, NormalizedMarket, ThreeWayGroup, ThreeWayOutcome
 
@@ -127,9 +128,11 @@ def normalize_market(raw: dict[str, Any]) -> Optional[NormalizedMarket]:
             yes_idx = 0
         clob_token_ids = (str(clob_token_ids_raw[yes_idx]),)
 
+    slug = raw.get("slug", "")
+
     return NormalizedMarket(
         ticker=str(ticker),
-        event_ticker=raw.get("slug", ""),
+        event_ticker=slug,
         market_type=MarketType.BINARY,
         title=question,
         subtitle="",
@@ -146,6 +149,7 @@ def normalize_market(raw: dict[str, Any]) -> Optional[NormalizedMarket]:
         expected_expiration=_parse_iso_dt(raw.get("endDate")),
         venue="polymarket",
         clob_token_ids=clob_token_ids,
+        poly_fee_tier=classify_poly_fee_tier(question, slug),
     )
 
 

@@ -35,11 +35,11 @@ def _hours_until(dt: datetime | None) -> float | None:
     return (dt - now).total_seconds() / 3600.0
 
 
-def _estimate_single_leg_fee(price: float, venue: str) -> float:
+def _estimate_single_leg_fee(price: float, venue: str, fee_tier: str = "standard") -> float:
     """Estimate fee for a single-leg directional trade."""
     if venue == "kalshi":
         return kalshi_fee_per_contract(price)
-    return polymarket_fee(price)
+    return polymarket_fee(price, fee_tier=fee_tier)
 
 
 def _category_params(
@@ -110,7 +110,7 @@ def scan_high_probability(
         for side, entry_price in candidates:
             # Edge = payout - cost - fees - slippage
             gross_edge = 1.0 - entry_price
-            fee = _estimate_single_leg_fee(entry_price, m.venue)
+            fee = _estimate_single_leg_fee(entry_price, m.venue, m.poly_fee_tier)
             slippage = 0.005
             net_edge = gross_edge - fee - slippage
 

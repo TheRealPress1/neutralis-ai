@@ -40,7 +40,7 @@ from neutralis.core.scoring import score_signal
 from neutralis.core.features import compute_market_features, estimate_costs
 from neutralis.execution.executor import PaperExecutor
 from neutralis.execution.models import TickContext
-from neutralis.fees import estimate_total_fee, estimate_cross_platform_fee, estimate_three_way_fee
+from neutralis.fees import classify_poly_fee_tier, estimate_total_fee, estimate_cross_platform_fee, estimate_three_way_fee
 from neutralis.fees.performance import PerformanceFeeAccruer
 from neutralis.guard.constraints import check_daily_loss_limit
 from neutralis.guard.decision import evaluate_signal, select_portfolio
@@ -68,6 +68,20 @@ from neutralis.venues.polymarket_normalize import normalize_market as poly_norma
 from neutralis.venues.polymarket_ws import PolymarketWebSocket
 
 logger = get_logger("event_engine")
+
+def _is_poly_maintenance_window() -> bool:
+    """Check if we're in Polymarket's weekly maintenance window.
+
+    Polymarket restarts the matching engine every Tuesday around 7:00 AM ET
+    for ~90 seconds. During this window, HTTP 425 errors are expected.
+    """
+    from zoneinfo import ZoneInfo
+    now_et = datetime.now(ZoneInfo("America/New_York"))
+    # Tuesday = 1 (Monday=0)
+    if now_et.weekday() == 1 and now_et.hour == 7 and now_et.minute < 3:
+        return True
+    return False
+
 
 _TRADE_FLOW_WINDOW_SEC = 300.0  # 5-minute sliding window
 _SIGNAL_COOLDOWN_SEC = 30.0  # Don't re-fire the same signal within this window
@@ -941,7 +955,7 @@ class EventEngine:
             combined = market.yes_ask + market.no_ask
             if combined < 1.0:
                 use_maker = state.settings.execution.use_maker_orders
-                fee = estimate_total_fee(market.yes_ask, market.no_ask, venue="kalshi", maker=use_maker)
+                fee = estimate_total_fee(market.yes_ask, market.no_ask, venue="kalshi", maker=use_maker, fee_tier=market.poly_fee_tier)
                 net_edge = (1.0 - combined) - fee - slippage_2
                 if net_edge > 0:
                     edge_pct = (net_edge / combined) * 100.0
@@ -999,10 +1013,16 @@ class EventEngine:
                         combined = favored_yes + other_no
                         gross_edge = 1.0 - combined
                         use_maker = state.settings.execution.use_maker_orders
+                        # Determine fee tiers for each leg
+                        k_tier = market.poly_fee_tier
+                        p_tier = poly_market.poly_fee_tier
+                        yes_ft = k_tier if yes_venue == "kalshi" else p_tier
+                        no_ft = k_tier if no_venue == "kalshi" else p_tier
                         fee = estimate_cross_platform_fee(
                             yes_price=favored_yes, yes_venue=yes_venue,
                             no_price=other_no, no_venue=no_venue,
                             maker=use_maker,
+                            yes_fee_tier=yes_ft, no_fee_tier=no_ft,
                         )
                         net_edge = gross_edge - fee - slippage_2
                         edge_pct = (net_edge / combined) * 100.0 if combined > 0 else 0.0
@@ -1078,7 +1098,9 @@ class EventEngine:
                     use_maker = state.settings.execution.use_maker_orders
                     prices = tuple(oc.ask for oc in group.outcomes)
                     venues = tuple(oc.venue for oc in group.outcomes)
-                    fee = estimate_three_way_fee(prices, venues, maker=use_maker)
+                    tier = classify_poly_fee_tier(group.title, group.event_id)
+                    fee_tiers = (tier, tier, tier)
+                    fee = estimate_three_way_fee(prices, venues, maker=use_maker, fee_tiers=fee_tiers)
                     slippage_3 = cfg.slippage_per_leg * 3  # three legs
                     net_edge = gross_edge - fee - slippage_3
                     if net_edge > 0:
@@ -1544,6 +1566,9 @@ class EventEngine:
         - Taker (use_maker_orders=False): Poly FOK first → Kalshi FOK second
           Original flow — execute riskier side first.
         """
+        if settings.execution.suppress_poly_maintenance and _is_poly_maintenance_window():
+            logger.warning("Polymarket maintenance window — suppressing XP execution")
+            return False
         if settings.execution.use_maker_orders:
             return self._execute_xp_maker(
                 signal, decision, decision_id, settings, storage, portfolio,

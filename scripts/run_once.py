@@ -55,6 +55,19 @@ from neutralis.venues.polymarket_normalize import normalize_market as poly_norma
 
 logger = get_logger("pipeline")
 
+def _is_poly_maintenance_window() -> bool:
+    """Check if we're in Polymarket's weekly maintenance window.
+
+    Polymarket restarts the matching engine every Tuesday around 7:00 AM ET
+    for ~90 seconds. During this window, HTTP 425 errors are expected.
+    """
+    from zoneinfo import ZoneInfo
+    now_et = datetime.now(ZoneInfo("America/New_York"))
+    if now_et.weekday() == 1 and now_et.hour == 7 and now_et.minute < 3:
+        return True
+    return False
+
+
 # Module-level state that persists across run_once() calls in daemon mode
 _market_cache: MarketCache | None = None
 
@@ -611,6 +624,12 @@ def evaluate_and_execute_for_user(
                 live_results = None
                 kalshi_legs = [leg for leg in signal.legs if (leg.venue or "kalshi") == "kalshi"]
                 poly_legs = [leg for leg in signal.legs if leg.venue == "polymarket"]
+
+                if poly_legs and kalshi_legs and live_kalshi is not None and live_poly is not None:
+                    # ── Polymarket maintenance window check ──
+                    if settings.execution.suppress_poly_maintenance and _is_poly_maintenance_window():
+                        logger.warning("Polymarket maintenance window — skipping XP execution, paper fallback")
+                        poly_legs = []  # fall through to paper executor
 
                 if poly_legs and kalshi_legs and live_kalshi is not None and live_poly is not None:
                     # ── Cross-platform: Polymarket FOK first, then Kalshi ──

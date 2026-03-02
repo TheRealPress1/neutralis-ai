@@ -85,6 +85,9 @@ class NormalizedMarket:
     # Polymarket-specific: CLOB token IDs for WebSocket subscription
     clob_token_ids: tuple[str, ...] = ()
 
+    # Polymarket fee tier: "standard" (zero), "crypto", or "sports_fee"
+    poly_fee_tier: str = "standard"
+
     snapshot_ts: datetime = field(default_factory=datetime.now)
 
 

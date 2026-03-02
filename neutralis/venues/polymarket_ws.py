@@ -59,7 +59,7 @@ class PolymarketWebSocket:
         self._ws = await websockets.connect(
             self._ws_url,
             ssl=ssl_ctx,
-            ping_interval=30,
+            ping_interval=10,
             ping_timeout=15,
             close_timeout=5,
         )

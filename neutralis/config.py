@@ -192,6 +192,8 @@ class ExecutionConfig:
     balance_floor_dollars: float = 25.0
     # Order placement timeout — max time to wait for an exchange API response
     order_timeout_sec: float = 15.0
+    # Polymarket maintenance window suppression (Tuesdays ~7:00 AM ET, ~90s downtime)
+    suppress_poly_maintenance: bool = True
     # Maker order strategy — GTC limit orders for lower Kalshi fees (4x cheaper)
     use_maker_orders: bool = True
     maker_price_offset_cents: int = 1  # Post N cents inside the spread (bid + offset)

@@ -116,7 +116,7 @@ def estimate_costs(
         if leg_venue == "kalshi":
             fees += kalshi_fee_per_contract(leg.price_dollars)
         else:
-            fees += polymarket_fee(leg.price_dollars)
+            fees += polymarket_fee(leg.price_dollars, fee_tier=market.poly_fee_tier)
 
     # Slippage: conservative estimate
     # If we have orderbook depth, slippage is small.

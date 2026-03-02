@@ -10,12 +10,12 @@ from neutralis.fees import kalshi_fee_per_contract, polymarket_fee
 from neutralis.models import NormalizedMarket
 
 
-def _compute_fee(price: float, quantity: float, venue: str) -> float:
+def _compute_fee(price: float, quantity: float, venue: str, fee_tier: str = "standard") -> float:
     """Compute total fee for a fill."""
     if venue == "kalshi":
         return round(kalshi_fee_per_contract(price) * quantity, 4)
     if venue == "polymarket":
-        return round(polymarket_fee(price, int(quantity)), 4)
+        return round(polymarket_fee(price, int(quantity), fee_tier=fee_tier), 4)
     return round(kalshi_fee_per_contract(price) * quantity, 4)
 
 
@@ -76,7 +76,8 @@ def simulate_fill(
     )
 
     quantity = fill_size / fill_price if fill_price > 0 else 0.0
-    fee = _compute_fee(fill_price, quantity, order.venue)
+    fee_tier = market.poly_fee_tier if market else "standard"
+    fee = _compute_fee(fill_price, quantity, order.venue, fee_tier=fee_tier)
 
     fill = Fill(
         order_id=order.id,
