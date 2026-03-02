@@ -571,22 +571,77 @@ def evaluate_and_execute_for_user(
 
         # ── Execute selected signals ──
         selected_count = 0
+        # Build Polymarket ticker → NormalizedMarket lookup for token_id resolution
+        poly_by_ticker = {m.ticker: m for m in scan.poly_markets}
+
         for signal, decision in ranked:
             decision_id = storage.save_decision(decision)
 
             if decision.verdict == DecisionVerdict.PASS and decision.selected:
                 selected_count += 1
 
-                # Attempt live Kalshi execution if enabled
+                # Attempt live execution if enabled
                 live_results = None
-                if live_kalshi is not None:
-                    kalshi_only = all(
-                        (leg.venue or "kalshi") == "kalshi" for leg in signal.legs
-                    )
-                    if kalshi_only:
-                        results = []
-                        all_filled = True
-                        for leg in signal.legs:
+                kalshi_legs = [leg for leg in signal.legs if (leg.venue or "kalshi") == "kalshi"]
+                poly_legs = [leg for leg in signal.legs if leg.venue == "polymarket"]
+
+                if poly_legs and kalshi_legs and live_kalshi is not None and live_poly is not None:
+                    # ── Cross-platform: Polymarket FOK first, then Kalshi ──
+                    xp_results: list[dict] = []
+                    xp_ok = True
+
+                    # Execute Polymarket legs first (riskier venue)
+                    for leg in poly_legs:
+                        if signal.combined_cost > 0:
+                            leg_frac = leg.price_dollars / signal.combined_cost
+                        else:
+                            leg_frac = 1.0 / max(len(signal.legs), 1)
+                        leg_dollars = decision.suggested_size_dollars * leg_frac
+                        leg_dollars = min(leg_dollars, settings.execution.max_order_dollars)
+
+                        # Resolve CLOB token ID from the Polymarket NormalizedMarket
+                        poly_market = poly_by_ticker.get(leg.ticker)
+                        token_id = (
+                            poly_market.clob_token_ids[0]
+                            if poly_market and poly_market.clob_token_ids
+                            else None
+                        )
+                        if not token_id:
+                            logger.warning(
+                                "No CLOB token ID for Polymarket ticker %s, falling back to paper",
+                                leg.ticker,
+                            )
+                            xp_ok = False
+                            break
+
+                        # Buying NO on Polymarket = SELL the YES token
+                        poly_side = "BUY" if leg.side == "yes" else "SELL"
+                        try:
+                            resp = live_poly.place_market_order(token_id, poly_side, leg_dollars)
+                            if resp.get("success"):
+                                xp_results.append({
+                                    "order_id": resp.get("orderID", ""),
+                                    "status": "executed",
+                                    "venue": "polymarket",
+                                })
+                            else:
+                                logger.warning(
+                                    "Polymarket order rejected: %s error=%s",
+                                    leg.ticker, resp.get("errorMsg", ""),
+                                )
+                                xp_ok = False
+                                break
+                        except Exception:
+                            logger.warning(
+                                "Polymarket order failed for %s, falling back to paper",
+                                leg.ticker, exc_info=True,
+                            )
+                            xp_ok = False
+                            break
+
+                    # Execute Kalshi legs second (if Polymarket succeeded)
+                    if xp_ok:
+                        for leg in kalshi_legs:
                             price_cents = max(1, min(99, round(leg.price_dollars * 100)))
                             if signal.combined_cost > 0:
                                 leg_frac = leg.price_dollars / signal.combined_cost
@@ -601,23 +656,70 @@ def evaluate_and_execute_for_user(
                                 )
                                 order = resp.get("order", {})
                                 if order.get("status") == "executed":
-                                    results.append(order)
+                                    xp_results.append(order)
                                 else:
                                     logger.warning(
-                                        "Order not filled: %s status=%s",
+                                        "Kalshi order not filled after Poly fill: %s status=%s",
                                         leg.ticker, order.get("status"),
                                     )
-                                    all_filled = False
+                                    xp_ok = False
                                     break
                             except Exception:
                                 logger.warning(
-                                    "Live order failed for %s, falling back to paper",
+                                    "Kalshi order failed after Poly fill: %s",
                                     leg.ticker, exc_info=True,
+                                )
+                                xp_ok = False
+                                break
+
+                    if xp_ok and xp_results:
+                        live_results = xp_results
+                    elif xp_results:
+                        # Partial fill (Poly succeeded, Kalshi failed) — record what
+                        # filled so exit strategies can manage the one-legged position
+                        logger.warning(
+                            "Cross-platform partial fill: %d/%d legs filled, "
+                            "recording partial — exit strategies will manage risk",
+                            len(xp_results), len(signal.legs),
+                        )
+                        live_results = xp_results
+
+                elif not poly_legs and live_kalshi is not None:
+                    # ── Kalshi-only signal ──
+                    results = []
+                    all_filled = True
+                    for leg in signal.legs:
+                        price_cents = max(1, min(99, round(leg.price_dollars * 100)))
+                        if signal.combined_cost > 0:
+                            leg_frac = leg.price_dollars / signal.combined_cost
+                        else:
+                            leg_frac = 1.0 / max(len(signal.legs), 1)
+                        leg_dollars = decision.suggested_size_dollars * leg_frac
+                        leg_dollars = min(leg_dollars, settings.execution.max_order_dollars)
+                        count = max(1, math.floor(leg_dollars / leg.price_dollars))
+                        try:
+                            resp = live_kalshi.place_order(
+                                leg.ticker, leg.side, price_cents, count,
+                            )
+                            order = resp.get("order", {})
+                            if order.get("status") == "executed":
+                                results.append(order)
+                            else:
+                                logger.warning(
+                                    "Order not filled: %s status=%s",
+                                    leg.ticker, order.get("status"),
                                 )
                                 all_filled = False
                                 break
-                        if all_filled and results:
-                            live_results = results
+                        except Exception:
+                            logger.warning(
+                                "Live order failed for %s, falling back to paper",
+                                leg.ticker, exc_info=True,
+                            )
+                            all_filled = False
+                            break
+                    if all_filled and results:
+                        live_results = results
 
                 if live_results is not None:
                     portfolio.record_fill(
@@ -660,6 +762,8 @@ def evaluate_and_execute_for_user(
     # Clean up live executors
     if live_kalshi is not None:
         live_kalshi.close()
+    if live_poly is not None:
+        live_poly.close()
 
     return result
 
