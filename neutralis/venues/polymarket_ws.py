@@ -73,6 +73,7 @@ class PolymarketWebSocket:
         msg = {
             "type": "market",
             "assets_ids": asset_ids,
+            "custom_feature_enabled": True,
         }
         await self._send(msg)
         self._subscribed_assets.update(asset_ids)
@@ -89,6 +90,7 @@ class PolymarketWebSocket:
                 "assets_ids": add_ids,
                 "type": "market",
                 "operation": "subscribe",
+                "custom_feature_enabled": True,
             }
             await self._send(msg)
             self._subscribed_assets.update(add_ids)
@@ -98,6 +100,7 @@ class PolymarketWebSocket:
                 "assets_ids": remove_ids,
                 "type": "market",
                 "operation": "unsubscribe",
+                "custom_feature_enabled": True,
             }
             await self._send(msg)
             self._subscribed_assets.difference_update(remove_ids)

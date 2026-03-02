@@ -35,6 +35,7 @@ class PolymarketClient:
             headers={"Accept": "application/json"},
         )
         self._last_request_ts: float = 0.0
+        self._fee_rate_cache: dict[str, int] = {}
 
     def _throttle(self) -> None:
         elapsed = time.monotonic() - self._last_request_ts
@@ -128,6 +129,42 @@ class PolymarketClient:
     def get_orderbook(self, token_id: str) -> dict[str, Any]:
         """Fetch orderbook from the CLOB API."""
         return self._get(self._clob_http, "/book", {"token_id": token_id})
+
+    def get_fee_rate_bps(self, token_id: str) -> int:
+        """Return the CLOB fee rate in basis points for *token_id*.
+
+        Queries ``GET /fee-rate?token_id=<token_id>`` on the CLOB API and
+        returns the ``base_fee`` field (int, basis points).  Returns **0** on
+        any error (404, timeout, network failure, unexpected payload, etc.)
+        so callers can safely treat the result as a non-negative integer.
+
+        Results are cached in ``_fee_rate_cache`` for the lifetime of the
+        client instance.
+        """
+        if token_id in self._fee_rate_cache:
+            return self._fee_rate_cache[token_id]
+
+        try:
+            data = self._get(self._clob_http, "/fee-rate", {"token_id": token_id})
+            fee = int(data.get("base_fee", 0)) if isinstance(data, dict) else 0
+        except Exception:  # noqa: BLE001 — intentionally broad
+            logger.debug("Fee-rate lookup failed for token %s, defaulting to 0", token_id)
+            fee = 0
+
+        self._fee_rate_cache[token_id] = fee
+        return fee
+
+    def get_fee_rates_bulk(self, token_ids: list[str]) -> dict[str, int]:
+        """Fetch fee rates for multiple tokens, returning ``{token_id: bps}``.
+
+        Cached values are reused; only uncached tokens hit the network.
+        Individual failures are silently treated as 0 bps (see
+        :meth:`get_fee_rate_bps`).
+        """
+        result: dict[str, int] = {}
+        for tid in token_ids:
+            result[tid] = self.get_fee_rate_bps(tid)
+        return result
 
     def close(self) -> None:
         self._http.close()

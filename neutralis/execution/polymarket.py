@@ -6,8 +6,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Any
 
+import httpx
 from py_clob_client.client import ClobClient
-from py_clob_client.clob_types import ApiCreds, MarketOrderArgs, OrderArgs, OrderType
+from py_clob_client.clob_types import ApiCreds, MarketOrderArgs, OrderArgs, OrderType, PartialCreateOrderOptions
 
 from neutralis.config import ExecutionConfig
 from neutralis.logging import get_logger
@@ -61,6 +62,9 @@ class PolymarketExecutor:
         self._last_request_ts: float = 0.0
         self._order_timeout = self._exec.order_timeout_sec
         self._timeout_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="poly-timeout")
+        self._http = httpx.Client(base_url="https://clob.polymarket.com", timeout=5.0)
+        self._tick_size_cache: dict[str, str] = {}
+        self._fee_rate_cache: dict[str, int] = {}
 
     @classmethod
     def from_credentials(
@@ -97,6 +101,9 @@ class PolymarketExecutor:
         instance._last_request_ts = 0.0
         instance._order_timeout = order_timeout_sec
         instance._timeout_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="poly-timeout")
+        instance._http = httpx.Client(base_url="https://clob.polymarket.com", timeout=5.0)
+        instance._tick_size_cache: dict[str, str] = {}
+        instance._fee_rate_cache: dict[str, int] = {}
 
         logger.info("Polymarket executor initialized from credentials (address=%s)", funder_address[:10])
         return instance
@@ -106,6 +113,34 @@ class PolymarketExecutor:
         if elapsed < _MIN_INTERVAL:
             time.sleep(_MIN_INTERVAL - elapsed)
         self._last_request_ts = time.monotonic()
+
+    def get_tick_size(self, token_id: str) -> str:
+        """Query the CLOB API for the tick size of a token. Cached."""
+        if token_id in self._tick_size_cache:
+            return self._tick_size_cache[token_id]
+        try:
+            resp = self._http.get("/tick-size", params={"token_id": token_id})
+            resp.raise_for_status()
+            tick_size = resp.json().get("minimum_tick_size", "0.01")
+            self._tick_size_cache[token_id] = tick_size
+            return tick_size
+        except Exception:
+            logger.warning("Failed to fetch tick_size for %s..., defaulting to 0.01", token_id[:12])
+            return "0.01"
+
+    def get_fee_rate_bps(self, token_id: str) -> int:
+        """Query the CLOB API for the fee rate (basis points) of a token. Cached."""
+        if token_id in self._fee_rate_cache:
+            return self._fee_rate_cache[token_id]
+        try:
+            resp = self._http.get("/fee-rate", params={"token_id": token_id})
+            resp.raise_for_status()
+            fee_bps = int(resp.json().get("base_fee", 0))
+            self._fee_rate_cache[token_id] = fee_bps
+            return fee_bps
+        except Exception:
+            logger.warning("Failed to fetch fee_rate_bps for %s..., defaulting to 0", token_id[:12])
+            return 0
 
     # -- Portfolio queries --
 
@@ -121,6 +156,7 @@ class PolymarketExecutor:
         token_id: str,
         side: str,
         amount: float,
+        neg_risk: bool = False,
     ) -> dict[str, Any]:
         """Place a fill-or-kill market order.
 
@@ -128,17 +164,26 @@ class PolymarketExecutor:
             token_id: CLOB token ID (YES token from NormalizedMarket.clob_token_ids)
             side: "BUY" or "SELL"
             amount: Dollar amount to spend (for BUY) or shares to sell (for SELL)
+            neg_risk: Whether this is a neg-risk market
 
         Returns:
             {"success": bool, "errorMsg": str, "orderID": str}
         """
         self._throttle()
 
-        order_args = MarketOrderArgs(
+        tick_size = self.get_tick_size(token_id)
+        fee_rate_bps = self.get_fee_rate_bps(token_id)
+
+        order_kwargs: dict[str, Any] = dict(
             token_id=token_id,
             amount=amount,
             side=side,
         )
+        if fee_rate_bps:
+            order_kwargs["fee_rate_bps"] = fee_rate_bps
+        order_args = MarketOrderArgs(**order_kwargs)
+
+        options = PartialCreateOrderOptions(tick_size=tick_size, neg_risk=neg_risk)
 
         logger.info(
             "Placing Polymarket market order: %s %s $%.2f (token=%s...)",
@@ -146,7 +191,7 @@ class PolymarketExecutor:
         )
 
         def _do_market_order() -> Any:
-            resp = self._client.create_market_order(order_args)
+            resp = self._client.create_market_order(order_args, options=options)
             return self._client.post_order(resp, OrderType.FOK)
 
         try:
@@ -179,6 +224,7 @@ class PolymarketExecutor:
         side: str,
         price: float,
         size: float,
+        neg_risk: bool = False,
     ) -> dict[str, Any]:
         """Place a GTC limit order.
 
@@ -187,18 +233,27 @@ class PolymarketExecutor:
             side: "BUY" or "SELL"
             price: Limit price (0.00 - 1.00)
             size: Number of shares
+            neg_risk: Whether this is a neg-risk market
 
         Returns:
             {"success": bool, "errorMsg": str, "orderID": str}
         """
         self._throttle()
 
-        order_args = OrderArgs(
+        tick_size = self.get_tick_size(token_id)
+        fee_rate_bps = self.get_fee_rate_bps(token_id)
+
+        order_kwargs: dict[str, Any] = dict(
             token_id=token_id,
             price=price,
             size=size,
             side=side,
         )
+        if fee_rate_bps:
+            order_kwargs["fee_rate_bps"] = fee_rate_bps
+        order_args = OrderArgs(**order_kwargs)
+
+        options = PartialCreateOrderOptions(tick_size=tick_size, neg_risk=neg_risk)
 
         logger.info(
             "Placing Polymarket limit order: %s %s %.0f @ $%.4f (token=%s...)",
@@ -206,7 +261,7 @@ class PolymarketExecutor:
         )
 
         def _do_limit_order() -> Any:
-            signed = self._client.create_order(order_args)
+            signed = self._client.create_order(order_args, options=options)
             return self._client.post_order(signed, OrderType.GTC)
 
         try:
@@ -262,6 +317,7 @@ class PolymarketExecutor:
     # -- Context manager --
 
     def close(self) -> None:
+        self._http.close()
         self._timeout_pool.shutdown(wait=False)
 
     def __enter__(self) -> PolymarketExecutor:

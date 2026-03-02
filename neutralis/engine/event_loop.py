@@ -265,6 +265,7 @@ class EventEngine:
             self._poly_ws.on("price_change", self._on_poly_price_change)
             self._poly_ws.on("book", self._on_poly_book)
             self._poly_ws.on("last_trade_price", self._on_poly_trade)
+            self._poly_ws.on("market_resolved", self._on_poly_market_resolved)
             try:
                 await self._poly_ws.connect()
                 await self._poly_ws.subscribe_markets(asset_ids)
@@ -876,6 +877,76 @@ class EventEngine:
             )
             # Trigger arb check which will find the cross-platform discrepancy
             await self._fast_arb_check(kalshi_ticker, kalshi_market, trigger_source="poly_informed_flow")
+
+    async def _on_poly_market_resolved(self, msg: dict[str, Any]) -> None:
+        """Handle Polymarket market resolution — remove resolved markets from state.
+
+        Similar to ``_on_lifecycle`` for Kalshi, this cleans up cross-platform
+        pairs when a Polymarket market settles so we stop trading stale pairs.
+
+        Message format:
+            {"event_type": "market_resolved", "market": "<condition_id>",
+             "winning_outcome": "Yes"|"No"|<label>, ...}
+        """
+        state = self._state
+        if state is None:
+            return
+
+        condition_id = msg.get("market", "")
+        winning_outcome = msg.get("winning_outcome", "")
+        if not condition_id:
+            return
+
+        # Find the Polymarket NormalizedMarket(s) associated with this condition_id.
+        # Polymarket normalizes ticker = conditionId, so the WS "market" field
+        # (condition_id) should match nm.ticker for Polymarket markets.
+        affected_poly_tickers: set[str] = set()
+        asset_ids_to_remove: list[str] = []
+
+        for asset_id, nm in list(self._asset_id_to_poly.items()):
+            if nm.ticker == condition_id:
+                affected_poly_tickers.add(nm.ticker)
+                asset_ids_to_remove.append(asset_id)
+
+        if not affected_poly_tickers:
+            logger.debug(
+                "Poly market_resolved for unknown condition_id=%s (winner=%s)",
+                condition_id[:30], winning_outcome,
+            )
+            return
+
+        for poly_ticker in affected_poly_tickers:
+            # Remove from poly_markets
+            state.poly_markets.pop(poly_ticker, None)
+            state.last_poly_update.pop(poly_ticker, None)
+
+            # Remove from cross-platform pairs (reverse lookup)
+            kalshi_ticker = state.poly_to_kalshi.pop(poly_ticker, None)
+            if kalshi_ticker:
+                state.xp_pairs.pop(kalshi_ticker, None)
+
+            # Clean up poly_ticker_to_assets mapping
+            self._poly_ticker_to_assets.pop(poly_ticker, None)
+
+        # Clean up asset_id -> NormalizedMarket mapping
+        for asset_id in asset_ids_to_remove:
+            self._asset_id_to_poly.pop(asset_id, None)
+
+        # Unsubscribe resolved assets from Polymarket WS
+        if self._poly_ws and asset_ids_to_remove:
+            try:
+                await self._poly_ws.update_subscription(remove_ids=asset_ids_to_remove)
+            except Exception:
+                logger.debug(
+                    "Failed to unsubscribe resolved Poly assets: %s",
+                    asset_ids_to_remove[:3],
+                )
+
+        logger.info(
+            "Poly market_resolved: condition_id=%s winner=%s — removed %d ticker(s), %d asset(s)",
+            condition_id[:30], winning_outcome,
+            len(affected_poly_tickers), len(asset_ids_to_remove),
+        )
 
     # ── Fast arb detection ─────────────────────────────────────────────
 
