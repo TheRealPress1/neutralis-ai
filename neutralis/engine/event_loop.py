@@ -66,6 +66,7 @@ from neutralis.venues.market_cache import MarketCache
 from neutralis.venues.polymarket_client import PolymarketClient
 from neutralis.venues.polymarket_normalize import normalize_market as poly_normalize, normalize_three_way_market as poly_normalize_three_way
 from neutralis.venues.polymarket_ws import PolymarketWebSocket
+from neutralis.core.attena_discovery import discover_supplementary_pairs, is_attena_enabled
 
 logger = get_logger("event_engine")
 
@@ -415,6 +416,14 @@ class EventEngine:
             list(poly_markets.values()),
             settings.matching,
         )
+
+        # Attena supplementary discovery (optional)
+        if is_attena_enabled():
+            attena_pairs = discover_supplementary_pairs(kalshi_markets, poly_markets, pairs)
+            if attena_pairs:
+                pairs = pairs + attena_pairs
+                logger.info("Attena: +%d supplementary pairs (total=%d)", len(attena_pairs), len(pairs))
+
         xp_pairs: dict[str, tuple[MarketPair, str]] = {}
         poly_to_kalshi: dict[str, str] = {}
         for pair in pairs:
@@ -1968,6 +1977,13 @@ class EventEngine:
             list(state.poly_markets.values()),
             settings.matching,
         )
+
+        # Attena supplementary discovery on refresh
+        if is_attena_enabled():
+            attena_pairs = discover_supplementary_pairs(kalshi_markets, state.poly_markets, pairs)
+            if attena_pairs:
+                pairs = pairs + attena_pairs
+
         xp_pairs: dict[str, tuple[MarketPair, str]] = {}
         poly_to_kalshi: dict[str, str] = {}
         for pair in pairs:
@@ -2048,6 +2064,13 @@ class EventEngine:
             list(poly_markets.values()),
             settings.matching,
         )
+
+        # Attena supplementary discovery on Poly refresh
+        if is_attena_enabled():
+            attena_pairs = discover_supplementary_pairs(state.kalshi_markets, poly_markets, pairs)
+            if attena_pairs:
+                pairs = pairs + attena_pairs
+
         xp_pairs: dict[str, tuple[MarketPair, str]] = {}
         poly_to_kalshi: dict[str, str] = {}
         for pair in pairs:

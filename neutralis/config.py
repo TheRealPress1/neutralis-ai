@@ -220,6 +220,8 @@ class MarketFilterConfig:
         # American sports
         "KXNBA", "KXNFL",
         "KXNBAMVP", "KXNBAEAST", "KXNBAWEST",
+        # NHL + MLB (confirmed cross-platform overlap via Attena)
+        "KXNHL", "KXMLB",
         # Crypto milestones (Polymarket has BTC/ETH milestone markets)
         "KXBTCMAXY", "KXBTCMINY", "KXETHMAXY", "KXETHMINY",
         "KXBTC2026200", "KXBTC2026250", "KXCRYPTORESERVE",

@@ -52,6 +52,7 @@ from neutralis.venues.kalshi_normalize import normalize_market as kalshi_normali
 from neutralis.venues.market_cache import MarketCache
 from neutralis.venues.polymarket_client import PolymarketClient
 from neutralis.venues.polymarket_normalize import normalize_market as poly_normalize, normalize_three_way_market as poly_normalize_three_way
+from neutralis.core.attena_discovery import discover_supplementary_pairs, is_attena_enabled
 
 logger = get_logger("pipeline")
 
@@ -242,6 +243,19 @@ def scan_markets(settings: Settings) -> ScanResult:
     # Step 3b: Cross-platform matching
     logger.info("Step 3b: Matching markets across venues")
     pairs = match_markets(kalshi_markets, poly_markets, settings.matching)
+
+    # Step 3b2: Attena supplementary discovery (optional)
+    if is_attena_enabled():
+        logger.info("Step 3b2: Running Attena supplementary discovery")
+        kalshi_by_t = {m.ticker: m for m in kalshi_markets}
+        poly_by_t = {m.ticker: m for m in poly_markets}
+        attena_pairs = discover_supplementary_pairs(kalshi_by_t, poly_by_t, pairs)
+        if attena_pairs:
+            pairs = pairs + attena_pairs
+            logger.info(
+                "Total matches after Attena: %d (%d supplementary)",
+                len(pairs), len(attena_pairs),
+            )
 
     # Step 3c: Cross-platform signal scan
     logger.info("Step 3c: Scanning matched pairs for price discrepancies")
