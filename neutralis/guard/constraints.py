@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from neutralis.categories import classify_market
 from neutralis.config import DirectionalConfig, PipelineConfig, PortfolioConfig
 from neutralis.models import GuardResult, NormalizedMarket, PortfolioSnapshot, Signal
+
+if TYPE_CHECKING:
+    from neutralis.storage.postgres import PostgresStorage
 
 
 def check_min_edge(
@@ -399,4 +402,68 @@ def check_min_implied_probability(
         ),
         value=prob,
         threshold=min_probability,
+    )
+
+
+# -- Daily loss circuit breaker --
+
+
+def check_daily_loss_limit(
+    storage: PostgresStorage,
+    config: PortfolioConfig,
+) -> GuardResult:
+    """Check if today's cumulative P&L has breached the daily loss limit.
+
+    Computes total daily P&L as:
+        realized P&L from positions closed today (UTC) + unrealized P&L from open positions
+
+    Trips the circuit breaker if EITHER:
+        1. daily_pnl <= -max_daily_loss_dollars   (absolute dollar cap)
+        2. daily_pnl <= -(max_total_exposure * max_daily_loss_pct / 100)  (percentage cap)
+
+    Returns a GuardResult with passed=False when the limit is breached.
+    """
+    realized_today = storage.get_today_realized_pnl()
+    unrealized = storage.get_today_unrealized_pnl()
+    daily_pnl = realized_today + unrealized
+
+    # Compute both thresholds
+    abs_limit = config.max_daily_loss_dollars
+    pct_limit_dollars = config.max_total_exposure_dollars * config.max_daily_loss_pct / 100.0
+
+    # Use whichever is MORE restrictive (smaller negative threshold)
+    effective_limit = min(abs_limit, pct_limit_dollars)
+
+    breached = daily_pnl <= -effective_limit
+
+    if breached:
+        # Determine which trigger fired
+        if daily_pnl <= -abs_limit and daily_pnl <= -pct_limit_dollars:
+            trigger = f"both (${abs_limit:.2f} abs + {config.max_daily_loss_pct:.1f}% = ${pct_limit_dollars:.2f})"
+        elif daily_pnl <= -abs_limit:
+            trigger = f"absolute ${abs_limit:.2f}"
+        else:
+            trigger = f"percentage {config.max_daily_loss_pct:.1f}% = ${pct_limit_dollars:.2f}"
+
+        return GuardResult(
+            guard_name="daily_loss_limit",
+            passed=False,
+            reason=(
+                f"CIRCUIT BREAKER: daily P&L ${daily_pnl:.2f} breached {trigger} limit "
+                f"(realized=${realized_today:.2f} + unrealized=${unrealized:.2f})"
+            ),
+            value=daily_pnl,
+            threshold=-effective_limit,
+        )
+
+    return GuardResult(
+        guard_name="daily_loss_limit",
+        passed=True,
+        reason=(
+            f"daily P&L ${daily_pnl:.2f} within limit "
+            f"(realized=${realized_today:.2f} + unrealized=${unrealized:.2f}, "
+            f"limit=-${effective_limit:.2f})"
+        ),
+        value=daily_pnl,
+        threshold=-effective_limit,
     )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Any
 
 from py_clob_client.client import ClobClient
@@ -14,6 +15,12 @@ from neutralis.logging import get_logger
 logger = get_logger(__name__)
 
 _MIN_INTERVAL = 1.0 / 10  # ~100ms between requests
+_CANCEL_TIMEOUT_SEC = 5.0  # Shorter timeout for cancel operations
+_TIMEOUT_ERROR_RESULT: dict[str, Any] = {
+    "success": False,
+    "errorMsg": "Order placement timed out",
+    "orderID": "",
+}
 
 
 class PolymarketExecutor:
@@ -23,6 +30,11 @@ class PolymarketExecutor:
     - EIP-712 order signing
     - API credential derivation from wallet key
     - Order creation, posting, and cancellation
+
+    All SDK calls are wrapped with a timeout guard via ThreadPoolExecutor
+    because the py-clob-client SDK does not expose built-in timeout support.
+    If a call exceeds `order_timeout_sec`, a timeout error result is returned
+    instead of hanging indefinitely.
     """
 
     def __init__(self, execution_config: ExecutionConfig) -> None:
@@ -47,6 +59,8 @@ class PolymarketExecutor:
         logger.info("Polymarket executor initialized (address=%s)", self._exec.polymarket_funder_address[:10])
 
         self._last_request_ts: float = 0.0
+        self._order_timeout = self._exec.order_timeout_sec
+        self._timeout_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="poly-timeout")
 
     @classmethod
     def from_credentials(
@@ -57,6 +71,7 @@ class PolymarketExecutor:
         funder_address: str,
         private_key: str = "",
         signature_type: int = 0,
+        order_timeout_sec: float = 15.0,
     ) -> PolymarketExecutor:
         """Create executor from pre-derived API credentials (not env vars).
 
@@ -80,6 +95,8 @@ class PolymarketExecutor:
         ))
         instance._client = client
         instance._last_request_ts = 0.0
+        instance._order_timeout = order_timeout_sec
+        instance._timeout_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="poly-timeout")
 
         logger.info("Polymarket executor initialized from credentials (address=%s)", funder_address[:10])
         return instance
@@ -128,9 +145,19 @@ class PolymarketExecutor:
             side, "FOK", amount, token_id[:12],
         )
 
-        try:
+        def _do_market_order() -> Any:
             resp = self._client.create_market_order(order_args)
-            result = self._client.post_order(resp, OrderType.FOK)
+            return self._client.post_order(resp, OrderType.FOK)
+
+        try:
+            future = self._timeout_pool.submit(_do_market_order)
+            result = future.result(timeout=self._order_timeout)
+        except FuturesTimeoutError:
+            logger.error(
+                "Polymarket market order TIMED OUT after %.1fs: %s %s $%.2f",
+                self._order_timeout, side, token_id[:12], amount,
+            )
+            return dict(_TIMEOUT_ERROR_RESULT)
         except Exception:
             logger.exception("Polymarket order failed: %s %s $%.2f", side, token_id[:12], amount)
             return {"success": False, "errorMsg": "SDK exception", "orderID": ""}
@@ -178,9 +205,19 @@ class PolymarketExecutor:
             side, "GTC", size, price, token_id[:12],
         )
 
-        try:
+        def _do_limit_order() -> Any:
             signed = self._client.create_order(order_args)
-            result = self._client.post_order(signed, OrderType.GTC)
+            return self._client.post_order(signed, OrderType.GTC)
+
+        try:
+            future = self._timeout_pool.submit(_do_limit_order)
+            result = future.result(timeout=self._order_timeout)
+        except FuturesTimeoutError:
+            logger.error(
+                "Polymarket limit order TIMED OUT after %.1fs: %s %.0f @ $%.4f",
+                self._order_timeout, side, size, price,
+            )
+            return dict(_TIMEOUT_ERROR_RESULT)
         except Exception:
             logger.exception("Polymarket limit order failed: %s %s %.0f @ $%.4f", side, token_id[:12], size, price)
             return {"success": False, "errorMsg": "SDK exception", "orderID": ""}
@@ -197,19 +234,27 @@ class PolymarketExecutor:
         return result if isinstance(result, dict) else {"success": False, "errorMsg": str(result), "orderID": ""}
 
     def cancel_order(self, order_id: str) -> dict[str, Any]:
-        """Cancel a resting order."""
+        """Cancel a resting order (5s timeout)."""
         self._throttle()
         try:
-            return self._client.cancel(order_id)
+            future = self._timeout_pool.submit(self._client.cancel, order_id)
+            return future.result(timeout=_CANCEL_TIMEOUT_SEC)
+        except FuturesTimeoutError:
+            logger.error("Cancel order TIMED OUT after %.1fs: %s", _CANCEL_TIMEOUT_SEC, order_id)
+            return {}
         except Exception:
             logger.exception("Failed to cancel order %s", order_id)
             return {}
 
     def cancel_all(self) -> dict[str, Any]:
-        """Cancel all open orders."""
+        """Cancel all open orders (5s timeout)."""
         self._throttle()
         try:
-            return self._client.cancel_all()
+            future = self._timeout_pool.submit(self._client.cancel_all)
+            return future.result(timeout=_CANCEL_TIMEOUT_SEC)
+        except FuturesTimeoutError:
+            logger.error("Cancel all orders TIMED OUT after %.1fs", _CANCEL_TIMEOUT_SEC)
+            return {}
         except Exception:
             logger.exception("Failed to cancel all orders")
             return {}
@@ -217,7 +262,7 @@ class PolymarketExecutor:
     # -- Context manager --
 
     def close(self) -> None:
-        pass  # SDK doesn't require explicit cleanup
+        self._timeout_pool.shutdown(wait=False)
 
     def __enter__(self) -> PolymarketExecutor:
         return self

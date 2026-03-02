@@ -27,7 +27,10 @@ from typing import Any
 
 import os
 
+import httpx
+
 from neutralis.config import Settings, WebSocketConfig, load_settings, load_settings_with_profile
+from neutralis.services.user_credentials import load_active_users
 from neutralis.core.cross_scanner import scan_cross_platform
 from neutralis.core.matcher import MarketPair, match_markets
 from neutralis.core.scanners import scan_complement_arb
@@ -39,6 +42,7 @@ from neutralis.execution.executor import PaperExecutor
 from neutralis.execution.models import TickContext
 from neutralis.fees import estimate_total_fee, estimate_cross_platform_fee, estimate_three_way_fee
 from neutralis.fees.performance import PerformanceFeeAccruer
+from neutralis.guard.constraints import check_daily_loss_limit
 from neutralis.guard.decision import evaluate_signal, select_portfolio
 from neutralis.logging import get_logger
 from neutralis.models import (
@@ -119,6 +123,9 @@ class _LiveState:
     poly_depth: dict[str, DepthSnapshot] = field(default_factory=dict)
     # Signal cooldown: ticker -> monotonic timestamp of last signal dispatch
     signal_cooldown: dict[str, float] = field(default_factory=dict)
+    # Stale price protection: last price update timestamp per ticker (monotonic)
+    last_kalshi_update: dict[str, float] = field(default_factory=dict)
+    last_poly_update: dict[str, float] = field(default_factory=dict)
     # Discrepancy analytics buffer
     discrepancy_buffer: list[dict] = field(default_factory=list)
     discrepancy_last_observed: dict[str, float] = field(default_factory=dict)
@@ -127,6 +134,8 @@ class _LiveState:
     ticker_updates: int = 0
     arb_checks: int = 0
     signals_detected: int = 0
+    signals_skipped_stale: int = 0
+    signals_skipped_disconnected: int = 0
     orders_placed: int = 0
     run_number: int = 0
 
@@ -165,11 +174,17 @@ class EventEngine:
         self._executor_pool = ThreadPoolExecutor(max_workers=4)
         self._market_cache = MarketCache()
         self._running = False
+        self._paused = False
         self._tasks: list[asyncio.Task] = []
         # Polymarket asset_id -> NormalizedMarket mapping (for WS price updates)
         self._asset_id_to_poly: dict[str, NormalizedMarket] = {}
         # poly_ticker -> list of asset_ids (for subscription management)
         self._poly_ticker_to_assets: dict[str, list[str]] = {}
+        # Kill-switch: set of user_ids whose kill switch was activated mid-run
+        self._killed_user_ids: set[str] = set()
+        # Stale price protection: WS connection status flags
+        self._kalshi_ws_connected: bool = False
+        self._poly_ws_connected: bool = False
 
     async def start(self) -> None:
         """Initialize state, connect WS, and start all tasks."""
@@ -202,6 +217,7 @@ class EventEngine:
         self._ws.on("market_lifecycle_v2", self._on_lifecycle)
 
         await self._ws.connect()
+        self._kalshi_ws_connected = True
 
         # If focus set is small, subscribe to ALL tickers for broad coverage
         # (complement arb detection works across the full market)
@@ -237,6 +253,7 @@ class EventEngine:
             try:
                 await self._poly_ws.connect()
                 await self._poly_ws.subscribe_markets(asset_ids)
+                self._poly_ws_connected = True
                 logger.info(
                     "Polymarket WS connected: %d assets subscribed for %d XP pairs",
                     len(asset_ids), len(state.xp_pairs),
@@ -244,9 +261,11 @@ class EventEngine:
             except Exception:
                 logger.warning("Failed to connect Polymarket WS, falling back to REST polling", exc_info=True)
                 self._poly_ws = None
+                self._poly_ws_connected = False
 
         # Step 5: Start periodic tasks
         self._running = True
+        self._paused = False
         self._tasks = [
             asyncio.create_task(self._ws.listen(), name="ws_listen"),
             asyncio.create_task(self._periodic_settlement(), name="settlement"),
@@ -254,6 +273,8 @@ class EventEngine:
             asyncio.create_task(self._periodic_refresh(), name="refresh"),
             asyncio.create_task(self._periodic_poly_refresh(), name="poly_refresh"),
             asyncio.create_task(self._periodic_flush_discrepancies(), name="discrepancy_flush"),
+            asyncio.create_task(self._periodic_kill_switch_check(), name="kill_switch"),
+            asyncio.create_task(self._periodic_daily_loss_check(), name="daily_loss_check"),
         ]
         if self._poly_ws:
             self._tasks.append(
@@ -280,7 +301,12 @@ class EventEngine:
             restarted = False
             for task in done:
                 if task.get_name() == "ws_listen" and self._running:
-                    logger.warning("Kalshi WS listener died, restarting")
+                    logger.warning("Kalshi WS listener died — marking disconnected, restarting")
+                    self._kalshi_ws_connected = False
+                    # Invalidate all cached Kalshi price timestamps so stale data
+                    # is not used before fresh prices arrive after reconnect
+                    if self._state:
+                        self._state.last_kalshi_update.clear()
                     self._tasks.remove(task)
                     ws_task = asyncio.create_task(
                         self._ws.run_forever(), name="ws_listen",
@@ -288,7 +314,11 @@ class EventEngine:
                     self._tasks.append(ws_task)
                     restarted = True
                 elif task.get_name() == "poly_ws_listen" and self._running and self._poly_ws:
-                    logger.warning("Polymarket WS listener died, restarting")
+                    logger.warning("Polymarket WS listener died — marking disconnected, restarting")
+                    self._poly_ws_connected = False
+                    # Invalidate all cached Polymarket price timestamps
+                    if self._state:
+                        self._state.last_poly_update.clear()
                     self._tasks.remove(task)
                     poly_ws_task = asyncio.create_task(
                         self._poly_ws.run_forever(), name="poly_ws_listen",
@@ -304,6 +334,8 @@ class EventEngine:
     async def stop(self) -> None:
         """Graceful shutdown."""
         self._running = False
+        self._kalshi_ws_connected = False
+        self._poly_ws_connected = False
         for task in self._tasks:
             task.cancel()
         if self._ws:
@@ -473,9 +505,17 @@ class EventEngine:
 
         state.ticker_updates += 1
 
+        # Mark Kalshi WS as connected (receives data = connected)
+        if not self._kalshi_ws_connected:
+            self._kalshi_ws_connected = True
+            logger.info("Kalshi WS reconnected — receiving price data again")
+
         nm = state.kalshi_markets.get(ticker)
         if nm is None:
             return
+
+        # Record timestamp for stale price protection
+        state.last_kalshi_update[ticker] = time.monotonic()
 
         # Use dollar string fields (e.g. "0.7600") — more precise than cents
         yes_bid_str = msg.get("yes_bid_dollars")
@@ -569,12 +609,14 @@ class EventEngine:
             removed_market = state.kalshi_markets.pop(ticker, None)
             state.kalshi_raw.pop(ticker, None)
             state.trade_flow.pop(ticker, None)
+            state.last_kalshi_update.pop(ticker, None)
 
             # Remove from cross-platform pairs
             pair_info = state.xp_pairs.pop(ticker, None)
             if pair_info:
                 _, poly_ticker = pair_info
                 state.poly_to_kalshi.pop(poly_ticker, None)
+                state.last_poly_update.pop(poly_ticker, None)
 
             # Remove from market cache
             self._market_cache.remove(ticker)
@@ -605,6 +647,11 @@ class EventEngine:
         state = self._state
         if state is None:
             return
+
+        # Mark Polymarket WS as connected (receives data = connected)
+        if not self._poly_ws_connected:
+            self._poly_ws_connected = True
+            logger.info("Polymarket WS reconnected — receiving price data again")
 
         price_changes = msg.get("price_changes", [])
         for pc in price_changes:
@@ -641,6 +688,9 @@ class EventEngine:
             )
             state.poly_markets[nm.ticker] = updated
             self._asset_id_to_poly[asset_id] = updated
+
+            # Record timestamp for stale price protection
+            state.last_poly_update[nm.ticker] = time.monotonic()
 
             # Trigger cross-platform arb check on the Kalshi side
             kalshi_ticker = state.poly_to_kalshi.get(nm.ticker)
@@ -836,8 +886,19 @@ class EventEngine:
         state = self._state
         if state is None:
             return
+
+        # Skip all signal generation when paused (kill switch set to "paused")
+        if self._paused:
+            return
+
+        # ── Stale price protection: refuse to fire signals while WS is disconnected ──
+        if not self._kalshi_ws_connected:
+            state.signals_skipped_disconnected += 1
+            return
+
         state.arb_checks += 1
         cfg = state.settings.pipeline
+        max_age = state.settings.websocket.max_price_age_sec
 
         # Skip expired markets (close_time in the past)
         exp = market.expected_expiration or market.close_time
@@ -846,6 +907,18 @@ class EventEngine:
                 exp = exp.replace(tzinfo=timezone.utc)
             if exp < datetime.now(timezone.utc):
                 return
+
+        # ── Stale price guard: skip if Kalshi price data is too old ──
+        now_mono = time.monotonic()
+        kalshi_ts = state.last_kalshi_update.get(ticker, 0.0)
+        if kalshi_ts > 0 and (now_mono - kalshi_ts) > max_age:
+            state.signals_skipped_stale += 1
+            if state.signals_skipped_stale % 100 == 1:  # Log periodically, not every skip
+                logger.warning(
+                    "Stale price guard: Kalshi ticker %s last update %.1fs ago (max=%.1fs) — skipping arb check",
+                    ticker, now_mono - kalshi_ts, max_age,
+                )
+            return
 
         # ── Check 1: Complement arb ──
         slippage_2 = cfg.slippage_per_leg * 2  # two-leg buffer
@@ -873,14 +946,30 @@ class EventEngine:
 
         # ── Check 2: Cross-platform arb ──
         pair_info = state.xp_pairs.get(ticker)
+        xp_stale = False
         if pair_info:
             pair, poly_ticker = pair_info
             poly_market = state.poly_markets.get(poly_ticker)
             if poly_market and poly_market.yes_ask > 0:
+                # Stale Polymarket price guard: skip XP arb if Poly price is too old
+                poly_ts = state.last_poly_update.get(poly_ticker, 0.0)
+                if poly_ts > 0 and (now_mono - poly_ts) > max_age:
+                    xp_stale = True
+                    state.signals_skipped_stale += 1
+                    if state.signals_skipped_stale % 100 == 1:
+                        logger.warning(
+                            "Stale price guard: Poly ticker %s last update %.1fs ago (max=%.1fs) — skipping XP arb",
+                            poly_ticker, now_mono - poly_ts, max_age,
+                        )
+                # Also skip XP if Polymarket WS is disconnected
+                if not self._poly_ws_connected and self._poly_ws is not None:
+                    xp_stale = True
+                    state.signals_skipped_disconnected += 1
+
                 k_yes = market.yes_ask
                 p_yes = poly_market.yes_ask
 
-                if k_yes > 0 and p_yes > 0 and abs(k_yes - p_yes) > 0.01:
+                if not xp_stale and k_yes > 0 and p_yes > 0 and abs(k_yes - p_yes) > 0.01:
                     # Determine arb direction
                     if k_yes < p_yes:
                         favored_yes = k_yes
@@ -1340,6 +1429,8 @@ class EventEngine:
                         is_paper=False, execution_results=results,
                     )
                     return True
+        except (TimeoutError, httpx.TimeoutException):
+            logger.warning("Kalshi live execution TIMED OUT for %s", signal.ticker)
         except Exception:
             logger.warning("Kalshi live execution failed for %s", signal.ticker, exc_info=True)
         return False
@@ -1492,6 +1583,9 @@ class EventEngine:
                             signal.ticker, resp.get("errorMsg", "unknown"),
                         )
                         return False
+        except (TimeoutError, httpx.TimeoutException):
+            logger.warning("Polymarket execution TIMED OUT for %s", signal.ticker)
+            return False
         except Exception:
             logger.warning("Polymarket execution failed for %s", signal.ticker, exc_info=True)
             return False
@@ -1531,6 +1625,11 @@ class EventEngine:
                             signal.ticker,
                         )
                         break
+        except (TimeoutError, httpx.TimeoutException):
+            logger.warning(
+                "Kalshi execution TIMED OUT after Polymarket filled for %s — "
+                "one-legged position", signal.ticker,
+            )
         except Exception:
             logger.warning(
                 "Kalshi execution failed after Polymarket filled for %s — "
@@ -1657,6 +1756,9 @@ class EventEngine:
                             )
                             return False
 
+        except (TimeoutError, httpx.TimeoutException):
+            logger.warning("Kalshi maker execution TIMED OUT for %s", signal.ticker)
+            return False
         except Exception:
             logger.warning("Kalshi maker execution failed for %s", signal.ticker, exc_info=True)
             return False
@@ -1702,6 +1804,11 @@ class EventEngine:
                             signal.ticker,
                         )
                         break
+        except (TimeoutError, httpx.TimeoutException):
+            logger.warning(
+                "Polymarket execution TIMED OUT after Kalshi maker filled for %s — "
+                "one-legged position", signal.ticker,
+            )
         except Exception:
             logger.warning(
                 "Polymarket execution failed after Kalshi maker filled for %s — "
@@ -1970,6 +2077,165 @@ class EventEngine:
             logger.exception("Failed to save %d discrepancy rows", len(batch))
             return 0
 
+    # ── Daily loss circuit breaker ────────────────────────────────────
+
+    async def _periodic_daily_loss_check(self) -> None:
+        """Check daily P&L every 60s and stop the engine if loss limit is breached."""
+        while self._running:
+            await asyncio.sleep(60.0)
+            if not self._running:
+                break
+            try:
+                loop = asyncio.get_event_loop()
+                breached = await loop.run_in_executor(
+                    self._executor_pool, self._check_daily_loss,
+                )
+                if breached:
+                    logger.critical(
+                        "DAILY LOSS CIRCUIT BREAKER: stopping EventEngine"
+                    )
+                    self._running = False
+            except Exception:
+                logger.exception("Daily loss check failed")
+
+    def _check_daily_loss(self) -> bool:
+        """Evaluate the daily loss limit for all active users. Runs sync in thread pool.
+
+        Returns True if ANY user has breached their daily loss limit.
+        """
+        state = self._state
+        if state is None:
+            return False
+        settings = state.settings
+
+        # Check per-user daily loss
+        try:
+            with PostgresStorage(settings.db) as global_storage:
+                users = load_active_users(global_storage)
+        except Exception:
+            logger.warning("Failed to load users for daily loss check", exc_info=True)
+            users = []
+
+        # Fallback to legacy single-user mode
+        if not users:
+            _user_id = os.environ.get("NEUTRALIS_USER_ID")
+            if _user_id:
+                users = [{"user_id": _user_id}]
+            else:
+                return False
+
+        any_breached = False
+        for user in users:
+            uid = str(user["user_id"])
+            try:
+                with PostgresStorage(settings.db, user_id=uid) as storage:
+                    result = check_daily_loss_limit(storage, settings.portfolio)
+                    if not result.passed:
+                        any_breached = True
+                        logger.critical(
+                            "DAILY LOSS CIRCUIT BREAKER for user %s: %s",
+                            uid[:8], result.reason,
+                        )
+                        try:
+                            storage.update_automation_state(
+                                status="paused",
+                                reason=f"daily_loss_limit: {result.reason}",
+                            )
+                        except Exception:
+                            logger.warning(
+                                "Failed to auto-pause user %s", uid[:8],
+                                exc_info=True,
+                            )
+            except Exception:
+                logger.warning(
+                    "Daily loss check failed for user %s", uid[:8],
+                    exc_info=True,
+                )
+
+        return any_breached
+
+    # ── Kill switch / automation state check ─────────────────────────
+
+    _KILL_SWITCH_CHECK_INTERVAL_SEC = 10.0
+
+    async def _periodic_kill_switch_check(self) -> None:
+        """Check automation_state every 10s -- pause or kill the engine."""
+        while self._running:
+            await asyncio.sleep(self._KILL_SWITCH_CHECK_INTERVAL_SEC)
+            try:
+                loop = asyncio.get_event_loop()
+                should_stop = await loop.run_in_executor(
+                    self._executor_pool, self._check_kill_switch,
+                )
+                if should_stop:
+                    logger.critical("Kill switch activated -- initiating graceful shutdown")
+                    self._running = False
+                    await self.stop()
+                    return
+            except Exception:
+                logger.warning("Kill switch check failed", exc_info=True)
+
+    def _check_kill_switch(self) -> bool:
+        """Synchronous kill switch check. Returns True if engine should stop."""
+        state = self._state
+        if state is None:
+            return False
+        settings = state.settings
+        try:
+            with PostgresStorage(settings.db) as storage:
+                active_users = load_active_users(storage)
+                if active_users:
+                    active_ids = {str(u["user_id"]) for u in active_users}
+                    if not hasattr(self, "_known_active_user_ids"):
+                        self._known_active_user_ids = active_ids
+                    else:
+                        dropped = self._known_active_user_ids - active_ids
+                        for uid in dropped:
+                            if uid not in self._killed_user_ids:
+                                self._killed_user_ids.add(uid)
+                                logger.warning(
+                                    "User %s kill switch activated mid-run"
+                                    " -- stopping trading for this user",
+                                    uid[:8],
+                                )
+                        self._known_active_user_ids = active_ids
+                    if not active_ids:
+                        logger.info("No active users remain -- shutting down")
+                        return True
+                    was_paused = self._paused
+                    self._paused = False
+                    if was_paused:
+                        logger.info("Automation resumed -- active users found")
+                    return False
+                auto_state = storage.get_automation_state()
+                if auto_state is None:
+                    return False
+                status = auto_state.get("status", "")
+                kill_switch = auto_state.get("kill_switch", False)
+                if status == "killed" or kill_switch:
+                    reason = auto_state.get("killed_reason", "manual")
+                    logger.critical(
+                        "Automation killed (reason: %s) -- shutting down event engine",
+                        reason,
+                    )
+                    return True
+                if status == "paused":
+                    if not self._paused:
+                        logger.info(
+                            "Automation paused -- suppressing signals, "
+                            "keeping WebSocket connections alive"
+                        )
+                    self._paused = True
+                    return False
+                if status == "running":
+                    if self._paused:
+                        logger.info("Automation resumed -- re-enabling signal generation")
+                    self._paused = False
+                    return False
+        except Exception:
+            logger.warning("Failed to check automation state", exc_info=True)
+        return False
+
     # ── Health ─────────────────────────────────────────────────────────
 
     def health_snapshot(self) -> dict[str, Any]:
@@ -1981,8 +2247,40 @@ class EventEngine:
             )
         kalshi_ws_ok = self._ws and self._ws.is_connected
         poly_ws_ok = self._poly_ws and self._poly_ws.is_connected
+
+        # Compute staleness info for health reporting
+        now_mono = time.monotonic()
+        max_age = self._ws_cfg.max_price_age_sec
+        oldest_kalshi_age = 0.0
+        oldest_poly_age = 0.0
+        any_stale = False
+
+        if state:
+            if state.last_kalshi_update:
+                oldest_kalshi_ts = min(state.last_kalshi_update.values())
+                oldest_kalshi_age = round(now_mono - oldest_kalshi_ts, 1)
+                if oldest_kalshi_age > max_age:
+                    any_stale = True
+            if state.last_poly_update:
+                oldest_poly_ts = min(state.last_poly_update.values())
+                oldest_poly_age = round(now_mono - oldest_poly_ts, 1)
+                if oldest_poly_age > max_age:
+                    any_stale = True
+
+        if not self._running:
+            health_status = "stopped"
+        elif self._paused:
+            health_status = "paused"
+        elif any_stale:
+            health_status = "degraded"
+        elif kalshi_ws_ok:
+            health_status = "ok"
+        else:
+            health_status = "degraded"
+
         return {
-            "status": "ok" if self._running and kalshi_ws_ok else "degraded",
+            "status": health_status,
+            "paused": self._paused,
             "kalshi_ws_connected": bool(kalshi_ws_ok),
             "kalshi_ws_subscriptions": self._ws.subscribed_count if self._ws else 0,
             "poly_ws_connected": bool(poly_ws_ok),
@@ -1996,7 +2294,15 @@ class EventEngine:
             "ticker_updates": state.ticker_updates if state else 0,
             "arb_checks": state.arb_checks if state else 0,
             "signals_detected": state.signals_detected if state else 0,
+            "signals_skipped_stale": state.signals_skipped_stale if state else 0,
+            "signals_skipped_disconnected": state.signals_skipped_disconnected if state else 0,
             "orders_placed": state.orders_placed if state else 0,
             "discrepancy_observations": state.discrepancy_total if state else 0,
             "discrepancy_buffer_size": len(state.discrepancy_buffer) if state else 0,
+            "killed_users": len(self._killed_user_ids),
+            # Stale price protection health info
+            "oldest_kalshi_price_age_sec": oldest_kalshi_age,
+            "oldest_poly_price_age_sec": oldest_poly_age,
+            "prices_stale": any_stale,
+            "max_price_age_sec": max_age,
         }

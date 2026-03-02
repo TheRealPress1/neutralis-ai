@@ -15,6 +15,7 @@ from neutralis.logging import get_logger
 logger = get_logger(__name__)
 
 _MIN_INTERVAL = 1.0 / 10  # ~100ms between requests
+_MAX_RETRY_TOTAL_SEC = 30.0  # Cap total time spent in retries (429 + 5xx backoff)
 
 
 class KalshiExecutor:
@@ -88,31 +89,43 @@ class KalshiExecutor:
         params: dict[str, Any] | None = None,
         *,
         _retries: int = 0,
+        _deadline: float | None = None,
     ) -> dict[str, Any]:
+        # Set a deadline on the first call so retries + backoff don't exceed 30s total
+        if _deadline is None:
+            _deadline = time.monotonic() + _MAX_RETRY_TOTAL_SEC
+
         self._throttle()
         auth_headers = self._sign_request(method, path)
         resp = self._http.request(
             method, path, json=json_body, params=params, headers=auth_headers
         )
 
+        remaining = _deadline - time.monotonic()
+
         if resp.status_code == 429:
-            if _retries >= 5:
-                logger.error("Rate limited 5 times on %s %s, giving up", method, path)
+            if _retries >= 5 or remaining <= 0:
+                logger.error("Rate limited %d times on %s %s (%.1fs remaining), giving up", _retries, method, path, max(remaining, 0))
                 resp.raise_for_status()
             retry_after = float(resp.headers.get("Retry-After", "2"))
-            backoff = retry_after * (2 ** _retries)
+            backoff = min(retry_after * (2 ** _retries), remaining)
+            if backoff <= 0:
+                logger.error("No time left for retry on %s %s, giving up", method, path)
+                resp.raise_for_status()
             logger.warning("Rate limited, retry %d/5 sleeping %.1fs", _retries + 1, backoff)
             time.sleep(backoff)
-            return self._request(method, path, json_body, params, _retries=_retries + 1)
+            return self._request(method, path, json_body, params, _retries=_retries + 1, _deadline=_deadline)
 
-        if resp.status_code >= 500 and _retries < 3:
-            wait = 2.0 * (2**_retries)
+        if resp.status_code >= 500 and _retries < 3 and remaining > 0:
+            wait = min(2.0 * (2**_retries), remaining)
+            if wait <= 0:
+                resp.raise_for_status()
             logger.warning(
                 "Server error %d on %s, retry %d/3 in %.1fs",
                 resp.status_code, path, _retries + 1, wait,
             )
             time.sleep(wait)
-            return self._request(method, path, json_body, params, _retries=_retries + 1)
+            return self._request(method, path, json_body, params, _retries=_retries + 1, _deadline=_deadline)
 
         resp.raise_for_status()
         if resp.status_code == 204:

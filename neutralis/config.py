@@ -91,6 +91,9 @@ class PortfolioConfig:
     max_ticker_exposure_dollars: float = 50.0
     max_venue_exposure_pct: float = 0.80
     max_open_positions: int = 50
+    # Daily loss circuit breaker — auto-pause trading when either limit is hit
+    max_daily_loss_dollars: float = 100.0  # absolute daily loss cap
+    max_daily_loss_pct: float = 20.0  # daily loss as % of max_total_exposure (starting capital proxy)
 
 
 @dataclass(frozen=True)
@@ -178,6 +181,8 @@ class ExecutionConfig:
     )
     max_order_dollars: float = 50.0
     balance_floor_dollars: float = 25.0
+    # Order placement timeout — max time to wait for an exchange API response
+    order_timeout_sec: float = 15.0
     # Maker order strategy — GTC limit orders for lower Kalshi fees (4x cheaper)
     use_maker_orders: bool = True
     maker_price_offset_cents: int = 1  # Post N cents inside the spread (bid + offset)
@@ -236,6 +241,8 @@ class WebSocketConfig:
     rest_refresh_interval_sec: float = 300.0
     # Max markets to subscribe to on WS (performance guard)
     max_ws_subscriptions: int = 2000
+    # Stale price protection: reject orders if price data is older than this
+    max_price_age_sec: float = 30.0
 
 
 @dataclass(frozen=True)

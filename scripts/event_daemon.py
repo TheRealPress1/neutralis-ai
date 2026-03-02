@@ -80,6 +80,49 @@ async def main() -> None:
         logger.exception("Health check failed: database unreachable")
         sys.exit(1)
 
+    # Check automation state before starting — refuse to start if killed or paused
+    try:
+        with PostgresStorage(settings.db) as storage:
+            active_users = load_active_users(storage)
+            if not active_users:
+                # No multi-tenant users — check legacy singleton state
+                auto_state = storage.get_automation_state()
+                if auto_state:
+                    status = auto_state.get("status", "")
+                    kill_switch = auto_state.get("kill_switch", False)
+                    if status == "killed" or kill_switch:
+                        logger.error(
+                            "Automation is killed (reason: %s) — refusing to start. "
+                            "Set automation_state.status to 'running' to re-enable.",
+                            auto_state.get("killed_reason", "unknown"),
+                        )
+                        sys.exit(1)
+                    if status == "paused":
+                        logger.error(
+                            "Automation is paused — refusing to start. "
+                            "Set automation_state.status to 'running' to resume."
+                        )
+                        sys.exit(1)
+                    logger.info(
+                        "Automation state check passed: status=%s", status
+                    )
+                else:
+                    logger.info(
+                        "No automation_state row found — proceeding with startup"
+                    )
+            else:
+                logger.info(
+                    "Automation state check passed: %d active user(s)",
+                    len(active_users),
+                )
+    except SystemExit:
+        raise
+    except Exception:
+        logger.warning(
+            "Failed to check automation state on startup — proceeding anyway",
+            exc_info=True,
+        )
+
     # Load credentials from DB — find the first active user with valid Kalshi keys
     kalshi_key_id = ""
     kalshi_pem = ""

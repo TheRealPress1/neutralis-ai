@@ -224,6 +224,27 @@ def main() -> None:
             except Exception:
                 logger.warning("Failed to update automation metrics", exc_info=True)
 
+            # Check if daily loss circuit breaker auto-paused any user
+            try:
+                auto_state = _state_storage.get_automation_state()
+                if auto_state and auto_state["status"] == "paused":
+                    killed_reason = auto_state.get("killed_reason", "")
+                    if killed_reason and "daily_loss_limit" in str(killed_reason):
+                        logger.critical(
+                            "DAILY LOSS CIRCUIT BREAKER: automation paused after run #%d — %s",
+                            stats.total_runs, killed_reason,
+                        )
+                        notifier.notify_error(
+                            error_msg=(
+                                f"DAILY LOSS CIRCUIT BREAKER TRIPPED: {killed_reason}. "
+                                "All trading paused until manual resume."
+                            ),
+                            consecutive=0,
+                            max_errors=0,
+                        )
+            except Exception:
+                logger.warning("Failed to check daily loss state after run", exc_info=True)
+
             # Heartbeat alert
             if (
                 cfg.heartbeat_every_n_runs > 0

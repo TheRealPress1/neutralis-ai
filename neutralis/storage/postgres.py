@@ -750,6 +750,61 @@ class PostgresStorage:
             {"days": days, **self._uid_params},
         )
 
+    def get_today_realized_pnl(self) -> float:
+        """Sum of realized P&L for positions closed today (UTC).
+
+        Used by the daily loss circuit breaker to determine if the cumulative
+        daily loss has breached the configured threshold.
+        """
+        conn = self._ensure_connected()
+        uf = self._user_filter()
+        p = self._uid_params
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT COALESCE(SUM(realized_pnl), 0)
+                    FROM positions
+                    WHERE status = 'closed'
+                      AND closed_at >= date_trunc('day', now() AT TIME ZONE 'UTC')
+                      {uf}
+                    """,
+                    p,
+                )
+                row = cur.fetchone()
+            conn.commit()
+        except Exception:
+            self._safe_rollback()
+            return 0.0
+        return float(row[0]) if row else 0.0
+
+    def get_today_unrealized_pnl(self) -> float:
+        """Sum of unrealized P&L for currently open positions.
+
+        Used together with realized P&L for the daily loss circuit breaker
+        to compute total daily P&L (realized + unrealized).
+        """
+        conn = self._ensure_connected()
+        uf = self._user_filter()
+        p = self._uid_params
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT COALESCE(SUM(unrealized_pnl), 0)
+                    FROM positions
+                    WHERE status = 'open'
+                      {uf}
+                    """,
+                    p,
+                )
+                row = cur.fetchone()
+            conn.commit()
+        except Exception:
+            self._safe_rollback()
+            return 0.0
+        return float(row[0]) if row else 0.0
+
     def get_category_breakdown(self) -> list[dict]:
         """P&L and trade counts per market category."""
         return self._fetch_dicts(f"""
@@ -1753,6 +1808,9 @@ class PostgresStorage:
             ]
         elif status == "paused":
             set_parts.append("paused_at = NOW()")
+            if reason:
+                set_parts.append("killed_reason = %(reason)s")
+                params["reason"] = reason
         elif status == "killed":
             set_parts += [
                 "killed_at = NOW()", "kill_switch = TRUE",

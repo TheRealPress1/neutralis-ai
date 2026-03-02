@@ -21,6 +21,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import os
 
+import httpx
+
 from neutralis.alerts.discord import DiscordNotifier
 from neutralis.config import Settings, load_settings, load_settings_with_profile
 from neutralis.execution.executor import PaperExecutor
@@ -36,6 +38,7 @@ from neutralis.core.scanners import scan_complement_arb
 from neutralis.core.settlement_scanner import scan_settlement_arb
 from neutralis.core.three_way import group_kalshi_three_way, merge_cross_venue_three_way, scan_three_way_arb
 from neutralis.core.scoring import score_signal
+from neutralis.guard.constraints import check_daily_loss_limit
 from neutralis.guard.decision import evaluate_directional_signal, evaluate_signal, select_portfolio
 from neutralis.guard.regime import apply_regime_to_pipeline, compute_regime
 from neutralis.logging import get_logger
@@ -378,6 +381,30 @@ def evaluate_and_execute_for_user(
                     result.exits_triggered, result.exit_pnl,
                 )
 
+        # ── Step 3d: Daily loss circuit breaker ──
+        daily_loss_check = check_daily_loss_limit(storage, settings.portfolio)
+        if not daily_loss_check.passed:
+            logger.critical(
+                "DAILY LOSS CIRCUIT BREAKER TRIPPED for user %s: %s",
+                uid[:8], daily_loss_check.reason,
+            )
+            try:
+                storage.update_automation_state(
+                    status="paused",
+                    reason=f"daily_loss_limit: {daily_loss_check.reason}",
+                )
+                logger.info("Automation auto-paused for user %s due to daily loss limit", uid[:8])
+            except Exception:
+                logger.warning(
+                    "Failed to auto-pause automation state for user %s",
+                    uid[:8], exc_info=True,
+                )
+            # Still return partial results (settlement + exits already ran, no new trades)
+            snapshot = mtm_portfolio.get_snapshot()
+            result.open_positions = snapshot.open_position_count
+            result.total_exposure = snapshot.total_exposure_dollars
+            return result
+
         # ── Step 4: Score, evaluate, rank, execute ──
         main_fee_accruer = None
         if settings.performance_fees.enabled:
@@ -631,6 +658,13 @@ def evaluate_and_execute_for_user(
                                 )
                                 xp_ok = False
                                 break
+                        except (TimeoutError, httpx.TimeoutException):
+                            logger.warning(
+                                "Polymarket order TIMED OUT for %s, falling back to paper",
+                                leg.ticker,
+                            )
+                            xp_ok = False
+                            break
                         except Exception:
                             logger.warning(
                                 "Polymarket order failed for %s, falling back to paper",
@@ -664,6 +698,13 @@ def evaluate_and_execute_for_user(
                                     )
                                     xp_ok = False
                                     break
+                            except (TimeoutError, httpx.TimeoutException):
+                                logger.warning(
+                                    "Kalshi order TIMED OUT after Poly fill: %s",
+                                    leg.ticker,
+                                )
+                                xp_ok = False
+                                break
                             except Exception:
                                 logger.warning(
                                     "Kalshi order failed after Poly fill: %s",
@@ -711,6 +752,13 @@ def evaluate_and_execute_for_user(
                                 )
                                 all_filled = False
                                 break
+                        except (TimeoutError, httpx.TimeoutException):
+                            logger.warning(
+                                "Kalshi order TIMED OUT for %s, falling back to paper",
+                                leg.ticker,
+                            )
+                            all_filled = False
+                            break
                         except Exception:
                             logger.warning(
                                 "Live order failed for %s, falling back to paper",
