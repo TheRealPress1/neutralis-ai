@@ -416,7 +416,7 @@ async function fetchPolymarketBalance(
   _secret: string,
   walletPrivateKey: string,
   _walletAddress: string,
-): Promise<{ balance: number } | null> {
+): Promise<{ balance: number; walletAddress: string } | null> {
   try {
     if (!walletPrivateKey) return null;
 
@@ -429,7 +429,7 @@ async function fetchPolymarketBalance(
 
     const data = await res.json();
     const bal = typeof data.balance === "string" ? parseFloat(data.balance) : (data.balance ?? 0);
-    return { balance: bal, walletAddress };
+    return { balance: bal, walletAddress: creds.address };
   } catch {
     return null;
   }
