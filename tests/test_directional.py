@@ -143,12 +143,14 @@ class TestScanHighProbability:
         assert len(signals) == 0
 
     def test_non_sport_filtered(self):
+        """Crypto market is filtered when extra_categories excludes crypto."""
         market = _make_market(
             ticker="KXBTC-001",
             event_ticker="KXBTC2026200",
             title="Bitcoin above 200k?",
         )
-        signals = scan_high_probability([market])
+        cfg = DirectionalConfig(extra_categories=())  # no extras — sports only
+        signals = scan_high_probability([market], config=cfg)
         assert len(signals) == 0
 
     def test_low_liquidity_filtered(self):
