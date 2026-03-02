@@ -444,9 +444,7 @@ def evaluate_and_execute_for_user(
 
         # Save regime state & disagreement (global, saved once — first user)
         if not scan.match_ids:  # first user stores shared data
-            storage_global = PostgresStorage(settings.db)
-            storage_global.connect()
-            try:
+            with PostgresStorage(settings.db) as storage_global:
                 storage_global.save_regime_state(
                     scan.regime, scan.regime_metrics, scan.regime_params,
                 )
@@ -469,8 +467,6 @@ def evaluate_and_execute_for_user(
                     key = f"{xp.kalshi_ticker}:{xp.polymarket_id}"
                     mid = scan.match_ids.get(key)
                     storage_global.save_cross_platform_signal(signal, match_id=mid)
-            finally:
-                storage_global.close()
 
         # Portfolio snapshot baseline for this user
         portfolio_snapshot = portfolio.get_snapshot()
