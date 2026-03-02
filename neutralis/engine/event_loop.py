@@ -355,7 +355,18 @@ class EventEngine:
 
     def _build_initial_state(self) -> _LiveState:
         """Synchronous: fetch all markets, normalize, match. Runs in thread pool."""
-        settings = load_settings()
+        # Load settings with the active risk profile so time_horizon and other
+        # user preferences are respected in the event engine.
+        base_settings = load_settings()
+        try:
+            with PostgresStorage(base_settings.db) as _profile_storage:
+                settings = load_settings_with_profile(_profile_storage)
+        except Exception:
+            logger.warning(
+                "Failed to load risk profile for event engine, using env defaults",
+                exc_info=True,
+            )
+            settings = base_settings
 
         # Fetch Kalshi via targeted series fetch — much faster than paginating 50k+ markets.
         # The general get_all_active_markets() caps at 50 pages (50k) but Kalshi has >50k
@@ -900,12 +911,16 @@ class EventEngine:
         cfg = state.settings.pipeline
         max_age = state.settings.websocket.max_price_age_sec
 
-        # Skip expired markets (close_time in the past)
+        # Skip expired markets (close_time in the past) and markets beyond time horizon
         exp = market.expected_expiration or market.close_time
         if exp is not None:
             if exp.tzinfo is None:
                 exp = exp.replace(tzinfo=timezone.utc)
-            if exp < datetime.now(timezone.utc):
+            now_utc = datetime.now(timezone.utc)
+            if exp < now_utc:
+                return
+            hours_left = (exp - now_utc).total_seconds() / 3600.0
+            if hours_left > cfg.max_time_to_expiry_hours:
                 return
 
         # ── Stale price guard: skip if Kalshi price data is too old ──

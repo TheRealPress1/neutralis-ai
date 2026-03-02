@@ -42,7 +42,7 @@ _ENTITY_RE = re.compile(r"\b(?:[A-Z][A-Za-z'\-]+(?:\s+|$)){2,}")
 # Common sports abbreviation expansions (pattern, replacement).
 # Applied case-insensitively before tokenisation and entity extraction.
 _ABBREVIATION_MAP: list[tuple[re.Pattern, str]] = [
-    # Soccer - English
+    # ── Soccer - English ──
     (re.compile(r"\bNottm\b", re.IGNORECASE), "Nottingham"),
     (re.compile(r"\bMan City\b", re.IGNORECASE), "Manchester City"),
     (re.compile(r"\bMan Utd\b", re.IGNORECASE), "Manchester United"),
@@ -51,24 +51,54 @@ _ABBREVIATION_MAP: list[tuple[re.Pattern, str]] = [
     (re.compile(r"\bSheff\b", re.IGNORECASE), "Sheffield"),
     (re.compile(r"\bSoton\b", re.IGNORECASE), "Southampton"),
     (re.compile(r"\bBham\b", re.IGNORECASE), "Birmingham"),
-    # Soccer - European
+    (re.compile(r"\bSpurs\b", re.IGNORECASE), "Tottenham"),
+    (re.compile(r"\bGunners\b", re.IGNORECASE), "Arsenal"),
+    (re.compile(r"\bNUFC\b"), "Newcastle United"),
+    (re.compile(r"\bAVFC\b"), "Aston Villa"),
+    (re.compile(r"\bWHU\b"), "West Ham United"),
+    # ── Soccer - European ──
     (re.compile(r"\bPSG\b"), "Paris Saint-Germain"),
     (re.compile(r"\bAtl\.?\s*Madrid\b", re.IGNORECASE), "Atletico Madrid"),
-    # American sports
+    (re.compile(r"\bBarca\b", re.IGNORECASE), "Barcelona"),
+    (re.compile(r"\bBayern\b", re.IGNORECASE), "Bayern Munich"),
+    (re.compile(r"\bInter\b(?!\s+Miami)", re.IGNORECASE), "Inter Milan"),
+    (re.compile(r"\bJuve\b", re.IGNORECASE), "Juventus"),
+    (re.compile(r"\bDortmund\b", re.IGNORECASE), "Borussia Dortmund"),
+    (re.compile(r"\bBVB\b"), "Borussia Dortmund"),
+    (re.compile(r"\bLeverkusen\b", re.IGNORECASE), "Bayer Leverkusen"),
+    (re.compile(r"\bGladbach\b", re.IGNORECASE), "Borussia Monchengladbach"),
+    # ── Soccer - MLS ──
+    (re.compile(r"\bLAFC\b"), "Los Angeles FC"),
+    (re.compile(r"\bNYCFC\b"), "New York City FC"),
+    (re.compile(r"\bNYRB\b"), "New York Red Bulls"),
+    (re.compile(r"\bRBNY\b"), "New York Red Bulls"),
+    # ── American sports ──
     (re.compile(r"\bOKC\b"), "Oklahoma City"),
     (re.compile(r"\bPhilly\b", re.IGNORECASE), "Philadelphia"),
     (re.compile(r"\bLA Clippers\b", re.IGNORECASE), "Los Angeles Clippers"),
     (re.compile(r"\bLA Lakers\b", re.IGNORECASE), "Los Angeles Lakers"),
     (re.compile(r"\bPro Basketball\b", re.IGNORECASE), "NBA"),
-    # Awards
+    (re.compile(r"\bNYK\b"), "New York Knicks"),
+    (re.compile(r"\bGSW\b"), "Golden State Warriors"),
+    (re.compile(r"\bSixers\b", re.IGNORECASE), "Philadelphia 76ers"),
+    (re.compile(r"\bCavs\b", re.IGNORECASE), "Cleveland Cavaliers"),
+    (re.compile(r"\bMavs\b", re.IGNORECASE), "Dallas Mavericks"),
+    (re.compile(r"\bBlazers\b", re.IGNORECASE), "Portland Trail Blazers"),
+    (re.compile(r"\bT-Wolves\b", re.IGNORECASE), "Minnesota Timberwolves"),
+    (re.compile(r"\bTimberwolves\b", re.IGNORECASE), "Minnesota Timberwolves"),
+    # ── Awards ──
     (re.compile(r"\bAcademy Awards?\b", re.IGNORECASE), "Oscars"),
     (re.compile(r"\b98th Oscars\b", re.IGNORECASE), "Oscars"),
-    # Crypto — normalise dollar representations
+    # ── Crypto — dollar amounts ──
     (re.compile(r"\$150k\b", re.IGNORECASE), "$150000"),
     (re.compile(r"\$200k\b", re.IGNORECASE), "$200000"),
     (re.compile(r"\$250k\b", re.IGNORECASE), "$250000"),
     (re.compile(r"\$100k\b", re.IGNORECASE), "$100000"),
     (re.compile(r"\$125k\b", re.IGNORECASE), "$125000"),
+    (re.compile(r"\$130k\b", re.IGNORECASE), "$130000"),
+    (re.compile(r"\$175k\b", re.IGNORECASE), "$175000"),
+    (re.compile(r"\$300k\b", re.IGNORECASE), "$300000"),
+    (re.compile(r"\$500k\b", re.IGNORECASE), "$500000"),
     (re.compile(r"\$149,999\.99\b"), "$150000"),
     (re.compile(r"\$109,999\.99\b"), "$110000"),
     (re.compile(r"\$99,999\.99\b"), "$100000"),
@@ -76,6 +106,13 @@ _ABBREVIATION_MAP: list[tuple[re.Pattern, str]] = [
     (re.compile(r"\$129,999\.99\b"), "$130000"),
     (re.compile(r"\$139,999\.99\b"), "$140000"),
     (re.compile(r"\$199,999\.99\b"), "$200000"),
+    # ── Crypto — token names ──
+    (re.compile(r"\bBTC\b"), "Bitcoin"),
+    (re.compile(r"\bETH\b"), "Ethereum"),
+    # ── Politics ──
+    (re.compile(r"\bPOTUS\b"), "President"),
+    (re.compile(r"\bSCOTUS\b"), "Supreme Court"),
+    (re.compile(r"\bGOP\b"), "Republican"),
 ]
 
 

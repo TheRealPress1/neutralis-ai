@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from neutralis.config import MatchingConfig, PipelineConfig, PortfolioConfig
+from neutralis.config import MatchingConfig, PipelineConfig, PortfolioConfig, TIME_HORIZON_PRESETS
 from neutralis.logging import get_logger
 
 logger = get_logger(__name__)
@@ -45,6 +45,7 @@ class RiskProfile:
     # Category overrides (JSONB from DB)
     category_overrides: dict[str, Any] = field(default_factory=dict)
     strategy: Optional[str] = None
+    time_horizon: str = "all"  # live | short_term | medium_term | long_term | all
 
     # Meta
     user_id: Optional[str] = None
@@ -52,11 +53,18 @@ class RiskProfile:
     updated_at: Optional[Any] = None
 
     def to_pipeline_config(self) -> PipelineConfig:
-        """Convert profile fields to a PipelineConfig."""
+        """Convert profile fields to a PipelineConfig.
+
+        When time_horizon is set to a known preset, it overrides
+        max_time_to_expiry_hours with the preset value.
+        """
+        max_hours = TIME_HORIZON_PRESETS.get(
+            self.time_horizon, self.max_time_to_expiry_hours,
+        )
         return PipelineConfig(
             min_edge_pct=self.min_edge_pct,
             min_liquidity_dollars=self.min_liquidity_dollars,
-            max_time_to_expiry_hours=self.max_time_to_expiry_hours,
+            max_time_to_expiry_hours=max_hours,
             min_time_to_expiry_hours=self.min_time_to_expiry_hours,
             fee_rate=self.fee_rate,
             max_position_dollars=self.max_position_dollars,
@@ -99,6 +107,7 @@ class RiskProfile:
             "min_similarity": self.min_similarity,
             "category_overrides": self.category_overrides,
             "strategy": self.strategy,
+            "time_horizon": self.time_horizon,
             "user_id": self.user_id,
             "created_at": str(self.created_at) if self.created_at else None,
             "updated_at": str(self.updated_at) if self.updated_at else None,
@@ -112,7 +121,8 @@ _PROFILE_COLS = (
     "min_time_to_expiry_hours, fee_rate, max_position_dollars, "
     "max_total_exposure_dollars, max_event_exposure_dollars, "
     "max_ticker_exposure_dollars, max_venue_exposure_pct, max_open_positions, "
-    "min_similarity, category_overrides, strategy, user_id, created_at, updated_at"
+    "min_similarity, category_overrides, strategy, time_horizon, "
+    "user_id, created_at, updated_at"
 )
 
 
@@ -138,9 +148,10 @@ def _row_to_profile(row: tuple) -> RiskProfile:  # type: ignore[type-arg]
         min_similarity=row[17],
         category_overrides=row[18] if isinstance(row[18], dict) else {},
         strategy=row[19],
-        user_id=str(row[20]) if row[20] else None,
-        created_at=row[21],
-        updated_at=row[22],
+        time_horizon=row[20] if row[20] else "all",
+        user_id=str(row[21]) if row[21] else None,
+        created_at=row[22],
+        updated_at=row[23],
     )
 
 
@@ -201,14 +212,14 @@ def update_profile(
         "max_total_exposure_dollars", "max_event_exposure_dollars",
         "max_ticker_exposure_dollars", "max_venue_exposure_pct",
         "max_open_positions", "min_similarity",
-        "category_overrides", "strategy",
+        "category_overrides", "strategy", "time_horizon",
     }
     filtered = {k: v for k, v in updates.items() if k in allowed}
     if not filtered:
         return None
 
     # Auto-mark as custom when config fields change
-    meta_fields = {"name", "description", "preset", "strategy"}
+    meta_fields = {"name", "description", "preset", "strategy", "time_horizon"}
     if any(k not in meta_fields for k in filtered):
         if "preset" not in filtered:
             filtered["preset"] = "custom"

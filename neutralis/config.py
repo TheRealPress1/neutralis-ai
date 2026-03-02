@@ -51,6 +51,15 @@ class DatabaseConfig:
             )
 
 
+TIME_HORIZON_PRESETS: dict[str, float] = {
+    "live": 72.0,          # 3 days — focus on imminent markets
+    "short_term": 168.0,   # 1 week
+    "medium_term": 720.0,  # 30 days
+    "long_term": 2160.0,   # 90 days
+    "all": 43800.0,        # ~5 years (default — no filtering)
+}
+
+
 @dataclass(frozen=True)
 class PipelineConfig:
     scan_interval_sec: float = 30.0

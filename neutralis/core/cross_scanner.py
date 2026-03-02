@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from neutralis.config import MatchingConfig, PipelineConfig
 from neutralis.core.matcher import MarketPair
 from neutralis.fees import estimate_cross_platform_fee
@@ -9,6 +11,16 @@ from neutralis.logging import get_logger
 from neutralis.models import CrossPlatformMatch, Signal, SignalType, TradeLeg
 
 logger = get_logger(__name__)
+
+
+def _hours_until(dt: datetime | None) -> float | None:
+    if dt is None:
+        return None
+    now = datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    delta = dt - now
+    return delta.total_seconds() / 3600.0
 
 
 def scan_cross_platform(
@@ -31,6 +43,21 @@ def scan_cross_platform(
     for pair in pairs:
         k = pair.kalshi_market
         p = pair.polymarket_market
+
+        # Time-to-expiry filter — reject pairs outside the user's horizon
+        skip = False
+        for mkt in (k, p):
+            exp = mkt.expected_expiration or mkt.close_time
+            hours_left = _hours_until(exp)
+            if hours_left is not None:
+                if hours_left < cfg_pipe.min_time_to_expiry_hours:
+                    skip = True
+                    break
+                if hours_left > cfg_pipe.max_time_to_expiry_hours:
+                    skip = True
+                    break
+        if skip:
+            continue
 
         kalshi_yes = k.yes_ask
         poly_yes = p.yes_ask
