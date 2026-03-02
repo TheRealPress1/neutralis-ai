@@ -122,13 +122,11 @@ export default function BalanceBar({
             <p className="font-mono text-2xl font-bold text-[#e8e9ea]">
               ${fmt(balances.polymarket.balance)}
             </p>
-            {balances.polymarket.balance === 0 && balances.polymarket.walletAddress ? (
-              <>
-                <WalletCopyRow address={balances.polymarket.walletAddress} />
-                <p className="mt-1 text-xs text-[#9ca3af]">Send USDC on Polygon to fund</p>
-              </>
-            ) : (
-              <p className="mt-1 text-xs text-[#9ca3af]">USDC</p>
+            <p className="mt-0.5 text-xs text-[#9ca3af]">
+              {balances.polymarket.balance === 0 ? "Send USDC on Polygon to fund" : "USDC"}
+            </p>
+            {balances.polymarket.walletAddress && (
+              <WalletCopyRow address={balances.polymarket.walletAddress} />
             )}
           </div>
         ) : (

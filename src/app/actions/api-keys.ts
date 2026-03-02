@@ -300,7 +300,18 @@ export async function testConnection(
 
 export interface ExchangeBalances {
   kalshi: { balance: number; portfolio_value: number } | null;
-  polymarket: { balance: number; walletAddress?: string } | null;
+  polymarket: { balance: number; walletAddress: string } | null;
+}
+
+/** Derive wallet address from private key locally — no network call */
+async function deriveWalletAddress(privateKey: string): Promise<string | null> {
+  try {
+    const { privateKeyToAccount } = await import("viem/accounts");
+    const pk = (privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`) as `0x${string}`;
+    return privateKeyToAccount(pk).address;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchKalshiBalance(
@@ -453,23 +464,32 @@ export async function fetchBalances(): Promise<ExchangeBalances> {
   const polyRow = keys.find((k) => k.platform === "polymarket");
   const walletRow = keys.find((k) => k.platform === "polymarket_wallet");
 
+  // Derive wallet address locally (no network) so it's always available
+  const walletPrivateKey = walletRow ? tryDecrypt(walletRow.private_key_pem) : null;
+  const walletAddress = walletPrivateKey ? await deriveWalletAddress(walletPrivateKey) : null;
+
   // Fetch both in parallel
-  const [kalshi, polymarket] = await Promise.all([
+  const [kalshi, polyBalanceResult] = await Promise.all([
     kalshiRow
       ? fetchKalshiBalance(
           kalshiRow.api_key_id,
           tryDecrypt(kalshiRow.private_key_pem),
         )
       : null,
-    polyRow && walletRow
+    polyRow && walletPrivateKey
       ? fetchPolymarketBalance(
           polyRow.api_key_id,
           tryDecrypt(polyRow.api_secret),
-          tryDecrypt(walletRow.private_key_pem),
-          walletRow.api_key_id,
-        ).then((b) => b ?? { balance: 0 })  // credentials exist → show $0 on fetch failure
+          walletPrivateKey,
+          walletRow?.api_key_id ?? "",
+        )
       : null,
   ]);
+
+  // Always surface the wallet address when credentials exist, even if balance fetch failed
+  const polymarket = walletAddress
+    ? { balance: polyBalanceResult?.balance ?? 0, walletAddress }
+    : polyBalanceResult;
 
   return { kalshi, polymarket };
 }
