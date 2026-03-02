@@ -270,7 +270,9 @@ class SchedulerConfig:
 @dataclass(frozen=True)
 class APIConfig:
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = field(
+        default_factory=lambda: int(os.environ.get("PORT", 8000))
+    )
 
 
 @dataclass(frozen=True)

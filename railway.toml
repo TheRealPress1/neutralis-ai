@@ -15,8 +15,8 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 # Railway uses this to confirm the service is alive before routing traffic.
-# The daemon exposes /health on port 9091; the API exposes /api/health on port 8000.
-# Override per-service in the Railway dashboard if needed.
+# Both the daemon (/health on port 9091) and the API (/health on port $PORT)
+# expose this path — no per-service override needed.
 healthcheckPath = "/health"
 healthcheckTimeout = 60
 
