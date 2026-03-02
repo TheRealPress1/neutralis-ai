@@ -64,6 +64,12 @@ function PolymarketHelpTooltip() {
             <p className="text-xs font-medium text-[#e8e9ea] mb-2">
               How to connect Polymarket
             </p>
+            <div className="mb-3 rounded bg-[#1a1d21] border border-[#2a2d31] px-3 py-2 text-xs text-[#9ca3af]">
+              <span className="font-medium text-[#e8e9ea]">US Polymarket app users:</span>{" "}
+              Apple Pay deposits are locked for 4 days and show as $0.00 USDC. For instant
+              funding, export your private key below and send USDC directly to your wallet
+              on Polygon.
+            </div>
             <ol className="text-xs text-[#9ca3af] space-y-2 list-decimal list-inside">
               <li>
                 <span className="font-medium text-[#e8e9ea]">Get your wallet private key</span>{" "}
@@ -76,7 +82,9 @@ function PolymarketHelpTooltip() {
                 >
                   reveal.magic.link/polymarket
                 </a>{" "}
-                and export your private key. (Sign up via Apple or email? This is your Magic.link key.)
+                and export your private key. Import it into MetaMask — your wallet address
+                will then appear in the dashboard so you can send USDC (Polygon network)
+                directly there for instant funding.
               </li>
               <li>
                 <span className="font-medium text-[#e8e9ea]">Get CLOB credentials</span>{" "}

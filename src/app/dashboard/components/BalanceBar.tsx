@@ -10,6 +10,30 @@ function fmt(n: number) {
   });
 }
 
+function WalletCopyRow({ address }: { address: string }) {
+  const [copied, setCopied] = useState(false);
+  const masked = address.slice(0, 6) + "..." + address.slice(-4);
+
+  function copy() {
+    navigator.clipboard.writeText(address).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="mt-1.5 flex items-center gap-1.5">
+      <span className="font-mono text-xs text-[#9ca3af]">{masked}</span>
+      <button
+        onClick={copy}
+        className="rounded px-1.5 py-0.5 text-[10px] font-medium text-[#9ca3af] border border-[#2a2d31] hover:text-[#e8e9ea] hover:border-[#e8e9ea]/40 transition-colors"
+      >
+        {copied ? "Copied!" : "Copy"}
+      </button>
+    </div>
+  );
+}
+
 export default function BalanceBar({
   refreshKey,
   onNavigate,
@@ -98,7 +122,14 @@ export default function BalanceBar({
             <p className="font-mono text-2xl font-bold text-[#e8e9ea]">
               ${fmt(balances.polymarket.balance)}
             </p>
-            <p className="mt-1 text-xs text-[#9ca3af]">USDC</p>
+            {balances.polymarket.balance === 0 && balances.polymarket.walletAddress ? (
+              <>
+                <WalletCopyRow address={balances.polymarket.walletAddress} />
+                <p className="mt-1 text-xs text-[#9ca3af]">Send USDC on Polygon to fund</p>
+              </>
+            ) : (
+              <p className="mt-1 text-xs text-[#9ca3af]">USDC</p>
+            )}
           </div>
         ) : (
           <div className="mt-3">

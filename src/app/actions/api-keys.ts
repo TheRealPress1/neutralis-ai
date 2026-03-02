@@ -300,7 +300,7 @@ export async function testConnection(
 
 export interface ExchangeBalances {
   kalshi: { balance: number; portfolio_value: number } | null;
-  polymarket: { balance: number } | null;
+  polymarket: { balance: number; walletAddress?: string } | null;
 }
 
 async function fetchKalshiBalance(
@@ -429,7 +429,7 @@ async function fetchPolymarketBalance(
 
     const data = await res.json();
     const bal = typeof data.balance === "string" ? parseFloat(data.balance) : (data.balance ?? 0);
-    return { balance: bal };
+    return { balance: bal, walletAddress };
   } catch {
     return null;
   }
