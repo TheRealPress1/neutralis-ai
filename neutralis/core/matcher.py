@@ -296,10 +296,16 @@ def _spread(market: NormalizedMarket) -> float:
 
 
 def _liquidity_ratio(a: NormalizedMarket, b: NormalizedMarket) -> float:
-    """Ratio of the larger liquidity to the smaller.  Returns inf if either is zero."""
+    """Ratio of the larger liquidity to the smaller.
+
+    Returns 0.0 (pass) when either side has no liquidity data — Kalshi's
+    basic market API doesn't include orderbook depth, so liquidity=0 means
+    "unknown", not "empty".  The guard layer's orderbook depth check
+    validates actual depth before execution.
+    """
     la, lb = a.liquidity, b.liquidity
     if la <= 0 or lb <= 0:
-        return float("inf")
+        return 0.0  # unknown liquidity — defer to guard checks
     return max(la, lb) / min(la, lb)
 
 
