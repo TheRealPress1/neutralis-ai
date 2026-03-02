@@ -32,22 +32,29 @@ export default async function DashboardPage() {
     ? "pro"
     : ((profile?.subscription_tier as SubscriptionTier) ?? "free");
 
-  // Check if user has any exchange keys configured
+  // Check which exchange keys are configured
   const { data: apiKeys } = await supabase
     .from("user_api_keys")
     .select("platform")
     .eq("user_id", user.id);
 
-  const hasApiKeys = (apiKeys ?? []).some(
-    (k: { platform: string }) =>
-      k.platform === "kalshi" || k.platform === "polymarket",
+  const platforms = (apiKeys ?? []).map(
+    (k: { platform: string }) => k.platform,
   );
+  const hasKalshi = platforms.includes("kalshi");
+  const hasPoly = platforms.includes("polymarket");
+  const hasPolyWallet = platforms.includes("polymarket_wallet");
+  const hasApiKeys = hasKalshi || hasPoly;
+  const hasBothVenues = hasKalshi && hasPoly && hasPolyWallet;
 
   return (
     <DashboardShell
       initialTier={tier}
       initialIsFounder={isFounder}
       initialHasApiKeys={hasApiKeys}
+      initialHasBothVenues={hasBothVenues}
+      initialHasKalshi={hasKalshi}
+      initialHasPoly={hasPoly && hasPolyWallet}
     />
   );
 }

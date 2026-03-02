@@ -36,10 +36,16 @@ export default function DashboardShell({
   initialTier = "free",
   initialIsFounder = false,
   initialHasApiKeys = true,
+  initialHasBothVenues = false,
+  initialHasKalshi = false,
+  initialHasPoly = false,
 }: {
   initialTier?: SubscriptionTier;
   initialIsFounder?: boolean;
   initialHasApiKeys?: boolean;
+  initialHasBothVenues?: boolean;
+  initialHasKalshi?: boolean;
+  initialHasPoly?: boolean;
 }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
@@ -177,7 +183,13 @@ export default function DashboardShell({
                 requiredTier="starter"
               />
             ) : (
-              <AutomationPanel refreshKey={refreshKey} />
+              <AutomationPanel
+                refreshKey={refreshKey}
+                hasBothVenues={initialHasBothVenues}
+                hasKalshi={initialHasKalshi}
+                hasPoly={initialHasPoly}
+                onNavigate={setActiveTab}
+              />
             )}
           </section>
         )}

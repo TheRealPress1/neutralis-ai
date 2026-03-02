@@ -52,8 +52,16 @@ const STATUS_CONFIG = {
 
 export default function AutomationPanel({
   refreshKey,
+  hasBothVenues = false,
+  hasKalshi = false,
+  hasPoly = false,
+  onNavigate,
 }: {
   refreshKey: number;
+  hasBothVenues?: boolean;
+  hasKalshi?: boolean;
+  hasPoly?: boolean;
+  onNavigate?: (tab: any) => void;
 }) {
   const [state, setState] = useState<AutomationState | null>(null);
   const [decisions, setDecisions] = useState<Decision[]>([]);
@@ -100,6 +108,8 @@ export default function AutomationPanel({
 
   async function handleToggle() {
     if (!state || state.status === "killed") return;
+    // Prevent starting without both venues configured
+    if (state.status !== "running" && !hasBothVenues) return;
     setToggling(true);
     setError(null);
     try {
@@ -187,6 +197,7 @@ export default function AutomationPanel({
   const cfg = STATUS_CONFIG[state.status];
   const isKilled = state.status === "killed";
   const isRunning = state.status === "running";
+  const canStart = hasBothVenues && !isKilled;
   const guardPassCount = (d: Decision) =>
     d.guard_results?.filter((g) => g.passed).length ?? 0;
   const guardTotalCount = (d: Decision) => d.guard_results?.length ?? 0;
@@ -249,6 +260,46 @@ export default function AutomationPanel({
               {state.killed_reason}
             </div>
           )}
+
+          {/* Missing API keys banner */}
+          {!isRunning && !hasBothVenues && (
+            <div className="mt-4 rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-3">
+              <p className="text-sm font-medium text-amber-400">
+                Exchange credentials required
+              </p>
+              <p className="mt-1 text-xs text-[#9ca3af]">
+                Both Kalshi and Polymarket must be configured before starting automation.
+              </p>
+              <ul className="mt-2 space-y-1 text-xs">
+                {!hasKalshi && (
+                  <li className="flex items-center gap-2 text-[#9ca3af]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                    Kalshi API keys not configured
+                  </li>
+                )}
+                {!hasPoly && (
+                  <li className="flex items-center gap-2 text-[#9ca3af]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                    Polymarket credentials not configured
+                  </li>
+                )}
+                {hasKalshi && hasPoly && (
+                  <li className="flex items-center gap-2 text-emerald-400">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    All credentials configured
+                  </li>
+                )}
+              </ul>
+              {onNavigate && (
+                <button
+                  onClick={() => onNavigate("connections")}
+                  className="mt-3 rounded-md bg-amber-400/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-400/20"
+                >
+                  Go to Connections
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Control buttons */}
@@ -256,9 +307,9 @@ export default function AutomationPanel({
           {/* Start / Pause toggle */}
           <button
             onClick={handleToggle}
-            disabled={toggling || isKilled}
+            disabled={toggling || isKilled || (!isRunning && !canStart)}
             className={`rounded-lg px-6 py-3 text-sm font-semibold transition-colors ${
-              isKilled
+              isKilled || (!isRunning && !canStart)
                 ? "cursor-not-allowed bg-[#1a1d21] text-[#9ca3af]"
                 : isRunning
                   ? "bg-amber-400/10 text-amber-400 hover:bg-amber-400/20"
@@ -271,7 +322,9 @@ export default function AutomationPanel({
                 ? "Automation Killed"
                 : isRunning
                   ? "Pause Automation"
-                  : "Start Automation"}
+                  : !canStart
+                    ? "Configure API Keys to Start"
+                    : "Start Automation"}
           </button>
 
           {/* Kill switch */}
