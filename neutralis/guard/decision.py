@@ -142,14 +142,16 @@ def evaluate_signal(
         suggested_size_dollars=suggested_size,
     )
 
+    failed_guards = [r for r in results if not r.passed]
     logger.info(
-        "Decision: signal=%s category=%s verdict=%s size=$%.2f guards=%d/%d passed",
+        "Decision: signal=%s category=%s verdict=%s size=$%.2f guards=%d/%d passed%s",
         signal.id,
         category,
         verdict.value,
         suggested_size,
         sum(1 for r in results if r.passed),
         len(results),
+        " FAILED=[%s]" % ", ".join(f"{r.guard_name}: {r.reason}" for r in failed_guards) if failed_guards else "",
         extra={"signal_id": signal.id},
     )
 
