@@ -68,7 +68,9 @@ class PipelineConfig:
     max_time_to_expiry_hours: float = 43800.0  # ~5 years (tournament/political markets)
     min_time_to_expiry_hours: float = 1.0
     fee_rate: float = 0.07
-    max_position_dollars: float = 25.0
+    max_position_dollars: float = field(
+        default_factory=lambda: float(os.environ.get("MAX_POSITION_DOLLARS", "25.0"))
+    )
     min_xp_edge_pct: float = 0.10  # Cross-platform arb threshold (lower — one side is fee-free)
     slippage_per_leg: float = 0.005  # $0.005 per leg execution buffer (price movement risk)
 
@@ -95,13 +97,21 @@ class MatchingConfig:
 
 @dataclass(frozen=True)
 class PortfolioConfig:
-    max_total_exposure_dollars: float = 500.0
-    max_event_exposure_dollars: float = 100.0
-    max_ticker_exposure_dollars: float = 50.0
+    max_total_exposure_dollars: float = field(
+        default_factory=lambda: float(os.environ.get("MAX_TOTAL_EXPOSURE", "500.0"))
+    )
+    max_event_exposure_dollars: float = field(
+        default_factory=lambda: float(os.environ.get("MAX_EVENT_EXPOSURE", "100.0"))
+    )
+    max_ticker_exposure_dollars: float = field(
+        default_factory=lambda: float(os.environ.get("MAX_TICKER_EXPOSURE", "50.0"))
+    )
     max_venue_exposure_pct: float = 0.80
     max_open_positions: int = 50
     # Daily loss circuit breaker — auto-pause trading when either limit is hit
-    max_daily_loss_dollars: float = 100.0  # absolute daily loss cap
+    max_daily_loss_dollars: float = field(
+        default_factory=lambda: float(os.environ.get("MAX_DAILY_LOSS", "100.0"))
+    )
     max_daily_loss_pct: float = 20.0  # daily loss as % of max_total_exposure (starting capital proxy)
 
 
@@ -188,8 +198,13 @@ class ExecutionConfig:
     polymarket_signature_type: int = field(
         default_factory=lambda: int(os.environ.get("POLYMARKET_SIGNATURE_TYPE", "0"))
     )
-    max_order_dollars: float = 50.0
-    balance_floor_dollars: float = 25.0
+    max_order_dollars: float = field(
+        default_factory=lambda: float(os.environ.get("MAX_ORDER_DOLLARS", "50.0"))
+    )
+    balance_floor_dollars: float = field(
+        default_factory=lambda: float(os.environ.get("BALANCE_FLOOR_DOLLARS", "25.0"))
+    )
+
     # Order placement timeout — max time to wait for an exchange API response
     order_timeout_sec: float = 15.0
     # Polymarket maintenance window suppression (Tuesdays ~7:00 AM ET, ~90s downtime)

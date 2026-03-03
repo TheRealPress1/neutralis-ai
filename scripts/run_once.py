@@ -506,14 +506,9 @@ def evaluate_and_execute_for_user(
                     logger.warning("Failed to init Kalshi executor for %s", uid[:8], exc_info=True)
                     live_kalshi = None
 
-            if creds.polymarket and settings.execution.live_trading_enabled:
+            if settings.execution.polymarket_private_key and settings.execution.live_trading_enabled:
                 try:
-                    live_poly = PolymarketExecutor.from_credentials(
-                        api_key=creds.polymarket.api_key,
-                        api_secret=creds.polymarket.api_secret,
-                        passphrase=creds.polymarket.passphrase,
-                        funder_address=creds.polymarket.funder_address,
-                    )
+                    live_poly = PolymarketExecutor(settings.execution)
                     logger.info("Live Polymarket execution ready for %s", uid[:8])
                 except Exception:
                     logger.warning("Failed to init Polymarket executor for %s", uid[:8], exc_info=True)
@@ -582,11 +577,112 @@ def evaluate_and_execute_for_user(
 
                 if decision.verdict == DecisionVerdict.PASS:
                     directional_selected += 1
-                    exec_result = paper_executor.execute(
-                        scored, decision, decision_db_id, tick_ctx, market=market,
+
+                    dir_live_ok = False
+                    logger.info(
+                        "Directional PASS: %s venue=%s live_poly=%s live_kalshi=%s entry_side=%s",
+                        scored.ticker[:20], market.venue,
+                        live_poly is not None, live_kalshi is not None,
+                        scored.entry_side,
                     )
-                    result.orders_created += len(exec_result.orders)
-                    result.fills_created += len(exec_result.fills)
+                    if live_poly is not None and market.venue == "polymarket":
+                        # Live execution for Polymarket directional signals
+                        token_id = (
+                            market.clob_token_ids[0]
+                            if market.clob_token_ids
+                            else None
+                        )
+                        if not token_id:
+                            logger.warning(
+                                "Directional %s: no CLOB token ID (clob_token_ids=%s), paper fallback",
+                                scored.ticker, market.clob_token_ids,
+                            )
+                        if not scored.entry_side:
+                            logger.warning(
+                                "Directional %s: no entry_side, paper fallback",
+                                scored.ticker,
+                            )
+                        if token_id and scored.entry_side:
+                            poly_side = "BUY" if scored.entry_side == "yes" else "SELL"
+                            leg_dollars = min(
+                                decision.suggested_size_dollars,
+                                settings.execution.max_order_dollars,
+                            )
+                            try:
+                                resp = live_poly.place_market_order(
+                                    token_id, poly_side, leg_dollars,
+                                )
+                                if resp.get("success"):
+                                    portfolio.record_fill(
+                                        scored, decision, decision_db_id,
+                                        is_paper=False,
+                                        execution_results=[{
+                                            "order_id": resp.get("orderID", ""),
+                                            "status": "executed",
+                                            "venue": "polymarket",
+                                        }],
+                                    )
+                                    dir_live_ok = True
+                                    logger.info(
+                                        "LIVE directional fill: %s %s $%.2f",
+                                        scored.entry_side, scored.ticker, leg_dollars,
+                                    )
+                                else:
+                                    logger.warning(
+                                        "Polymarket directional rejected: %s error=%s",
+                                        scored.ticker, resp.get("errorMsg", ""),
+                                    )
+                            except Exception:
+                                logger.warning(
+                                    "Polymarket directional failed: %s, paper fallback",
+                                    scored.ticker, exc_info=True,
+                                )
+
+                    elif live_kalshi is not None and market.venue != "polymarket":
+                        # Live execution for Kalshi directional signals
+                        if scored.entry_side:
+                            price_cents = max(1, min(99, round(
+                                (scored.yes_ask if scored.entry_side == "yes" else scored.no_ask) * 100
+                            )))
+                            leg_dollars = min(
+                                decision.suggested_size_dollars,
+                                settings.execution.max_order_dollars,
+                            )
+                            entry_price = price_cents / 100.0
+                            count = max(1, math.floor(leg_dollars / entry_price)) if entry_price > 0 else 1
+                            try:
+                                resp = live_kalshi.place_order(
+                                    scored.ticker, scored.entry_side, price_cents, count,
+                                )
+                                order = resp.get("order", {})
+                                if order.get("status") == "executed":
+                                    portfolio.record_fill(
+                                        scored, decision, decision_db_id,
+                                        is_paper=False,
+                                        execution_results=[order],
+                                    )
+                                    dir_live_ok = True
+                                    logger.info(
+                                        "LIVE directional fill: %s %s $%.2f on Kalshi",
+                                        scored.entry_side, scored.ticker, leg_dollars,
+                                    )
+                                else:
+                                    logger.warning(
+                                        "Kalshi directional not filled: %s status=%s",
+                                        scored.ticker, order.get("status"),
+                                    )
+                            except Exception:
+                                logger.warning(
+                                    "Kalshi directional failed: %s, paper fallback",
+                                    scored.ticker, exc_info=True,
+                                )
+
+                    if not dir_live_ok:
+                        exec_result = paper_executor.execute(
+                            scored, decision, decision_db_id, tick_ctx, market=market,
+                        )
+                        result.orders_created += len(exec_result.orders)
+                        result.fills_created += len(exec_result.fills)
                     dir_snapshot = portfolio.get_snapshot_filtered("high_probability_directional")
 
         # ── Guard evaluation (provisional) ──

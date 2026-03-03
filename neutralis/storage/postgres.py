@@ -39,7 +39,9 @@ class PostgresStorage:
         self._user_id: str | None = user_id
 
     def connect(self) -> None:
-        self._conn = psycopg.connect(self._dsn)
+        self._conn = psycopg.connect(self._dsn, prepare_threshold=None)
+        self._conn.autocommit = True
+        self._conn.execute("DEALLOCATE ALL")
         self._conn.autocommit = False
         logger.info("Connected to Postgres")
 

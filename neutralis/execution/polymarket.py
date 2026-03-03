@@ -92,11 +92,17 @@ class PolymarketExecutor:
             signature_type=signature_type,
             funder=funder_address,
         )
-        client.set_api_creds(ApiCreds(
-            api_key=api_key,
-            api_secret=api_secret,
-            api_passphrase=passphrase,
-        ))
+        if private_key:
+            # Derive fresh API creds from the private key — DB-stored creds
+            # may be stale or derived from a different key.
+            creds = client.create_or_derive_api_creds()
+            client.set_api_creds(creds)
+        else:
+            client.set_api_creds(ApiCreds(
+                api_key=api_key,
+                api_secret=api_secret,
+                api_passphrase=passphrase,
+            ))
         instance._client = client
         instance._last_request_ts = 0.0
         instance._order_timeout = order_timeout_sec
@@ -121,7 +127,7 @@ class PolymarketExecutor:
         try:
             resp = self._http.get("/tick-size", params={"token_id": token_id})
             resp.raise_for_status()
-            tick_size = resp.json().get("minimum_tick_size", "0.01")
+            tick_size = str(resp.json().get("minimum_tick_size", "0.01"))
             self._tick_size_cache[token_id] = tick_size
             return tick_size
         except Exception:
