@@ -36,6 +36,13 @@ def check_min_edge(
 
 
 def check_liquidity(market: NormalizedMarket, config: PipelineConfig) -> GuardResult:
+    # Kalshi's market API doesn't report liquidity — treat 0 as unknown and pass
+    if market.liquidity <= 0:
+        return GuardResult(
+            guard_name="liquidity",
+            passed=True,
+            reason="liquidity unknown (not reported by venue), deferring to orderbook depth",
+        )
     passed = market.liquidity >= config.min_liquidity_dollars
     return GuardResult(
         guard_name="liquidity",

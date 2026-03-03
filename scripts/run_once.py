@@ -578,12 +578,12 @@ def evaluate_and_execute_for_user(
                     scored, market, settings.directional,
                     portfolio_snapshot=dir_snapshot,
                 )
-                storage.save_decision(decision)
+                decision_db_id = storage.save_decision(decision)
 
                 if decision.verdict == DecisionVerdict.PASS:
                     directional_selected += 1
                     exec_result = paper_executor.execute(
-                        scored, decision, 0, tick_ctx, market=market,
+                        scored, decision, decision_db_id, tick_ctx, market=market,
                     )
                     result.orders_created += len(exec_result.orders)
                     result.fills_created += len(exec_result.fills)

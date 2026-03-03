@@ -99,9 +99,9 @@ def compute_size(
         mults = RISK_MULTIPLIERS.get(risk_level, RISK_MULTIPLIERS["moderate"])
         size *= mults["position_mult"]
 
-    # Never use more than 20% of reported liquidity
-    liquidity_cap = market.liquidity * 0.20
-    if liquidity_cap > 0:
+    # Never use more than 20% of reported liquidity (skip when liquidity unknown)
+    if market.liquidity > 0:
+        liquidity_cap = market.liquidity * 0.20
         size = min(size, liquidity_cap)
 
     # Confidence scaling: reduce size for low-confidence signals
