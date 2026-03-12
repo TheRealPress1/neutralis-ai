@@ -12,7 +12,7 @@ const FEATURES = [
   {
     title: "Cross-platform scanning",
     description:
-      "Monitors Kalshi and Polymarket in real-time for pricing discrepancies across matched markets.",
+      "Monitors Kalshi and Polymarket US in real-time for pricing discrepancies across matched markets.",
   },
   {
     title: "Risk-managed evaluation",
@@ -41,10 +41,9 @@ export default function OnboardingWizard({
   const [kalshiKeyId, setKalshiKeyId] = useState("");
   const [kalshiPem, setKalshiPem] = useState("");
 
-  // Polymarket
-  const [polyKey, setPolyKey] = useState("");
-  const [polySecret, setPolySecret] = useState("");
-  const [polyPassphrase, setPolyPassphrase] = useState("");
+  // Polymarket US
+  const [polyUSKeyId, setPolyUSKeyId] = useState("");
+  const [polyUSSecret, setPolyUSSecret] = useState("");
 
   function handleSkip() {
     startTransition(async () => {
@@ -78,18 +77,18 @@ export default function OnboardingWizard({
       });
     }
 
-    if (polyKey || polySecret || polyPassphrase) {
-      if (!polyKey || !polySecret || !polyPassphrase) {
+    if (polyUSKeyId || polyUSSecret) {
+      if (!polyUSKeyId || !polyUSSecret) {
         setError(
-          "Polymarket requires an API Key, API Secret, and Passphrase.",
+          "Polymarket US requires both a Key ID and a Secret Key.",
         );
         return;
       }
       keys.push({
-        platform: "polymarket",
-        api_key_id: polyKey.trim(),
-        api_secret: polySecret.trim(),
-        private_key_pem: polyPassphrase.trim(),
+        platform: "polymarket_us",
+        api_key_id: polyUSKeyId.trim(),
+        api_secret: polyUSSecret.trim(),
+        private_key_pem: "",
       });
     }
 
@@ -274,70 +273,56 @@ export default function OnboardingWizard({
           </div>
         </div>
 
-        {/* Polymarket */}
+        {/* Polymarket US */}
         <div className="card-panel card-accent rounded-xl p-6">
-          <h2 className="text-lg font-semibold mb-1">Polymarket</h2>
+          <div className="flex items-center gap-2 mb-1">
+            <h2 className="text-lg font-semibold">Polymarket US</h2>
+            <span className="text-[10px] font-normal text-[#9ca3af]">CFTC</span>
+          </div>
           <p className="text-sm text-[#9ca3af] mb-5">
-            Get your CLOB credentials from{" "}
+            Get your API credentials at{" "}
             <a
-              href="https://polymarket.com/settings?tab=builder"
+              href="https://polymarket.us/developer"
               target="_blank"
               rel="noopener noreferrer"
               className="text-[#e8e9ea] underline underline-offset-2 hover:text-white"
             >
-              polymarket.com &rarr; Profile &rarr; Builders
+              polymarket.us/developer
             </a>
           </p>
 
           <div className="space-y-4">
             <div>
               <label
-                htmlFor="poly-key"
+                htmlFor="poly-us-key-id"
                 className="block text-sm font-medium mb-2 text-[#e8e9ea]"
               >
-                API Key
+                Key ID
               </label>
               <input
-                id="poly-key"
+                id="poly-us-key-id"
                 type="text"
-                value={polyKey}
-                onChange={(e) => setPolyKey(e.target.value)}
+                value={polyUSKeyId}
+                onChange={(e) => setPolyUSKeyId(e.target.value)}
                 className={INPUT_CLASS}
-                placeholder="Your Polymarket CLOB API key"
+                placeholder="e.g. 71836b68-e570-42d4-b0fa-ab241c2e545a"
               />
             </div>
 
             <div>
               <label
-                htmlFor="poly-secret"
+                htmlFor="poly-us-secret"
                 className="block text-sm font-medium mb-2 text-[#e8e9ea]"
               >
-                API Secret
+                Secret Key
               </label>
               <input
-                id="poly-secret"
+                id="poly-us-secret"
                 type="password"
-                value={polySecret}
-                onChange={(e) => setPolySecret(e.target.value)}
+                value={polyUSSecret}
+                onChange={(e) => setPolyUSSecret(e.target.value)}
                 className={INPUT_CLASS}
-                placeholder="Your Polymarket API secret"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="poly-passphrase"
-                className="block text-sm font-medium mb-2 text-[#e8e9ea]"
-              >
-                Passphrase
-              </label>
-              <input
-                id="poly-passphrase"
-                type="password"
-                value={polyPassphrase}
-                onChange={(e) => setPolyPassphrase(e.target.value)}
-                className={INPUT_CLASS}
-                placeholder="Your Polymarket CLOB passphrase"
+                placeholder="Base64-encoded Ed25519 secret key"
               />
             </div>
           </div>

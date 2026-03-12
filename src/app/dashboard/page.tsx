@@ -42,10 +42,9 @@ export default async function DashboardPage() {
     (k: { platform: string }) => k.platform,
   );
   const hasKalshi = platforms.includes("kalshi");
-  const hasPoly = platforms.includes("polymarket");
-  const hasPolyWallet = platforms.includes("polymarket_wallet");
+  const hasPoly = platforms.includes("polymarket_us");
   const hasApiKeys = hasKalshi || hasPoly;
-  const hasBothVenues = hasKalshi && hasPoly && hasPolyWallet;
+  const hasBothVenues = hasKalshi && hasPoly;
 
   return (
     <DashboardShell
@@ -54,7 +53,7 @@ export default async function DashboardPage() {
       initialHasApiKeys={hasApiKeys}
       initialHasBothVenues={hasBothVenues}
       initialHasKalshi={hasKalshi}
-      initialHasPoly={hasPoly && hasPolyWallet}
+      initialHasPoly={hasPoly}
     />
   );
 }

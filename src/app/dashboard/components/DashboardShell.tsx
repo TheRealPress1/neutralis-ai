@@ -119,13 +119,13 @@ export default function DashboardShell({
                 <img src="/kalshi-icon.png" alt="Kalshi" className="h-[22px] w-[22px]" />
               </a>
               <a
-                href="https://polymarket.com/portfolio"
+                href="https://polymarket.us"
                 target="_blank"
                 rel="noopener noreferrer"
-                title="Polymarket"
+                title="Polymarket US"
                 className="flex items-center justify-center rounded opacity-85 transition-opacity hover:opacity-100"
               >
-                <img src="/polymarket-icon.svg" alt="Polymarket" className="h-[22px] w-[22px]" />
+                <img src="/polymarket-icon.svg" alt="Polymarket US" className="h-[22px] w-[22px]" />
               </a>
             </div>
           </div>

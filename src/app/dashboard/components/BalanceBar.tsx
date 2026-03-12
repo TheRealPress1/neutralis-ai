@@ -10,30 +10,6 @@ function fmt(n: number) {
   });
 }
 
-function WalletCopyRow({ address }: { address: string }) {
-  const [copied, setCopied] = useState(false);
-  const masked = address.slice(0, 6) + "..." + address.slice(-4);
-
-  function copy() {
-    navigator.clipboard.writeText(address).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  }
-
-  return (
-    <div className="mt-1.5 flex items-center gap-1.5">
-      <span className="font-mono text-xs text-[#9ca3af]">{masked}</span>
-      <button
-        onClick={copy}
-        className="rounded px-1.5 py-0.5 text-[10px] font-medium text-[#9ca3af] border border-[#2a2d31] hover:text-[#e8e9ea] hover:border-[#e8e9ea]/40 transition-colors"
-      >
-        {copied ? "Copied!" : "Copy"}
-      </button>
-    </div>
-  );
-}
-
 export default function BalanceBar({
   refreshKey,
   onNavigate,
@@ -103,7 +79,7 @@ export default function BalanceBar({
         )}
       </div>
 
-      {/* Polymarket */}
+      {/* Polymarket US */}
       <div className="card-panel rounded-xl p-5">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1a1d21]">
@@ -111,23 +87,21 @@ export default function BalanceBar({
           </div>
           <div className="min-w-0 flex-1">
             <p className="font-[family-name:var(--font-cormorant)] text-xs font-medium uppercase tracking-[0.15em] text-[#9ca3af]">
-              Polymarket Balance
+              Polymarket US
             </p>
           </div>
         </div>
         {loading ? (
           <div className="mt-3 h-7 w-24 animate-pulse rounded bg-[#12151a]" />
-        ) : balances?.polymarket ? (
+        ) : balances?.polymarket_us ? (
           <div className="mt-3">
-            <p className="font-mono text-2xl font-bold text-[#e8e9ea]">
-              ${fmt(balances.polymarket.balance)}
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              Connected
+            </span>
+            <p className="mt-1.5 text-xs text-[#9ca3af]">
+              CFTC-regulated sports markets
             </p>
-            <p className="mt-0.5 text-xs text-[#9ca3af]">
-              {balances.polymarket.balance === 0 ? "Send USDC on Polygon to fund" : "USDC"}
-            </p>
-            {balances.polymarket.walletAddress && (
-              <WalletCopyRow address={balances.polymarket.walletAddress} />
-            )}
           </div>
         ) : (
           <div className="mt-3">
@@ -137,7 +111,7 @@ export default function BalanceBar({
                 onClick={() => onNavigate("connections")}
                 className="mt-1 text-xs text-[#9ca3af] underline underline-offset-2 transition-colors hover:text-[#e8e9ea]"
               >
-                Connect Polymarket
+                Connect Polymarket US
               </button>
             )}
           </div>

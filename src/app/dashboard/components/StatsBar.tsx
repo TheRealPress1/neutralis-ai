@@ -11,7 +11,7 @@ interface LiveStats {
   open_positions: number;
   total_exposure: number;
   kalshi_positions: number;
-  polymarket_positions: number;
+  polymarket_us_positions: number;
 }
 
 export default function StatsBar({ refreshKey }: { refreshKey: number }) {
@@ -22,12 +22,12 @@ export default function StatsBar({ refreshKey }: { refreshKey: number }) {
     fetchLivePositions()
       .then((live) => {
         if (cancelled) return;
-        const all = [...live.kalshi, ...live.polymarket];
+        const all = [...live.kalshi, ...live.polymarket_us];
         setStats({
           open_positions: all.length,
           total_exposure: all.reduce((sum, p) => sum + p.market_value, 0),
           kalshi_positions: live.kalshi.length,
-          polymarket_positions: live.polymarket.length,
+          polymarket_us_positions: live.polymarket_us.length,
         });
       })
       .catch(() => { /* silent */ });
@@ -43,7 +43,7 @@ export default function StatsBar({ refreshKey }: { refreshKey: number }) {
     { label: "Open Positions", key: "open_positions", format: (v) => String(v) },
     { label: "Total Exposure", key: "total_exposure", format: (v) => `$${fmt(v)}` },
     { label: "Kalshi Positions", key: "kalshi_positions", format: (v) => String(v) },
-    { label: "Polymarket Positions", key: "polymarket_positions", format: (v) => String(v) },
+    { label: "Poly US Positions", key: "polymarket_us_positions", format: (v) => String(v) },
   ];
 
   return (

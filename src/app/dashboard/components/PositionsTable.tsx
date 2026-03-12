@@ -29,7 +29,7 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
         if (tab === "open") {
           const live = await fetchLivePositions();
           if (!cancelled) {
-            setLivePositions([...live.kalshi, ...live.polymarket]);
+            setLivePositions([...live.kalshi, ...live.polymarket_us]);
           }
         } else {
           const closed = await fetchPositions("closed");
