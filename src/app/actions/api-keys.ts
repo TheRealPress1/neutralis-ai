@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { encrypt, decrypt, tryEncrypt } from "@/lib/encryption";
-import { createSign, constants as cryptoConstants } from "crypto";
+import { createSign, createPrivateKey, sign, constants as cryptoConstants } from "crypto";
 import { rateLimit, SENSITIVE_LIMIT, getClientIp } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 
@@ -260,7 +260,81 @@ export async function testConnection(
 
 export interface ExchangeBalances {
   kalshi: { balance: number; portfolio_value: number } | null;
-  polymarket_us: { connected: boolean } | null;
+  polymarket_us: {
+    balance: number;
+    buying_power: number;
+    asset_value: number;
+  } | null;
+}
+
+const POLYMARKET_US_API = "https://api.polymarket.us";
+
+/**
+ * Ed25519 PKCS8 DER prefix for a 32-byte seed.
+ * ASN.1: SEQUENCE { INTEGER 0, SEQUENCE { OID 1.3.101.112 }, OCTET STRING { OCTET STRING { seed } } }
+ */
+const ED25519_PKCS8_PREFIX = Buffer.from(
+  "302e020100300506032b657004220420",
+  "hex",
+);
+
+function signPolyUSRequest(
+  keyId: string,
+  secretKey: string,
+  method: string,
+  path: string,
+): { headers: Record<string, string> } {
+  const timestampMs = Date.now().toString();
+  const message = `${timestampMs}${method}${path}`;
+
+  // Decode base64 secret key → take first 32 bytes (Ed25519 seed)
+  const secretBytes = Buffer.from(secretKey, "base64");
+  const seed = secretBytes.length >= 64 ? secretBytes.subarray(0, 32) : secretBytes;
+
+  // Build PKCS8 DER encoding for Ed25519 private key
+  const derKey = Buffer.concat([ED25519_PKCS8_PREFIX, seed]);
+  const keyObj = createPrivateKey({ key: derKey, format: "der", type: "pkcs8" });
+
+  const signature = sign(null, Buffer.from(message), keyObj);
+
+  return {
+    headers: {
+      "X-PM-Access-Key": keyId,
+      "X-PM-Timestamp": timestampMs,
+      "X-PM-Signature": signature.toString("base64"),
+    },
+  };
+}
+
+async function fetchPolymarketUSBalance(
+  keyId: string,
+  secretKey: string,
+): Promise<{ balance: number; buying_power: number; asset_value: number } | null> {
+  try {
+    const path = "/v1/account/balances";
+    const { headers } = signPolyUSRequest(keyId, secretKey, "GET", path);
+
+    const res = await fetch(`${POLYMARKET_US_API}${path}`, {
+      headers: { ...headers, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const balances = data.balances ?? [];
+    const usd = balances[0]; // Primary USD balance
+
+    if (!usd) return null;
+
+    return {
+      balance: usd.currentBalance ?? 0,
+      buying_power: usd.buyingPower ?? 0,
+      asset_value: usd.assetNotional ?? 0,
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function fetchKalshiBalance(
@@ -321,16 +395,21 @@ export async function fetchBalances(): Promise<ExchangeBalances> {
   const kalshiRow = keys.find((k) => k.platform === "kalshi");
   const polyUSRow = keys.find((k) => k.platform === "polymarket_us");
 
-  const kalshi = kalshiRow
-    ? await fetchKalshiBalance(
-        kalshiRow.api_key_id,
-        tryDecrypt(kalshiRow.private_key_pem),
-      )
-    : null;
-
-  // Polymarket US balance requires Ed25519 authenticated endpoint —
-  // credentials are stored for the Python daemon. Show connection status only.
-  const polymarket_us = polyUSRow ? { connected: true } : null;
+  // Fetch both in parallel
+  const [kalshi, polymarket_us] = await Promise.all([
+    kalshiRow
+      ? fetchKalshiBalance(
+          kalshiRow.api_key_id,
+          tryDecrypt(kalshiRow.private_key_pem),
+        )
+      : null,
+    polyUSRow
+      ? fetchPolymarketUSBalance(
+          polyUSRow.api_key_id,
+          tryDecrypt(polyUSRow.api_secret),
+        )
+      : null,
+  ]);
 
   return { kalshi, polymarket_us };
 }

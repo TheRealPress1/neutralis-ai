@@ -95,12 +95,22 @@ export default function BalanceBar({
           <div className="mt-3 h-7 w-24 animate-pulse rounded bg-[#12151a]" />
         ) : balances?.polymarket_us ? (
           <div className="mt-3">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              Connected
-            </span>
-            <p className="mt-1.5 text-xs text-[#9ca3af]">
-              CFTC-regulated sports markets
+            <p className="font-mono text-2xl font-bold text-[#e8e9ea]">
+              ${fmt(balances.polymarket_us.balance)}
+            </p>
+            <p className="mt-1 text-xs text-[#9ca3af]">
+              Buying power:{" "}
+              <span className="font-mono text-[#c0c5cb]">
+                ${fmt(balances.polymarket_us.buying_power)}
+              </span>
+              {balances.polymarket_us.asset_value > 0 && (
+                <>
+                  {" "}&middot; Positions:{" "}
+                  <span className="font-mono text-[#c0c5cb]">
+                    ${fmt(balances.polymarket_us.asset_value)}
+                  </span>
+                </>
+              )}
             </p>
           </div>
         ) : (
