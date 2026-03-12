@@ -252,14 +252,7 @@ class EventEngine:
             await self._ws.subscribe_ticker()  # All markets
             logger.info("Subscribed to ALL tickers (focus set too small: %d)", len(focus_tickers))
         else:
-            batch_size = 500
-            ticker_list = list(focus_tickers)
-            # First batch creates the subscription; subsequent batches add to it
-            first_batch = ticker_list[:batch_size]
-            await self._ws.subscribe_ticker(first_batch)
-            for i in range(batch_size, len(ticker_list), batch_size):
-                batch = ticker_list[i : i + batch_size]
-                await self._ws.update_subscription("ticker", add_tickers=batch)
+            await self._ws.subscribe_ticker(list(focus_tickers))
 
         await self._ws.subscribe_fills()
         await self._ws.subscribe_trades()

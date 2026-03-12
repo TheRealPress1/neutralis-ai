@@ -74,10 +74,17 @@ class PolymarketUSWebSocket:
 
         self._ws = self._client.ws.markets()
 
-        # Register handlers on the SDK's event emitter
+        # Register handlers on the SDK's event emitter.
+        # The SDK calls callbacks synchronously, so wrap async handlers
+        # to schedule them on the running event loop.
+        loop = asyncio.get_running_loop()
         for event_type, handlers in self._handlers.items():
             for handler in handlers:
-                self._ws.on(event_type, handler)
+                def _make_sync(h: MsgHandler):  # noqa: E306
+                    def _sync_wrapper(*args: Any) -> None:
+                        loop.create_task(h(*args))
+                    return _sync_wrapper
+                self._ws.on(event_type, _make_sync(handler))
 
         await self._ws.connect()
         self._running = True
