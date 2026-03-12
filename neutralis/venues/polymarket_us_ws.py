@@ -54,6 +54,14 @@ class PolymarketUSWebSocket:
 
     async def connect(self) -> None:
         """Initialize SDK client and connect the markets WS."""
+        # macOS Python doesn't include system CA certs — use certifi
+        import os
+        try:
+            import certifi
+            os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+        except ImportError:
+            pass
+
         from polymarket_us import AsyncPolymarketUS
 
         if self._key_id and self._secret_key:
