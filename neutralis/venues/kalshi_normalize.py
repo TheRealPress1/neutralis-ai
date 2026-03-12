@@ -15,6 +15,13 @@ from neutralis.models import (
 
 logger = get_logger(__name__)
 
+# Kalshi match series that produce 3-way markets (Team A / Team B / Draw)
+_MATCH_SERIES = frozenset({
+    "KXEPLGAME", "KXBUNDESLIGAGAME", "KXLIGUE1GAME", "KXSERIEAGAME",
+    "KXBRASILEIROGAME", "KXSCOTTISHPREMGAME", "KXUEFAGAME",
+})
+_DRAW_SUFFIXES = ("-TIE", "-DRAW", "-DRW")
+
 
 def _parse_dollar_str(val: Any, default: float = 0.0) -> float:
     """Convert Kalshi dollar string (e.g. '0.5500') to float."""
@@ -103,9 +110,20 @@ def normalize_market(
         yes_bids = _parse_orderbook_levels(ob_fp.get("yes_dollars"))
         no_bids = _parse_orderbook_levels(ob_fp.get("no_dollars"))
 
+    # Detect 3-way match outcome from ticker suffix
+    event_ticker = raw.get("event_ticker", "")
+    outcome_label = ""
+    series_prefix = event_ticker.split("-")[0] if event_ticker else ""
+    if series_prefix in _MATCH_SERIES and ticker.startswith(event_ticker + "-"):
+        suffix = ticker[len(event_ticker) + 1:]
+        if any(ticker.endswith(s) for s in _DRAW_SUFFIXES):
+            outcome_label = "draw"
+        else:
+            outcome_label = f"team:{suffix.lower()}"
+
     return NormalizedMarket(
         ticker=ticker,
-        event_ticker=raw.get("event_ticker", ""),
+        event_ticker=event_ticker,
         market_type=market_type,
         title=raw.get("title", ""),
         subtitle=raw.get("subtitle", ""),
@@ -123,4 +141,5 @@ def normalize_market(
         notional_value=_parse_dollar_str(raw.get("notional_value_dollars"), default=1.0),
         yes_bids=yes_bids,
         no_bids=no_bids,
+        outcome_label=outcome_label,
     )

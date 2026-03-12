@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from typing import Any, Optional
 
 from neutralis.logging import get_logger
 from neutralis.models import MarketStatus, MarketType, NormalizedMarket
+
+_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 logger = get_logger(__name__)
 
@@ -139,6 +142,19 @@ def normalize_us_market(raw: dict[str, Any]) -> Optional[NormalizedMarket]:
     else:
         status = MarketStatus.INACTIVE
 
+    # Detect 3-way match outcome from question text and slug
+    outcome_label = ""
+    q_lower = question.lower()
+    if "draw" in q_lower or " tie" in q_lower or "tie " in q_lower:
+        outcome_label = "draw"
+    elif market_sides and len(market_sides) == 2:
+        # Moneyline market — extract team outcome from slug suffix after date
+        date_match = _DATE_RE.search(slug)
+        if date_match:
+            after_date = slug[date_match.end():]
+            if after_date.startswith("-") and len(after_date) > 1:
+                outcome_label = f"team:{after_date[1:]}"
+
     return NormalizedMarket(
         ticker=slug,
         event_ticker=slug,
@@ -159,4 +175,5 @@ def normalize_us_market(raw: dict[str, Any]) -> Optional[NormalizedMarket]:
         venue="polymarket_us",
         market_slug=slug,
         poly_fee_tier="us_flat",
+        outcome_label=outcome_label,
     )

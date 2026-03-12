@@ -30,6 +30,7 @@ import os
 import httpx
 
 from neutralis.config import Settings, WebSocketConfig, load_settings, load_settings_with_profile
+from neutralis.guard.bankroll import build_dynamic_config, fetch_bankroll_from_executors
 from neutralis.services.user_credentials import load_active_users
 from neutralis.core.cross_scanner import scan_cross_platform
 from neutralis.core.matcher import MarketPair, match_markets
@@ -328,6 +329,7 @@ class EventEngine:
             asyncio.create_task(self._periodic_flush_discrepancies(), name="discrepancy_flush"),
             asyncio.create_task(self._periodic_kill_switch_check(), name="kill_switch"),
             asyncio.create_task(self._periodic_daily_loss_check(), name="daily_loss_check"),
+            asyncio.create_task(self._periodic_bankroll_refresh(), name="bankroll_refresh"),
         ]
         if self._poly_ws:
             self._tasks.append(
@@ -437,6 +439,12 @@ class EventEngine:
                 exc_info=True,
             )
             settings = base_settings
+
+        # ── Dynamic bankroll: fetch real exchange balances and scale limits ──
+        if settings.execution.live_trading_enabled:
+            bankroll = self._fetch_startup_bankroll(settings)
+            if bankroll >= 5.0:
+                settings = build_dynamic_config(bankroll, settings)
 
         # Fetch Kalshi via targeted series fetch — much faster than paginating 50k+ markets.
         # The general get_all_active_markets() caps at 50 pages (50k) but Kalshi has >50k
@@ -2682,6 +2690,64 @@ class EventEngine:
         except Exception:
             logger.warning("Failed to check automation state", exc_info=True)
         return False
+
+    # ── Bankroll refresh ──────────────────────────────────────────────
+
+    async def _periodic_bankroll_refresh(self) -> None:
+        """Re-fetch exchange balances every 5 min and update dynamic config."""
+        while self._running:
+            await asyncio.sleep(300.0)  # 5 minutes
+            if not self._running:
+                break
+            try:
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(
+                    self._executor_pool, self._refresh_bankroll,
+                )
+            except Exception:
+                logger.warning("Bankroll refresh failed", exc_info=True)
+
+    def _fetch_startup_bankroll(self, settings: Settings) -> float:
+        """Fetch live balances using per-user credentials. Called at startup."""
+        kalshi_exec = None
+        poly_us_exec = None
+        try:
+            if self._kalshi_key_id and self._kalshi_pem:
+                from neutralis.execution.kalshi import KalshiExecutor
+                kalshi_exec = KalshiExecutor.from_credentials(
+                    self._kalshi_key_id, self._kalshi_pem, settings.kalshi,
+                )
+            if settings.execution.polymarket_us_key_id:
+                from neutralis.execution.polymarket_us import PolymarketUSExecutor
+                poly_us_exec = PolymarketUSExecutor(settings.execution)
+
+            return fetch_bankroll_from_executors(kalshi_exec, poly_us_exec)
+        except Exception:
+            logger.warning("Failed to fetch startup bankroll", exc_info=True)
+            return 0.0
+        finally:
+            if kalshi_exec:
+                try:
+                    kalshi_exec.close()
+                except Exception:
+                    pass
+            if poly_us_exec:
+                try:
+                    poly_us_exec.close()
+                except Exception:
+                    pass
+
+    def _refresh_bankroll(self) -> None:
+        """Fetch live balances and update state.settings with dynamic config."""
+        state = self._state
+        if state is None:
+            return
+        if not state.settings.execution.live_trading_enabled:
+            return
+
+        bankroll = self._fetch_startup_bankroll(state.settings)
+        if bankroll >= 5.0:
+            state.settings = build_dynamic_config(bankroll, state.settings)
 
     # ── Health ─────────────────────────────────────────────────────────
 

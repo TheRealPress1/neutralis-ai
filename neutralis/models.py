@@ -91,6 +91,9 @@ class NormalizedMarket:
     # Polymarket US: human-readable market slug for order placement
     market_slug: str = ""
 
+    # 3-way match outcome: "draw", "team:<abbr>", or "" (standard binary)
+    outcome_label: str = ""
+
     snapshot_ts: datetime = field(default_factory=datetime.now)
 
 

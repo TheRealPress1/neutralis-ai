@@ -85,6 +85,15 @@ def scan_cross_platform(
             yes_venue = poly_venue
             no_venue = "kalshi"
 
+        # Polymarket US moneyline markets don't support BUY_SHORT (buying NO).
+        # Skip arbs that require a NO leg on Polymarket US.
+        if no_venue == "polymarket_us":
+            logger.debug(
+                "Skipping: NO leg on Polymarket US not supported: '%s' <-> '%s'",
+                k.title[:40], p.title[:40],
+            )
+            continue
+
         # Arb economics: buy YES on cheaper + buy NO on other = $1.00 return
         combined_cost = favored_yes + other_no
         gross_edge = 1.0 - combined_cost

@@ -212,6 +212,27 @@ def _temporal_score(market_a: NormalizedMarket, market_b: NormalizedMarket) -> f
 # Main matching function
 # ---------------------------------------------------------------------------
 
+def _outcomes_compatible(market_a: NormalizedMarket, market_b: NormalizedMarket) -> bool:
+    """Check if two markets represent compatible outcomes.
+
+    Both must be either standard (no label) or have matching labels.
+    Prevents draw markets from matching team-win markets.
+    """
+    la = market_a.outcome_label
+    lb = market_b.outcome_label
+
+    # Both standard binary: compatible
+    if not la and not lb:
+        return True
+
+    # One has label, other doesn't: incompatible
+    if bool(la) != bool(lb):
+        return False
+
+    # Both have labels: must match (case-insensitive)
+    return la.lower() == lb.lower()
+
+
 def _spread(market: NormalizedMarket) -> float:
     """Bid-ask spread on the YES side.
 
@@ -338,6 +359,15 @@ def match_markets(
                     "Rejected (spread): '%s' (%.2f) <-> '%s' (%.2f)",
                     k_market.title[:40], k_spread,
                     p_market.title[:40], p_spread,
+                )
+                continue
+
+            # Post-filter: outcome compatibility (prevents draw vs team-win matches)
+            if not _outcomes_compatible(k_market, p_market):
+                logger.debug(
+                    "Rejected (outcome): '%s' (%s) <-> '%s' (%s)",
+                    k_market.title[:40], k_market.outcome_label or "generic",
+                    p_market.title[:40], p_market.outcome_label or "generic",
                 )
                 continue
 

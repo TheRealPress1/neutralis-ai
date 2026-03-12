@@ -573,6 +573,16 @@ def evaluate_and_execute_for_user(
         except Exception:
             logger.warning("Failed to load credentials for %s", uid[:8], exc_info=True)
 
+        # ── Dynamic bankroll: fetch real exchange balances and scale limits ──
+        if settings.execution.live_trading_enabled:
+            from neutralis.guard.bankroll import fetch_bankroll_from_executors, build_dynamic_config
+            bankroll = fetch_bankroll_from_executors(
+                kalshi_executor=live_kalshi,
+                poly_us_executor=live_poly_us,
+            )
+            if bankroll >= 5.0:
+                settings = build_dynamic_config(bankroll, settings)
+
         # ── Load user's risk profile overrides ──
         category_overrides = None
         profile = load_active_profile(storage)
