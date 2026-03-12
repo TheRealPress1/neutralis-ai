@@ -85,12 +85,14 @@ def scan_cross_platform(
             yes_venue = poly_venue
             no_venue = "kalshi"
 
-        # Polymarket US moneyline markets don't support BUY_SHORT (buying NO).
-        # Skip arbs that require a NO leg on Polymarket US.
-        if no_venue == "polymarket_us":
+        # Polymarket US match moneyline markets don't support BUY_SHORT.
+        # Skip NO legs on Poly US only for 3-way match outcomes (outcome_label set).
+        # Binary markets (tournament winners, political) may support BUY_SHORT.
+        if no_venue == "polymarket_us" and p.outcome_label:
             logger.debug(
-                "Skipping: NO leg on Polymarket US not supported: '%s' <-> '%s'",
-                k.title[:40], p.title[:40],
+                "Skipping: NO leg on Polymarket US match market: '%s' (%s) <-> '%s' (%s)",
+                k.title[:40], k.outcome_label or "binary",
+                p.title[:40], p.outcome_label,
             )
             continue
 
