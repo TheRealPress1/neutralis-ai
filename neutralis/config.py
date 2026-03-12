@@ -300,7 +300,7 @@ class PolymarketWSConfig:
 @dataclass(frozen=True)
 class PolymarketUSConfig:
     """Polymarket US (CFTC-regulated) market data configuration."""
-    base_url: str = "https://api.polymarket.us"
+    base_url: str = "https://gateway.polymarket.us"
     default_market_limit: int = 100
     max_pages: int = 50
 

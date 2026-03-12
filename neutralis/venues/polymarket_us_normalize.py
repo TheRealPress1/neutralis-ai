@@ -45,21 +45,33 @@ def normalize_us_market(raw: dict[str, Any]) -> Optional[NormalizedMarket]:
     if not question:
         return None
 
-    # Only binary markets
-    market_type = raw.get("marketType", "binary")
-    if market_type != "binary":
-        return None
+    # Enrich title with team full names from marketSides for better cross-platform matching
+    sides = raw.get("marketSides", [])
+    team_names = []
+    for side in sides:
+        team = side.get("team", {})
+        name = team.get("name", "")
+        if name and name not in team_names:
+            team_names.append(name)
+    subtitle = " vs ".join(team_names) if team_names else ""
 
+    # Accept binary-like market types (moneyline = 2 sides, futures = multi-side)
     outcomes = raw.get("outcomes")
     if isinstance(outcomes, str):
         try:
             outcomes = json.loads(outcomes)
         except (json.JSONDecodeError, TypeError):
             outcomes = None
-    if outcomes and len(outcomes) != 2:
+
+    # Polymarket US sports markets have marketSides instead of outcomes
+    market_sides = raw.get("marketSides", [])
+
+    # Only binary (2-outcome) markets — moneyline, spread, total, etc.
+    n_outcomes = len(outcomes) if outcomes else len(market_sides)
+    if n_outcomes != 2:
         return None
 
-    # Parse outcome prices if available
+    # Parse outcome prices
     outcome_prices = raw.get("outcomePrices")
     if isinstance(outcome_prices, str):
         try:
@@ -69,14 +81,28 @@ def normalize_us_market(raw: dict[str, Any]) -> Optional[NormalizedMarket]:
 
     yes_price = 0.0
     no_price = 0.0
-    if outcome_prices and len(outcome_prices) >= 2 and outcomes:
-        for i, label in enumerate(outcomes):
-            label_lower = str(label).strip().lower()
-            if label_lower == "yes":
-                yes_price = _safe_float(outcome_prices[i])
-            elif label_lower == "no":
-                no_price = _safe_float(outcome_prices[i])
-        if yes_price == 0.0 and no_price == 0.0:
+    if outcome_prices and len(outcome_prices) >= 2:
+        # For sports markets: index 0 = first team (long), index 1 = second team (short)
+        # Map long side → "yes", short side → "no"
+        if market_sides and len(market_sides) >= 2:
+            for i, side in enumerate(market_sides):
+                if i < len(outcome_prices):
+                    if side.get("long", i == 0):
+                        yes_price = _safe_float(outcome_prices[i])
+                    else:
+                        no_price = _safe_float(outcome_prices[i])
+        elif outcomes:
+            # Standard yes/no or named outcomes
+            for i, label in enumerate(outcomes):
+                label_lower = str(label).strip().lower()
+                if label_lower == "yes":
+                    yes_price = _safe_float(outcome_prices[i])
+                elif label_lower == "no":
+                    no_price = _safe_float(outcome_prices[i])
+            if yes_price == 0.0 and no_price == 0.0:
+                yes_price = _safe_float(outcome_prices[0])
+                no_price = _safe_float(outcome_prices[1])
+        else:
             yes_price = _safe_float(outcome_prices[0])
             no_price = _safe_float(outcome_prices[1])
 
@@ -118,7 +144,7 @@ def normalize_us_market(raw: dict[str, Any]) -> Optional[NormalizedMarket]:
         event_ticker=slug,
         market_type=MarketType.BINARY,
         title=question,
-        subtitle="",
+        subtitle=subtitle,
         status=status,
         yes_bid=yes_bid,
         yes_ask=yes_ask,

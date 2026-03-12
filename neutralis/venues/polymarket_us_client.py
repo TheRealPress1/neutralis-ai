@@ -1,6 +1,7 @@
 """Read-only Polymarket US API client using httpx.
 
 Polymarket US (CFTC-regulated) market data endpoints.
+Base URL: https://gateway.polymarket.us (NOT api.polymarket.us)
 No authentication needed for read-only market data.
 """
 
@@ -80,18 +81,17 @@ class PolymarketUSClient:
         params: dict[str, Any] = {
             "limit": limit or self._cfg.default_market_limit,
             "offset": offset,
-            "active": str(active).lower(),
+            "closed": str(not active).lower(),
         }
         data = self._get("/v1/markets", params)
-        # Response may be a list or wrapped in an object
-        if isinstance(data, list):
-            markets = data
-        elif isinstance(data, dict):
+        if isinstance(data, dict):
             markets = data.get("markets", data.get("data", []))
-            if isinstance(markets, dict):
-                markets = [markets]
+        elif isinstance(data, list):
+            markets = data
         else:
             markets = []
+        if isinstance(markets, dict):
+            markets = [markets]
         logger.info(
             "Fetched %d Polymarket US markets (offset=%d)", len(markets), offset,
         )
