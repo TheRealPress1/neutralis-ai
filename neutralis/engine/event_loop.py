@@ -254,9 +254,12 @@ class EventEngine:
         else:
             batch_size = 500
             ticker_list = list(focus_tickers)
-            for i in range(0, len(ticker_list), batch_size):
+            # First batch creates the subscription; subsequent batches add to it
+            first_batch = ticker_list[:batch_size]
+            await self._ws.subscribe_ticker(first_batch)
+            for i in range(batch_size, len(ticker_list), batch_size):
                 batch = ticker_list[i : i + batch_size]
-                await self._ws.subscribe_ticker(batch)
+                await self._ws.update_subscription("ticker", add_tickers=batch)
 
         await self._ws.subscribe_fills()
         await self._ws.subscribe_trades()
