@@ -85,8 +85,11 @@ class NormalizedMarket:
     # Polymarket-specific: CLOB token IDs for WebSocket subscription
     clob_token_ids: tuple[str, ...] = ()
 
-    # Polymarket fee tier: "standard" (zero), "crypto", or "sports_fee"
+    # Polymarket fee tier: "standard" (zero), "crypto", "sports_fee", or "us_flat"
     poly_fee_tier: str = "standard"
+
+    # Polymarket US: human-readable market slug for order placement
+    market_slug: str = ""
 
     snapshot_ts: datetime = field(default_factory=datetime.now)
 
@@ -237,6 +240,8 @@ class Position:
     exit_price: Optional[float] = None
     signal_type: str = ""
     hwm_pnl_pct: float = 0.0
+    # Polymarket US: slug for order placement (empty for Kalshi/intl Poly)
+    market_slug: str = ""
 
 
 @dataclass(frozen=True)

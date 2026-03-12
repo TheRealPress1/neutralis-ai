@@ -213,6 +213,18 @@ class ExecutionConfig:
     use_maker_orders: bool = True
     maker_price_offset_cents: int = 1  # Post N cents inside the spread (bid + offset)
     maker_fill_timeout_sec: float = 10.0  # Cancel unfilled GTC order after this
+    # Polymarket US execution credentials (Ed25519)
+    polymarket_us_key_id: str = field(
+        default_factory=lambda: os.environ.get("POLYMARKET_US_KEY_ID", "")
+    )
+    polymarket_us_secret_key: str = field(
+        default_factory=lambda: os.environ.get("POLYMARKET_US_SECRET_KEY", "")
+    )
+    # Prefer US over international for sports markets when both are available
+    prefer_polymarket_us: bool = field(
+        default_factory=lambda: os.environ.get("PREFER_POLYMARKET_US", "true").lower()
+        in ("true", "1", "yes")
+    )
 
 
 @dataclass(frozen=True)
@@ -286,6 +298,26 @@ class PolymarketWSConfig:
 
 
 @dataclass(frozen=True)
+class PolymarketUSConfig:
+    """Polymarket US (CFTC-regulated) market data configuration."""
+    base_url: str = "https://api.polymarket.us"
+    default_market_limit: int = 100
+    max_pages: int = 50
+
+
+@dataclass(frozen=True)
+class PolymarketUSWSConfig:
+    enabled: bool = field(
+        default_factory=lambda: os.environ.get("POLYMARKET_US_WS_ENABLED", "").lower()
+        in ("true", "1", "yes")
+    )
+    ws_url: str = "wss://api.polymarket.us/v1/ws/markets"
+    reconnect_delay_sec: float = 1.0
+    max_reconnect_delay_sec: float = 60.0
+    max_subscriptions: int = 10  # Hard limit from US API
+
+
+@dataclass(frozen=True)
 class SchedulerConfig:
     scan_interval_sec: float = 30.0
     max_consecutive_errors: int = 5
@@ -327,6 +359,8 @@ class Settings:
     market_filter: MarketFilterConfig = field(default_factory=MarketFilterConfig)
     websocket: WebSocketConfig = field(default_factory=WebSocketConfig)
     polymarket_ws: PolymarketWSConfig = field(default_factory=PolymarketWSConfig)
+    polymarket_us: PolymarketUSConfig = field(default_factory=PolymarketUSConfig)
+    polymarket_us_ws: PolymarketUSWSConfig = field(default_factory=PolymarketUSWSConfig)
     directional: DirectionalConfig = field(default_factory=DirectionalConfig)
     performance_fees: PerformanceFeeConfig = field(default_factory=PerformanceFeeConfig)
 
@@ -373,5 +407,7 @@ def load_settings_with_profile(storage: object) -> Settings:
         market_filter=base.market_filter,
         websocket=base.websocket,
         polymarket_ws=base.polymarket_ws,
+        polymarket_us=base.polymarket_us,
+        polymarket_us_ws=base.polymarket_us_ws,
         performance_fees=base.performance_fees,
     )

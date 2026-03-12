@@ -16,6 +16,9 @@ certifi>=2024.0
 # Cryptography (RSA-PSS auth + AES-256-GCM key encryption)
 cryptography>=42.0,<47.0
 
-# Polymarket CLOB execution
+# Polymarket CLOB execution (international)
 py-clob-client>=0.34.5,<0.35
 eth-account>=0.10,<0.14
+
+# Polymarket US execution (CFTC-regulated, Ed25519 auth)
+polymarket-us>=0.1.2,<0.2

@@ -188,6 +188,86 @@ def _settle_polymarket(
     return settled, total_pnl
 
 
+def _settle_polymarket_us(
+    positions: list[Position],
+    portfolio: PortfolioManager,
+    settings: Settings,
+    notifier: DiscordNotifier | None = None,
+) -> tuple[int, float]:
+    """Check Polymarket US positions for resolved markets. Returns (settled, pnl)."""
+    if not positions:
+        return 0, 0.0
+
+    from neutralis.venues.polymarket_us_client import PolymarketUSClient
+
+    settled = 0
+    total_pnl = 0.0
+
+    try:
+        with PolymarketUSClient(settings.polymarket_us) as client:
+            for pos in positions:
+                try:
+                    raw = client.get_market_by_slug(pos.market_slug or pos.ticker)
+                except Exception:
+                    logger.warning(
+                        "Error fetching PolyUS market %s, skipping", pos.ticker,
+                    )
+                    continue
+
+                if raw is None:
+                    continue
+
+                # Polymarket US uses closed=true for settled markets
+                if not raw.get("closed", False):
+                    continue
+
+                # Determine resolution from outcome prices
+                outcome_prices = raw.get("outcomePrices", [])
+                result = ""
+                if outcome_prices and len(outcome_prices) >= 2:
+                    try:
+                        yes_price = float(outcome_prices[0])
+                    except (ValueError, TypeError):
+                        yes_price = -1.0
+
+                    if yes_price >= 0.99:
+                        result = "yes"
+                    elif yes_price <= 0.01:
+                        result = "no"
+                    else:
+                        continue  # Not clearly resolved
+
+                if not result or result not in ("yes", "no"):
+                    continue
+
+                price = _settlement_price(pos.side, result)
+                if price is None:
+                    continue
+
+                closed = portfolio.close_position(pos.id, price)
+                settled += 1
+                total_pnl += closed.realized_pnl
+
+                logger.info(
+                    "Settled: %s (polymarket_us) | result=%s | side=%s | P&L=$%.2f",
+                    pos.ticker,
+                    result,
+                    pos.side.value,
+                    closed.realized_pnl,
+                )
+                if notifier is not None:
+                    notifier.notify_settlement(
+                        ticker=pos.ticker,
+                        side=pos.side.value,
+                        result=result,
+                        pnl=closed.realized_pnl,
+                    )
+    except Exception:
+        logger.warning("Settlement: failed to connect to Polymarket US, skipping %d positions", len(positions))
+
+    return settled, total_pnl
+
+
 def run_settlement(
     settings: Settings,
     notifier: DiscordNotifier | None = None,
@@ -226,12 +306,14 @@ def run_settlement(
         # Group by venue
         kalshi_pos = [p for p in positions if p.venue == "kalshi"]
         poly_pos = [p for p in positions if p.venue == "polymarket"]
+        poly_us_pos = [p for p in positions if p.venue == "polymarket_us"]
 
         k_settled, k_pnl = _settle_kalshi(kalshi_pos, portfolio, settings, notifier)
         p_settled, p_pnl = _settle_polymarket(poly_pos, portfolio, settings, notifier)
+        us_settled, us_pnl = _settle_polymarket_us(poly_us_pos, portfolio, settings, notifier)
 
-        total_settled = k_settled + p_settled
-        total_pnl = k_pnl + p_pnl
+        total_settled = k_settled + p_settled + us_settled
+        total_pnl = k_pnl + p_pnl + us_pnl
 
         if total_settled > 0:
             logger.info(

@@ -14,7 +14,7 @@ def _compute_fee(price: float, quantity: float, venue: str, fee_tier: str = "sta
     """Compute total fee for a fill."""
     if venue == "kalshi":
         return round(kalshi_fee_per_contract(price) * quantity, 4)
-    if venue == "polymarket":
+    if venue in ("polymarket", "polymarket_us"):
         return round(polymarket_fee(price, int(quantity), fee_tier=fee_tier), 4)
     return round(kalshi_fee_per_contract(price) * quantity, 4)
 

@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { getApiKeys } from "@/app/actions/api-keys";
 
 export default function ConnectionsPanel() {
-  const [polyConnected, setPolyConnected] = useState(false);
+  const [polyUSConnected, setPolyUSConnected] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       const result = await getApiKeys();
       const keys = result.keys ?? [];
-      setPolyConnected(keys.some((k: { platform: string }) => k.platform === "polymarket"));
+      setPolyUSConnected(keys.some((k: { platform: string }) => k.platform === "polymarket_us"));
       setLoading(false);
     }
     load();
@@ -35,20 +35,33 @@ export default function ConnectionsPanel() {
         </span>
       </div>
 
-      {/* Polymarket */}
+      {/* Polymarket US (CFTC-regulated) */}
       <div className="py-3">
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-medium text-[#e8e9ea]">Polymarket</p>
+            <p className="font-medium text-[#e8e9ea]">
+              Polymarket US
+              <span className="ml-1.5 text-[10px] font-normal text-[#9ca3af]">CFTC</span>
+            </p>
             <p className="text-xs text-[#9ca3af] mt-0.5">
-              {polyConnected
-                ? "CLOB API credentials configured"
-                : "Not configured — add credentials in Onboarding"}
+              {polyUSConnected
+                ? "Ed25519 credentials configured"
+                : (<>
+                    Not configured &mdash; get API keys at{" "}
+                    <a
+                      href="https://polymarket.us/developer"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#e8e9ea] underline underline-offset-2 hover:text-white"
+                    >
+                      polymarket.us/developer
+                    </a>
+                  </>)}
             </p>
           </div>
           {loading ? (
             <div className="h-6 w-20 animate-pulse rounded-full bg-[#1a1d21]" />
-          ) : polyConnected ? (
+          ) : polyUSConnected ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
               Connected

@@ -127,6 +127,9 @@ def polymarket_fee_per_contract(
         return round(_POLY_CRYPTO_FEE_RATE * pq ** _POLY_CRYPTO_EXPONENT, 6)
     if fee_tier == "sports_fee":
         return round(_POLY_SPORTS_FEE_RATE * pq ** _POLY_SPORTS_EXPONENT, 6)
+    if fee_tier == "us_flat":
+        # Polymarket US flat taker fee — delegate to US-specific function
+        return round(price * _POLY_US_TAKER_FEE_RATE, 6)
     # standard — zero fees
     return 0.0
 
@@ -139,6 +142,39 @@ def polymarket_fee(
 ) -> float:
     """Total Polymarket fee for N contracts."""
     return polymarket_fee_per_contract(price, fee_tier=fee_tier) * contracts
+
+
+# -- Polymarket US fee schedule --
+# Source: https://docs.polymarket.us (Mar 2026)
+# Flat 0.10% taker fee on total contract premium, 0.10% maker rebate (net zero).
+
+_POLY_US_TAKER_FEE_RATE = 0.001  # 0.10%
+
+
+def polymarket_us_fee_per_contract(
+    price: float,
+    *,
+    maker: bool = False,
+) -> float:
+    """Per-contract Polymarket US fee.
+
+    Flat 0.10% taker on contract premium, maker rebate offsets fee (net zero).
+    """
+    if price <= 0 or price >= 1.0:
+        return 0.0
+    if maker:
+        return 0.0  # Rebate offsets fee
+    return round(price * _POLY_US_TAKER_FEE_RATE, 6)
+
+
+def polymarket_us_fee(
+    price: float,
+    contracts: int = 1,
+    *,
+    maker: bool = False,
+) -> float:
+    """Total Polymarket US fee for N contracts."""
+    return polymarket_us_fee_per_contract(price, maker=maker) * contracts
 
 
 def estimate_total_fee(
@@ -163,6 +199,11 @@ def estimate_total_fee(
         return (
             polymarket_fee(yes_price, contracts, fee_tier=fee_tier)
             + polymarket_fee(no_price, contracts, fee_tier=fee_tier)
+        )
+    if venue == "polymarket_us":
+        return (
+            polymarket_us_fee(yes_price, contracts, maker=maker)
+            + polymarket_us_fee(no_price, contracts, maker=maker)
         )
     # Unknown venue — conservative estimate using Kalshi taker rates
     return (
@@ -189,11 +230,15 @@ def estimate_cross_platform_fee(
     """
     if yes_venue == "kalshi":
         yes_fee = kalshi_fee(yes_price, contracts, maker=maker)
+    elif yes_venue == "polymarket_us":
+        yes_fee = polymarket_us_fee(yes_price, contracts, maker=maker)
     else:
         yes_fee = polymarket_fee(yes_price, contracts, fee_tier=yes_fee_tier)
 
     if no_venue == "kalshi":
         no_fee = kalshi_fee(no_price, contracts, maker=maker)
+    elif no_venue == "polymarket_us":
+        no_fee = polymarket_us_fee(no_price, contracts, maker=maker)
     else:
         no_fee = polymarket_fee(no_price, contracts, fee_tier=no_fee_tier)
 
@@ -216,6 +261,8 @@ def estimate_three_way_fee(
     for price, venue, tier in zip(prices, venues, fee_tiers):
         if venue == "kalshi":
             total += kalshi_fee(price, contracts, maker=maker)
+        elif venue == "polymarket_us":
+            total += polymarket_us_fee(price, contracts, maker=maker)
         else:
             total += polymarket_fee(price, contracts, fee_tier=tier)
     return total

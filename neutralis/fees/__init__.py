@@ -12,6 +12,8 @@ from neutralis.fees.exchange import (
     kalshi_fee_per_contract,
     polymarket_fee,
     polymarket_fee_per_contract,
+    polymarket_us_fee,
+    polymarket_us_fee_per_contract,
 )
 
 __all__ = [
@@ -20,6 +22,8 @@ __all__ = [
     "kalshi_fee",
     "polymarket_fee_per_contract",
     "polymarket_fee",
+    "polymarket_us_fee_per_contract",
+    "polymarket_us_fee",
     "estimate_total_fee",
     "estimate_cross_platform_fee",
     "estimate_three_way_fee",

@@ -66,7 +66,14 @@ from neutralis.venues.market_cache import MarketCache
 from neutralis.venues.polymarket_client import PolymarketClient
 from neutralis.venues.polymarket_normalize import normalize_market as poly_normalize, normalize_three_way_market as poly_normalize_three_way
 from neutralis.venues.polymarket_ws import PolymarketWebSocket
+from neutralis.venues.polymarket_us_client import PolymarketUSClient
+from neutralis.venues.polymarket_us_normalize import normalize_us_market as poly_us_normalize
+from neutralis.venues.polymarket_us_ws import PolymarketUSWebSocket
 from neutralis.core.attena_discovery import discover_supplementary_pairs, is_attena_enabled
+from neutralis.core.oddspipe_discovery import (
+    discover_supplementary_pairs as oddspipe_discover,
+    is_oddspipe_enabled,
+)
 
 logger = get_logger("event_engine")
 
@@ -130,6 +137,8 @@ class _LiveState:
     three_way_kalshi: dict[str, ThreeWayGroup] = field(default_factory=dict)
     # Reverse lookup: kalshi_ticker -> event_ticker (for WS updates)
     ticker_to_three_way: dict[str, str] = field(default_factory=dict)
+    # Polymarket US markets keyed by slug/ticker
+    poly_us_markets: dict[str, NormalizedMarket] = field(default_factory=dict)
     # Polymarket 3-way groups (for cross-venue merge on Kalshi refresh)
     poly_three_way: list[ThreeWayGroup] = field(default_factory=list)
     # Trade flow tracking
@@ -185,6 +194,7 @@ class EventEngine:
         self._kalshi_pem = kalshi_pem
         self._ws: KalshiWebSocket | None = None
         self._poly_ws: PolymarketWebSocket | None = None
+        self._poly_us_ws: PolymarketUSWebSocket | None = None
         self._state: _LiveState | None = None
         self._executor_pool = ThreadPoolExecutor(max_workers=4)
         self._market_cache = MarketCache()
@@ -200,6 +210,7 @@ class EventEngine:
         # Stale price protection: WS connection status flags
         self._kalshi_ws_connected: bool = False
         self._poly_ws_connected: bool = False
+        self._poly_us_ws_connected: bool = False
 
     async def start(self) -> None:
         """Initialize state, connect WS, and start all tasks."""
@@ -279,6 +290,32 @@ class EventEngine:
                 self._poly_ws = None
                 self._poly_ws_connected = False
 
+        # Step 4b: Connect Polymarket US WebSocket (10-instrument hard limit)
+        poly_us_ws_cfg = self._settings.polymarket_us_ws
+        if poly_us_ws_cfg.enabled and state.poly_us_markets:
+            top_slugs = self._pick_top_us_ws_slugs(state)
+            if top_slugs:
+                self._poly_us_ws = PolymarketUSWebSocket(
+                    key_id=self._settings.execution.polymarket_us_key_id,
+                    secret_key=self._settings.execution.polymarket_us_secret_key,
+                    reconnect_delay_sec=poly_us_ws_cfg.reconnect_delay_sec,
+                    max_reconnect_delay_sec=poly_us_ws_cfg.max_reconnect_delay_sec,
+                )
+                self._poly_us_ws.on("market_data", self._on_poly_us_market_data)
+                self._poly_us_ws.on("market_data_lite", self._on_poly_us_market_data)
+                try:
+                    await self._poly_us_ws.connect()
+                    await self._poly_us_ws.subscribe_markets(top_slugs)
+                    self._poly_us_ws_connected = True
+                    logger.info(
+                        "Polymarket US WS connected: %d slugs subscribed",
+                        len(top_slugs),
+                    )
+                except Exception:
+                    logger.warning("Failed to connect Polymarket US WS, falling back to REST polling", exc_info=True)
+                    self._poly_us_ws = None
+                    self._poly_us_ws_connected = False
+
         # Step 5: Start periodic tasks
         self._running = True
         self._paused = False
@@ -296,12 +333,17 @@ class EventEngine:
             self._tasks.append(
                 asyncio.create_task(self._poly_ws.listen(), name="poly_ws_listen")
             )
+        if self._poly_us_ws:
+            self._tasks.append(
+                asyncio.create_task(self._poly_us_ws.run_forever(), name="poly_us_ws_listen")
+            )
 
         logger.info(
-            "EventEngine running — %d Kalshi WS subs, %s Poly WS, %d periodic tasks",
+            "EventEngine running — %d Kalshi WS subs, %s Poly WS, %s Poly US WS, %d periodic tasks",
             len(focus_tickers),
             f"{self._poly_ws.subscribed_count} assets" if self._poly_ws else "REST-only",
-            len(self._tasks) - (2 if self._poly_ws else 1),
+            f"{self._poly_us_ws.subscribed_count} slugs" if self._poly_us_ws else "REST-only",
+            len(self._tasks) - sum([1, bool(self._poly_ws), bool(self._poly_us_ws)]),
         )
 
     async def run_until_stopped(self) -> None:
@@ -341,6 +383,15 @@ class EventEngine:
                     )
                     self._tasks.append(poly_ws_task)
                     restarted = True
+                elif task.get_name() == "poly_us_ws_listen" and self._running and self._poly_us_ws:
+                    logger.warning("Polymarket US WS listener died — marking disconnected, restarting")
+                    self._poly_us_ws_connected = False
+                    self._tasks.remove(task)
+                    poly_us_ws_task = asyncio.create_task(
+                        self._poly_us_ws.run_forever(), name="poly_us_ws_listen",
+                    )
+                    self._tasks.append(poly_us_ws_task)
+                    restarted = True
             if restarted:
                 await self.run_until_stopped()
                 return
@@ -352,12 +403,15 @@ class EventEngine:
         self._running = False
         self._kalshi_ws_connected = False
         self._poly_ws_connected = False
+        self._poly_us_ws_connected = False
         for task in self._tasks:
             task.cancel()
         if self._ws:
             await self._ws.close()
         if self._poly_ws:
             await self._poly_ws.close()
+        if self._poly_us_ws:
+            await self._poly_us_ws.close()
         self._executor_pool.shutdown(wait=False)
         logger.info(
             "EventEngine stopped — %d ticker updates, %d arb checks, %d signals, %d orders",
@@ -402,19 +456,41 @@ class EventEngine:
             if nm and nm.market_type == MarketType.BINARY:
                 kalshi_markets[nm.ticker] = nm
 
-        # Fetch Polymarket
-        with PolymarketClient(settings.polymarket) as client:
-            raw_poly = client.get_all_active_markets()
+        # Fetch Polymarket (international — only if credentials configured)
+        raw_poly: list[dict] = []
         poly_markets: dict[str, NormalizedMarket] = {}
-        for raw in raw_poly:
-            nm = poly_normalize(raw)
-            if nm and nm.market_type == MarketType.BINARY:
-                poly_markets[nm.ticker] = nm
+        if settings.execution.polymarket_private_key:
+            try:
+                with PolymarketClient(settings.polymarket) as client:
+                    raw_poly = client.get_all_active_markets()
+                for raw in raw_poly:
+                    nm = poly_normalize(raw)
+                    if nm and nm.market_type == MarketType.BINARY:
+                        poly_markets[nm.ticker] = nm
+            except Exception:
+                logger.warning("Failed to fetch international Polymarket markets", exc_info=True)
+        else:
+            logger.info("Skipping international Polymarket (no POLYMARKET_PRIVATE_KEY)")
 
-        # Match cross-platform
+        # Fetch Polymarket US (if credentials configured)
+        poly_us_markets: dict[str, NormalizedMarket] = {}
+        if settings.execution.polymarket_us_key_id:
+            try:
+                with PolymarketUSClient(settings.polymarket_us) as us_client:
+                    raw_poly_us = us_client.get_all_active_markets()
+                for raw in raw_poly_us:
+                    nm = poly_us_normalize(raw)
+                    if nm and nm.market_type == MarketType.BINARY:
+                        poly_us_markets[nm.ticker] = nm
+                logger.info("Polymarket US: %d binary markets fetched", len(poly_us_markets))
+            except Exception:
+                logger.warning("Failed to fetch Polymarket US markets", exc_info=True)
+
+        # Match cross-platform (international + US Polymarket combined)
+        all_poly_for_matching = list(poly_markets.values()) + list(poly_us_markets.values())
         pairs = match_markets(
             list(kalshi_markets.values()),
-            list(poly_markets.values()),
+            all_poly_for_matching,
             settings.matching,
         )
 
@@ -424,6 +500,13 @@ class EventEngine:
             if attena_pairs:
                 pairs = pairs + attena_pairs
                 logger.info("Attena: +%d supplementary pairs (total=%d)", len(attena_pairs), len(pairs))
+
+        # OddsPipe supplementary discovery (optional)
+        if is_oddspipe_enabled():
+            op_pairs = oddspipe_discover(kalshi_markets, poly_markets, pairs)
+            if op_pairs:
+                pairs = pairs + op_pairs
+                logger.info("OddsPipe: +%d supplementary pairs (total=%d)", len(op_pairs), len(pairs))
 
         xp_pairs: dict[str, tuple[MarketPair, str]] = {}
         poly_to_kalshi: dict[str, str] = {}
@@ -446,14 +529,15 @@ class EventEngine:
                     ticker_to_three_way[oc.ticker] = g.event_id
 
         logger.info(
-            "State built: %d Kalshi, %d Polymarket, %d pairs, %d 3-way matches (%d cross-venue)",
-            len(kalshi_markets), len(poly_markets), len(pairs),
+            "State built: %d Kalshi, %d Polymarket, %d Polymarket US, %d pairs, %d 3-way matches (%d cross-venue)",
+            len(kalshi_markets), len(poly_markets), len(poly_us_markets), len(pairs),
             len(three_way_kalshi), len(xv_three_way),
         )
 
         return _LiveState(
             kalshi_markets=kalshi_markets,
             poly_markets=poly_markets,
+            poly_us_markets=poly_us_markets,
             kalshi_raw=kalshi_raw,
             xp_pairs=xp_pairs,
             poly_to_kalshi=poly_to_kalshi,
@@ -521,6 +605,31 @@ class EventEngine:
             "Polymarket asset mappings: %d assets across %d paired markets",
             len(self._asset_id_to_poly), len(self._poly_ticker_to_assets),
         )
+
+    def _pick_top_us_ws_slugs(self, state: _LiveState) -> list[str]:
+        """Pick the top 10 Polymarket US slugs for WS subscription.
+
+        Ranks cross-platform pairs by arb proximity (how close to profitable).
+        Only includes US-venue markets.
+        """
+        candidates: list[tuple[float, str]] = []
+
+        for kalshi_ticker, (pair, poly_ticker) in state.xp_pairs.items():
+            pm = pair.polymarket_market
+            if pm.venue != "polymarket_us":
+                continue
+            km = state.kalshi_markets.get(kalshi_ticker)
+            if not km or km.yes_ask <= 0 or pm.yes_ask <= 0:
+                continue
+            # Lower combined = closer to arb
+            combined = min(
+                km.yes_ask + pm.no_ask,
+                pm.yes_ask + km.no_ask,
+            )
+            candidates.append((combined, pm.market_slug or pm.ticker))
+
+        candidates.sort()
+        return [slug for _, slug in candidates[:PolymarketUSWebSocket.MAX_SUBSCRIPTIONS]]
 
     # ── WebSocket message handlers ─────────────────────────────────────
 
@@ -948,6 +1057,60 @@ class EventEngine:
             len(affected_poly_tickers), len(asset_ids_to_remove),
         )
 
+    # ── Polymarket US WebSocket handlers ────────────────────────────────
+
+    async def _on_poly_us_market_data(self, msg: dict[str, Any]) -> None:
+        """Handle Polymarket US market data update — update cached prices and trigger arb check.
+
+        The SDK's event emitter delivers parsed market data with best_bid/best_ask.
+        """
+        state = self._state
+        if state is None:
+            return
+
+        if not self._poly_us_ws_connected:
+            self._poly_us_ws_connected = True
+            logger.info("Polymarket US WS reconnected — receiving price data again")
+
+        slug = msg.get("slug") or msg.get("market_slug") or ""
+        if not slug:
+            return
+
+        nm = state.poly_us_markets.get(slug)
+        if nm is None:
+            return
+
+        best_bid_str = msg.get("best_bid") or msg.get("bestBid")
+        best_ask_str = msg.get("best_ask") or msg.get("bestAsk")
+        if not best_bid_str or not best_ask_str:
+            return
+
+        try:
+            best_bid = float(best_bid_str)
+            best_ask = float(best_ask_str)
+        except (ValueError, TypeError):
+            return
+
+        if best_bid <= 0 or best_ask <= 0 or best_ask >= 1.0:
+            return
+
+        updated = replace(
+            nm,
+            yes_bid=best_bid,
+            yes_ask=best_ask,
+            no_bid=round(1.0 - best_ask, 4),
+            no_ask=round(1.0 - best_bid, 4),
+        )
+        state.poly_us_markets[slug] = updated
+        state.last_poly_update[slug] = time.monotonic()
+
+        # Trigger cross-platform arb check on the Kalshi side
+        kalshi_ticker = state.poly_to_kalshi.get(slug)
+        if kalshi_ticker:
+            kalshi_market = state.kalshi_markets.get(kalshi_ticker)
+            if kalshi_market:
+                await self._fast_arb_check(kalshi_ticker, kalshi_market, trigger_source="poly_us_ws")
+
     # ── Fast arb detection ─────────────────────────────────────────────
 
     def _signal_on_cooldown(self, state: _LiveState, ticker: str, signal_type: str) -> bool:
@@ -1058,7 +1221,7 @@ class EventEngine:
         xp_stale = False
         if pair_info:
             pair, poly_ticker = pair_info
-            poly_market = state.poly_markets.get(poly_ticker)
+            poly_market = state.poly_markets.get(poly_ticker) or state.poly_us_markets.get(poly_ticker)
             if poly_market and poly_market.yes_ask > 0:
                 # Stale Polymarket price guard: skip XP arb if Poly price is too old
                 poly_ts = state.last_poly_update.get(poly_ticker, 0.0)
@@ -1070,8 +1233,12 @@ class EventEngine:
                             "Stale price guard: Poly ticker %s last update %.1fs ago (max=%.1fs) — skipping XP arb",
                             poly_ticker, now_mono - poly_ts, max_age,
                         )
-                # Also skip XP if Polymarket WS is disconnected
-                if not self._poly_ws_connected and self._poly_ws is not None:
+                # Also skip XP if the relevant Polymarket WS is disconnected
+                if poly_market.venue == "polymarket_us":
+                    if not self._poly_us_ws_connected and self._poly_us_ws is not None:
+                        xp_stale = True
+                        state.signals_skipped_disconnected += 1
+                elif not self._poly_ws_connected and self._poly_ws is not None:
                     xp_stale = True
                     state.signals_skipped_disconnected += 1
 
@@ -1080,14 +1247,16 @@ class EventEngine:
 
                 if not xp_stale and k_yes > 0 and p_yes > 0 and abs(k_yes - p_yes) > 0.01:
                     # Determine arb direction
+                    # Use actual venue from NormalizedMarket (supports "polymarket" and "polymarket_us")
+                    p_venue = poly_market.venue or "polymarket"
                     if k_yes < p_yes:
                         favored_yes = k_yes
                         other_no = poly_market.no_ask
-                        yes_venue, no_venue = "kalshi", "polymarket"
+                        yes_venue, no_venue = "kalshi", p_venue
                     else:
                         favored_yes = p_yes
                         other_no = market.no_ask
-                        yes_venue, no_venue = "polymarket", "kalshi"
+                        yes_venue, no_venue = p_venue, "kalshi"
 
                     if other_no > 0:
                         combined = favored_yes + other_no
@@ -1210,7 +1379,7 @@ class EventEngine:
                 xp_entry = state.xp_pairs.get(ticker)
                 if xp_entry:
                     poly_ticker = xp_entry[1]
-                    poly_market = state.poly_markets.get(poly_ticker)
+                    poly_market = state.poly_markets.get(poly_ticker) or state.poly_us_markets.get(poly_ticker)
                     if poly_market and poly_market.clob_token_ids:
                         depth = state.poly_depth.get(poly_market.clob_token_ids[0])
                         if depth:
@@ -1493,10 +1662,20 @@ class EventEngine:
         settings: Settings, storage: PostgresStorage, portfolio: PortfolioManager,
     ) -> bool:
         """Attempt live order placement on Kalshi and/or Polymarket. Returns True if successful."""
+        # Venue is set correctly by cross_scanner.py from NormalizedMarket.venue:
+        #   "kalshi", "polymarket" (international), or "polymarket_us"
         kalshi_legs = [leg for leg in signal.legs if (leg.venue or "kalshi") == "kalshi"]
         poly_legs = [leg for leg in signal.legs if leg.venue == "polymarket"]
+        poly_us_legs = [leg for leg in signal.legs if leg.venue == "polymarket_us"]
 
-        # Cross-platform arb: both venues
+        # Cross-platform arb via Polymarket US
+        if kalshi_legs and poly_us_legs and settings.execution.polymarket_us_key_id:
+            return self._execute_cross_platform_us_live(
+                signal, decision, decision_id, settings, storage, portfolio,
+                kalshi_legs, poly_us_legs,
+            )
+
+        # Cross-platform arb via international Polymarket
         if kalshi_legs and poly_legs and settings.execution.polymarket_private_key:
             return self._execute_cross_platform_live(
                 signal, decision, decision_id, settings, storage, portfolio,
@@ -1550,6 +1729,101 @@ class EventEngine:
             logger.warning("Kalshi live execution TIMED OUT for %s", signal.ticker)
         except Exception:
             logger.warning("Kalshi live execution failed for %s", signal.ticker, exc_info=True)
+        return False
+
+    def _execute_cross_platform_us_live(
+        self, signal: Signal, decision: Decision, decision_id: int,
+        settings: Settings, storage: PostgresStorage, portfolio: PortfolioManager,
+        kalshi_legs: list[TradeLeg], poly_us_legs: list[TradeLeg],
+    ) -> bool:
+        """Execute cross-platform arb: Polymarket US FOK first, then Kalshi."""
+        from neutralis.execution.kalshi import KalshiExecutor
+        from neutralis.execution.polymarket_us import PolymarketUSExecutor
+
+        if settings.execution.suppress_poly_maintenance and _is_poly_maintenance_window():
+            logger.warning("Polymarket maintenance window — suppressing XP US execution")
+            return False
+
+        poly_us_results = []
+        kalshi_results = []
+
+        # Step 1: Execute Polymarket US leg(s) first
+        try:
+            with PolymarketUSExecutor(settings.execution) as us_exec:
+                for leg in poly_us_legs:
+                    state = self._state
+                    us_market = state.poly_us_markets.get(leg.ticker) if state else None
+                    slug = us_market.market_slug if us_market else ""
+                    if not slug:
+                        logger.warning("No market_slug for Poly US ticker %s — skipping", leg.ticker)
+                        return False
+
+                    if signal.combined_cost > 0:
+                        leg_frac = leg.price_dollars / signal.combined_cost
+                    else:
+                        leg_frac = 1.0 / max(len(signal.legs), 1)
+                    leg_dollars = decision.suggested_size_dollars * leg_frac
+                    leg_dollars = min(leg_dollars, settings.execution.max_order_dollars)
+
+                    resp = us_exec.place_market_order(slug, leg.side, leg_dollars)
+                    if resp.get("success"):
+                        poly_us_results.append({
+                            "order_id": resp.get("orderID", ""),
+                            "status": "executed",
+                            "venue": "polymarket_us",
+                        })
+                    else:
+                        logger.warning(
+                            "Polymarket US leg failed: %s error=%s",
+                            signal.ticker, resp.get("errorMsg", ""),
+                        )
+                        return False
+        except (TimeoutError, httpx.TimeoutException):
+            logger.warning("Polymarket US execution TIMED OUT for %s", signal.ticker)
+            return False
+        except Exception:
+            logger.warning("Polymarket US execution failed for %s", signal.ticker, exc_info=True)
+            return False
+
+        # Step 2: Kalshi FOK
+        try:
+            with KalshiExecutor(settings.kalshi, settings.execution) as k_exec:
+                for leg in kalshi_legs:
+                    price_cents = max(1, min(99, round(leg.price_dollars * 100)))
+                    if signal.combined_cost > 0:
+                        leg_frac = leg.price_dollars / signal.combined_cost
+                    else:
+                        leg_frac = 1.0 / max(len(signal.legs), 1)
+                    leg_dollars = decision.suggested_size_dollars * leg_frac
+                    leg_dollars = min(leg_dollars, settings.execution.max_order_dollars)
+                    count = max(1, math.floor(leg_dollars / leg.price_dollars))
+
+                    resp = k_exec.place_order(leg.ticker, leg.side, price_cents, count)
+                    order = resp.get("order", {})
+                    if order.get("status") == "executed":
+                        kalshi_results.append(order)
+                    else:
+                        logger.warning(
+                            "Kalshi leg FAILED after Poly US filled for %s — one-legged position",
+                            signal.ticker,
+                        )
+                        break
+        except (TimeoutError, httpx.TimeoutException):
+            logger.warning("Kalshi TIMED OUT after Poly US filled for %s", signal.ticker)
+        except Exception:
+            logger.warning("Kalshi failed after Poly US filled for %s", signal.ticker, exc_info=True)
+
+        all_results = poly_us_results + kalshi_results
+        if all_results:
+            portfolio.record_fill(
+                signal, decision, decision_id,
+                is_paper=False, execution_results=all_results,
+            )
+            logger.info(
+                "Cross-platform US taker: %s poly_us=%d kalshi=%d fills",
+                signal.ticker, len(poly_us_results), len(kalshi_results),
+            )
+            return True
         return False
 
     def _resolve_poly_token_id(self, poly_ticker: str, side: str) -> str | None:
@@ -2042,10 +2316,11 @@ class EventEngine:
             if nm and nm.market_type == MarketType.BINARY:
                 kalshi_markets[nm.ticker] = nm
 
-        # Re-match with existing Polymarket data
+        # Re-match with existing Polymarket data (international + US)
+        all_poly_for_matching = list(state.poly_markets.values()) + list(state.poly_us_markets.values())
         pairs = match_markets(
             list(kalshi_markets.values()),
-            list(state.poly_markets.values()),
+            all_poly_for_matching,
             settings.matching,
         )
 
@@ -2054,6 +2329,12 @@ class EventEngine:
             attena_pairs = discover_supplementary_pairs(kalshi_markets, state.poly_markets, pairs)
             if attena_pairs:
                 pairs = pairs + attena_pairs
+
+        # OddsPipe supplementary discovery on refresh
+        if is_oddspipe_enabled():
+            op_pairs = oddspipe_discover(kalshi_markets, state.poly_markets, pairs)
+            if op_pairs:
+                pairs = pairs + op_pairs
 
         xp_pairs: dict[str, tuple[MarketPair, str]] = {}
         poly_to_kalshi: dict[str, str] = {}
@@ -2109,6 +2390,12 @@ class EventEngine:
                         await self._poly_ws.update_subscription(remove_ids=to_remove)
                         logger.info("Poly WS: removed %d asset subscriptions", len(to_remove))
 
+                # Rotate Polymarket US WS subscriptions (10-instrument limit)
+                if self._poly_us_ws and self._poly_us_ws.is_connected and self._state:
+                    new_slugs = self._pick_top_us_ws_slugs(self._state)
+                    if new_slugs:
+                        await self._poly_us_ws.rotate_subscriptions(new_slugs)
+
             except Exception:
                 logger.exception("Polymarket refresh failed")
 
@@ -2118,21 +2405,41 @@ class EventEngine:
             return
         settings = state.settings
 
-        with PolymarketClient(settings.polymarket) as client:
-            raw_poly = client.get_all_active_markets()
-
+        # Refresh international Polymarket only if credentials configured
+        raw_poly: list[dict] = []
         poly_markets: dict[str, NormalizedMarket] = {}
-        for raw in raw_poly:
-            nm = poly_normalize(raw)
-            if nm and nm.market_type == MarketType.BINARY:
-                poly_markets[nm.ticker] = nm
+        if settings.execution.polymarket_private_key:
+            try:
+                with PolymarketClient(settings.polymarket) as client:
+                    raw_poly = client.get_all_active_markets()
+                for raw in raw_poly:
+                    nm = poly_normalize(raw)
+                    if nm and nm.market_type == MarketType.BINARY:
+                        poly_markets[nm.ticker] = nm
+            except Exception:
+                logger.warning("Failed to refresh international Polymarket markets", exc_info=True)
 
         state.poly_markets = poly_markets
 
-        # Re-match
+        # Also refresh Polymarket US markets
+        if settings.execution.polymarket_us_key_id:
+            try:
+                with PolymarketUSClient(settings.polymarket_us) as us_client:
+                    raw_poly_us = us_client.get_all_active_markets()
+                poly_us_markets: dict[str, NormalizedMarket] = {}
+                for raw in raw_poly_us:
+                    nm = poly_us_normalize(raw)
+                    if nm and nm.market_type == MarketType.BINARY:
+                        poly_us_markets[nm.ticker] = nm
+                state.poly_us_markets = poly_us_markets
+            except Exception:
+                logger.warning("Failed to refresh Polymarket US markets", exc_info=True)
+
+        # Re-match (international + US Polymarket combined)
+        all_poly_for_matching = list(poly_markets.values()) + list(state.poly_us_markets.values())
         pairs = match_markets(
             list(state.kalshi_markets.values()),
-            list(poly_markets.values()),
+            all_poly_for_matching,
             settings.matching,
         )
 
@@ -2141,6 +2448,12 @@ class EventEngine:
             attena_pairs = discover_supplementary_pairs(state.kalshi_markets, poly_markets, pairs)
             if attena_pairs:
                 pairs = pairs + attena_pairs
+
+        # OddsPipe supplementary discovery on Poly refresh
+        if is_oddspipe_enabled():
+            op_pairs = oddspipe_discover(state.kalshi_markets, poly_markets, pairs)
+            if op_pairs:
+                pairs = pairs + op_pairs
 
         xp_pairs: dict[str, tuple[MarketPair, str]] = {}
         poly_to_kalshi: dict[str, str] = {}
@@ -2419,8 +2732,11 @@ class EventEngine:
             "kalshi_ws_subscriptions": self._ws.subscribed_count if self._ws else 0,
             "poly_ws_connected": bool(poly_ws_ok),
             "poly_ws_subscriptions": self._poly_ws.subscribed_count if self._poly_ws else 0,
+            "poly_us_ws_connected": self._poly_us_ws_connected,
+            "poly_us_ws_subscriptions": self._poly_us_ws.subscribed_count if self._poly_us_ws else 0,
             "kalshi_markets": len(state.kalshi_markets) if state else 0,
             "poly_markets": len(state.poly_markets) if state else 0,
+            "poly_us_markets": len(state.poly_us_markets) if state else 0,
             "xp_pairs": len(state.xp_pairs) if state else 0,
             "three_way_groups": len(state.three_way_kalshi) if state else 0,
             "active_trade_flow_tickers": active_flow,

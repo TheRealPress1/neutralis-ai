@@ -46,6 +46,13 @@ VENUE_SLIPPAGE: dict[str, SlippageConfig] = {
         max_slippage_bps=150,
         impact_coefficient=0.3,
     ),
+    "polymarket_us": SlippageConfig(
+        base_slippage_bps=5,
+        thin_book_penalty_bps=30,
+        liquidity_threshold=200,
+        max_slippage_bps=150,
+        impact_coefficient=0.3,
+    ),
 }
 
 

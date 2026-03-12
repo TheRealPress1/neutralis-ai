@@ -66,6 +66,8 @@ def scan_cross_platform(
             continue
 
         # Determine which venue has cheaper YES
+        # Use the actual venue from the NormalizedMarket (supports "polymarket" and "polymarket_us")
+        poly_venue = p.venue or "polymarket"
         if kalshi_yes < poly_yes:
             favored = "kalshi"
             favored_yes = kalshi_yes
@@ -73,14 +75,14 @@ def scan_cross_platform(
             yes_ticker = k.ticker
             no_ticker = p.ticker
             yes_venue = "kalshi"
-            no_venue = "polymarket"
+            no_venue = poly_venue
         else:
-            favored = "polymarket"
+            favored = poly_venue
             favored_yes = poly_yes
             other_no = k.no_ask
             yes_ticker = p.ticker
             no_ticker = k.ticker
-            yes_venue = "polymarket"
+            yes_venue = poly_venue
             no_venue = "kalshi"
 
         # Arb economics: buy YES on cheaper + buy NO on other = $1.00 return

@@ -52,7 +52,13 @@ from neutralis.venues.kalshi_normalize import normalize_market as kalshi_normali
 from neutralis.venues.market_cache import MarketCache
 from neutralis.venues.polymarket_client import PolymarketClient
 from neutralis.venues.polymarket_normalize import normalize_market as poly_normalize, normalize_three_way_market as poly_normalize_three_way
+from neutralis.venues.polymarket_us_client import PolymarketUSClient
+from neutralis.venues.polymarket_us_normalize import normalize_us_market as poly_us_normalize
 from neutralis.core.attena_discovery import discover_supplementary_pairs, is_attena_enabled
+from neutralis.core.oddspipe_discovery import (
+    discover_supplementary_pairs as oddspipe_discover,
+    is_oddspipe_enabled,
+)
 
 logger = get_logger("pipeline")
 
@@ -105,6 +111,7 @@ class ScanResult:
     """Shared scan output — computed once per tick, reused for every user."""
     kalshi_markets: list[NormalizedMarket]
     poly_markets: list[NormalizedMarket]
+    poly_us_markets: list[NormalizedMarket]
     raw_kalshi: list[dict]
     raw_poly: list[dict]
     complement_signals: list[Signal]
@@ -196,10 +203,19 @@ def scan_markets(settings: Settings) -> ScanResult:
         with KalshiClient(settings.kalshi) as kalshi_client:
             raw_kalshi = kalshi_client.get_all_active_markets()
 
-    # Step 1b: Fetch active markets from Polymarket
-    logger.info("Step 1b: Fetching active markets from Polymarket")
-    with PolymarketClient(settings.polymarket) as poly_client:
-        raw_poly = poly_client.get_all_active_markets()
+    # Step 1b: Fetch active markets from Polymarket (international)
+    # Only fetch if international credentials are configured — the international
+    # platform is geo-blocked for US users, so skip to avoid wasted requests.
+    raw_poly: list[dict] = []
+    if settings.execution.polymarket_private_key:
+        logger.info("Step 1b: Fetching active markets from Polymarket (international)")
+        try:
+            with PolymarketClient(settings.polymarket) as poly_client:
+                raw_poly = poly_client.get_all_active_markets()
+        except Exception:
+            logger.warning("Failed to fetch international Polymarket markets, continuing without", exc_info=True)
+    else:
+        logger.info("Step 1b: Skipping international Polymarket (no POLYMARKET_PRIVATE_KEY)")
 
     # Step 2a: Normalize Kalshi (binary only)
     logger.info("Step 2a: Normalizing %d raw Kalshi markets", len(raw_kalshi))
@@ -218,6 +234,22 @@ def scan_markets(settings: Settings) -> ScanResult:
         if m is not None and m.market_type == MarketType.BINARY:
             poly_markets.append(m)
     logger.info("Normalized %d Polymarket binary markets", len(poly_markets))
+
+    # Step 1c + 2c: Fetch and normalize Polymarket US markets
+    poly_us_markets: list[NormalizedMarket] = []
+    if settings.execution.polymarket_us_key_id:
+        logger.info("Step 1c: Fetching active markets from Polymarket US")
+        try:
+            with PolymarketUSClient(settings.polymarket_us) as us_client:
+                raw_poly_us = us_client.get_all_active_markets()
+            logger.info("Step 2c: Normalizing %d raw Polymarket US markets", len(raw_poly_us))
+            for raw in raw_poly_us:
+                m = poly_us_normalize(raw)
+                if m is not None and m.market_type == MarketType.BINARY:
+                    poly_us_markets.append(m)
+            logger.info("Normalized %d Polymarket US binary markets", len(poly_us_markets))
+        except Exception:
+            logger.warning("Failed to fetch Polymarket US markets, continuing without", exc_info=True)
 
     # Step 3a: Complement arb scan (Kalshi only)
     logger.info("Step 3a: Running complement arb scanner")
@@ -240,9 +272,10 @@ def scan_markets(settings: Settings) -> ScanResult:
         if s.ticker not in settlement_tickers:
             complement_signals.append(s)
 
-    # Step 3b: Cross-platform matching
+    # Step 3b: Cross-platform matching (international + US Polymarket combined)
     logger.info("Step 3b: Matching markets across venues")
-    pairs = match_markets(kalshi_markets, poly_markets, settings.matching)
+    all_poly_for_matching = poly_markets + poly_us_markets
+    pairs = match_markets(kalshi_markets, all_poly_for_matching, settings.matching)
 
     # Step 3b2: Attena supplementary discovery (optional)
     if is_attena_enabled():
@@ -257,6 +290,19 @@ def scan_markets(settings: Settings) -> ScanResult:
                 len(pairs), len(attena_pairs),
             )
 
+    # Step 3b3: OddsPipe supplementary discovery (optional)
+    if is_oddspipe_enabled():
+        logger.info("Step 3b3: Running OddsPipe supplementary discovery")
+        op_kalshi = {m.ticker: m for m in kalshi_markets}
+        op_poly = {m.ticker: m for m in poly_markets}
+        oddspipe_pairs = oddspipe_discover(op_kalshi, op_poly, pairs)
+        if oddspipe_pairs:
+            pairs = pairs + oddspipe_pairs
+            logger.info(
+                "Total matches after OddsPipe: %d (%d supplementary)",
+                len(pairs), len(oddspipe_pairs),
+            )
+
     # Step 3c: Cross-platform signal scan
     logger.info("Step 3c: Scanning matched pairs for price discrepancies")
     xp_signals = scan_cross_platform(pairs, settings.matching, pipeline_config=settings.pipeline, maker=use_maker)
@@ -265,7 +311,7 @@ def scan_markets(settings: Settings) -> ScanResult:
     directional_signals: list[Signal] = []
     if settings.directional.enabled:
         logger.info("Step 3f: Running directional scanner on sports markets")
-        all_normalized = kalshi_markets + poly_markets
+        all_normalized = kalshi_markets + poly_markets + poly_us_markets
         directional_signals = scan_high_probability(all_normalized, settings.directional)
         logger.info("Directional scanner: %d signals found", len(directional_signals))
 
@@ -304,6 +350,7 @@ def scan_markets(settings: Settings) -> ScanResult:
     return ScanResult(
         kalshi_markets=kalshi_markets,
         poly_markets=poly_markets,
+        poly_us_markets=poly_us_markets,
         raw_kalshi=raw_kalshi,
         raw_poly=raw_poly,
         complement_signals=complement_signals,
@@ -479,6 +526,7 @@ def evaluate_and_execute_for_user(
         # ── Initialize executors from user's credentials ──
         live_kalshi = None
         live_poly = None
+        live_poly_us = None
         try:
             from neutralis.execution.kalshi import KalshiExecutor
             from neutralis.execution.polymarket import PolymarketExecutor
@@ -513,6 +561,15 @@ def evaluate_and_execute_for_user(
                 except Exception:
                     logger.warning("Failed to init Polymarket executor for %s", uid[:8], exc_info=True)
                     live_poly = None
+
+            if settings.execution.polymarket_us_key_id and settings.execution.live_trading_enabled:
+                try:
+                    from neutralis.execution.polymarket_us import PolymarketUSExecutor
+                    live_poly_us = PolymarketUSExecutor(settings.execution)
+                    logger.info("Live Polymarket US execution ready for %s", uid[:8])
+                except Exception:
+                    logger.warning("Failed to init Polymarket US executor for %s", uid[:8], exc_info=True)
+                    live_poly_us = None
         except Exception:
             logger.warning("Failed to load credentials for %s", uid[:8], exc_info=True)
 
@@ -638,7 +695,50 @@ def evaluate_and_execute_for_user(
                                     scored.ticker, exc_info=True,
                                 )
 
-                    elif live_kalshi is not None and market.venue != "polymarket":
+                    elif live_poly_us is not None and market.venue == "polymarket_us":
+                        # Live execution for Polymarket US directional signals
+                        slug = market.market_slug
+                        if not slug:
+                            logger.warning(
+                                "Directional %s: no market_slug, paper fallback",
+                                scored.ticker,
+                            )
+                        elif scored.entry_side:
+                            leg_dollars = min(
+                                decision.suggested_size_dollars,
+                                settings.execution.max_order_dollars,
+                            )
+                            try:
+                                resp = live_poly_us.place_market_order(
+                                    slug, scored.entry_side, leg_dollars,
+                                )
+                                if resp.get("success"):
+                                    portfolio.record_fill(
+                                        scored, decision, decision_db_id,
+                                        is_paper=False,
+                                        execution_results=[{
+                                            "order_id": resp.get("orderID", ""),
+                                            "status": "executed",
+                                            "venue": "polymarket_us",
+                                        }],
+                                    )
+                                    dir_live_ok = True
+                                    logger.info(
+                                        "LIVE directional fill: %s %s $%.2f on Polymarket US",
+                                        scored.entry_side, scored.ticker, leg_dollars,
+                                    )
+                                else:
+                                    logger.warning(
+                                        "Polymarket US directional rejected: %s error=%s",
+                                        scored.ticker, resp.get("errorMsg", ""),
+                                    )
+                            except Exception:
+                                logger.warning(
+                                    "Polymarket US directional failed: %s, paper fallback",
+                                    scored.ticker, exc_info=True,
+                                )
+
+                    elif live_kalshi is not None and market.venue not in ("polymarket", "polymarket_us"):
                         # Live execution for Kalshi directional signals
                         if scored.entry_side:
                             price_cents = max(1, min(99, round(
@@ -717,8 +817,9 @@ def evaluate_and_execute_for_user(
 
         # ── Execute selected signals ──
         selected_count = 0
-        # Build Polymarket ticker → NormalizedMarket lookup for token_id resolution
+        # Build Polymarket ticker → NormalizedMarket lookup for token_id / slug resolution
         poly_by_ticker = {m.ticker: m for m in scan.poly_markets}
+        poly_by_ticker.update({m.ticker: m for m in scan.poly_us_markets})
 
         for signal, decision in ranked:
             decision_id = storage.save_decision(decision)
@@ -727,9 +828,12 @@ def evaluate_and_execute_for_user(
                 selected_count += 1
 
                 # Attempt live execution if enabled
+                # Venue is set correctly by cross_scanner.py from the NormalizedMarket.venue field:
+                #   "kalshi", "polymarket" (international), or "polymarket_us"
                 live_results = None
                 kalshi_legs = [leg for leg in signal.legs if (leg.venue or "kalshi") == "kalshi"]
                 poly_legs = [leg for leg in signal.legs if leg.venue == "polymarket"]
+                poly_us_legs = [leg for leg in signal.legs if leg.venue == "polymarket_us"]
 
                 if poly_legs and kalshi_legs and live_kalshi is not None and live_poly is not None:
                     # ── Polymarket maintenance window check ──
@@ -850,7 +954,109 @@ def evaluate_and_execute_for_user(
                         )
                         live_results = xp_results
 
-                elif not poly_legs and live_kalshi is not None:
+                elif poly_us_legs and kalshi_legs and live_kalshi is not None and live_poly_us is not None:
+                    # ── Cross-platform: Polymarket US first, then Kalshi ──
+                    xp_results: list[dict] = []
+                    xp_ok = True
+
+                    for leg in poly_us_legs:
+                        if signal.combined_cost > 0:
+                            leg_frac = leg.price_dollars / signal.combined_cost
+                        else:
+                            leg_frac = 1.0 / max(len(signal.legs), 1)
+                        leg_dollars = decision.suggested_size_dollars * leg_frac
+                        leg_dollars = min(leg_dollars, settings.execution.max_order_dollars)
+
+                        us_market = poly_by_ticker.get(leg.ticker)
+                        slug = us_market.market_slug if us_market else ""
+                        if not slug:
+                            logger.warning(
+                                "No market_slug for Polymarket US ticker %s, falling back to paper",
+                                leg.ticker,
+                            )
+                            xp_ok = False
+                            break
+
+                        try:
+                            resp = live_poly_us.place_market_order(slug, leg.side, leg_dollars)
+                            if resp.get("success"):
+                                xp_results.append({
+                                    "order_id": resp.get("orderID", ""),
+                                    "status": "executed",
+                                    "venue": "polymarket_us",
+                                })
+                            else:
+                                logger.warning(
+                                    "Polymarket US order rejected: %s error=%s",
+                                    leg.ticker, resp.get("errorMsg", ""),
+                                )
+                                xp_ok = False
+                                break
+                        except (TimeoutError, httpx.TimeoutException):
+                            logger.warning(
+                                "Polymarket US order TIMED OUT for %s, falling back to paper",
+                                leg.ticker,
+                            )
+                            xp_ok = False
+                            break
+                        except Exception:
+                            logger.warning(
+                                "Polymarket US order failed for %s, falling back to paper",
+                                leg.ticker, exc_info=True,
+                            )
+                            xp_ok = False
+                            break
+
+                    if xp_ok:
+                        for leg in kalshi_legs:
+                            price_cents = max(1, min(99, round(leg.price_dollars * 100)))
+                            if signal.combined_cost > 0:
+                                leg_frac = leg.price_dollars / signal.combined_cost
+                            else:
+                                leg_frac = 1.0 / max(len(signal.legs), 1)
+                            leg_dollars = decision.suggested_size_dollars * leg_frac
+                            leg_dollars = min(leg_dollars, settings.execution.max_order_dollars)
+                            count = max(1, math.floor(leg_dollars / leg.price_dollars))
+                            try:
+                                resp = live_kalshi.place_order(
+                                    leg.ticker, leg.side, price_cents, count,
+                                )
+                                order = resp.get("order", {})
+                                if order.get("status") == "executed":
+                                    xp_results.append(order)
+                                else:
+                                    logger.warning(
+                                        "Kalshi order not filled after Poly US fill: %s status=%s",
+                                        leg.ticker, order.get("status"),
+                                    )
+                                    xp_ok = False
+                                    break
+                            except (TimeoutError, httpx.TimeoutException):
+                                logger.warning(
+                                    "Kalshi order TIMED OUT after Poly US fill: %s",
+                                    leg.ticker,
+                                )
+                                xp_ok = False
+                                break
+                            except Exception:
+                                logger.warning(
+                                    "Kalshi order failed after Poly US fill: %s",
+                                    leg.ticker, exc_info=True,
+                                )
+                                xp_ok = False
+                                break
+
+                    if xp_ok and xp_results:
+                        live_results = xp_results
+                    elif xp_results:
+                        logger.warning(
+                            "Cross-platform (US) partial fill: %d/%d legs filled, "
+                            "recording partial — exit strategies will manage risk",
+                            len(xp_results), len(signal.legs),
+                        )
+                        live_results = xp_results
+
+                elif not poly_legs and not poly_us_legs and live_kalshi is not None:
                     # ── Kalshi-only signal ──
                     results = []
                     all_filled = True
@@ -937,6 +1143,8 @@ def evaluate_and_execute_for_user(
         live_kalshi.close()
     if live_poly is not None:
         live_poly.close()
+    if live_poly_us is not None:
+        live_poly_us.close()
 
     return result
 

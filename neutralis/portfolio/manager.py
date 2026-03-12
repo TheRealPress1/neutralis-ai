@@ -333,6 +333,7 @@ class PortfolioManager:
 
         kalshi_pos = [p for p in positions if p.venue == "kalshi"]
         poly_pos = [p for p in positions if p.venue == "polymarket"]
+        poly_us_pos = [p for p in positions if p.venue == "polymarket_us"]
         marked = 0
 
         # Mark Kalshi positions
@@ -367,7 +368,7 @@ class PortfolioManager:
                         pos.ticker, pos.side.value, current_price, pnl,
                     )
 
-        # Mark Polymarket positions
+        # Mark Polymarket (international) positions
         if poly_pos:
             with PolymarketClient(settings.polymarket) as client:
                 for pos in poly_pos:
@@ -398,6 +399,43 @@ class PortfolioManager:
                         "MTM: %s %s price=%.4f pnl=$%.2f",
                         pos.ticker, pos.side.value, current_price, pnl,
                     )
+
+        # Mark Polymarket US positions
+        if poly_us_pos:
+            from neutralis.venues.polymarket_us_client import PolymarketUSClient
+            try:
+                with PolymarketUSClient(settings.polymarket_us) as us_client:
+                    for pos in poly_us_pos:
+                        try:
+                            raw = us_client.get_market_by_slug(pos.market_slug or pos.ticker)
+                        except Exception:
+                            logger.warning("MTM: error fetching PolyUS %s, skipping", pos.ticker)
+                            continue
+                        if raw is None:
+                            continue
+
+                        best_bid = raw.get("bestBid")
+                        best_ask = raw.get("bestAsk")
+                        if best_bid is None or best_ask is None:
+                            continue
+
+                        try:
+                            if pos.side == TradeSide.BUY_YES:
+                                current_price = float(best_bid)
+                            else:
+                                current_price = 1.0 - float(best_ask)
+                        except (ValueError, TypeError):
+                            continue
+
+                        pnl = round(current_price * pos.quantity - pos.size_dollars, 4)
+                        self._storage.update_unrealized_pnl(pos.id, pnl)
+                        marked += 1
+                        logger.debug(
+                            "MTM: %s %s price=%.4f pnl=$%.2f",
+                            pos.ticker, pos.side.value, current_price, pnl,
+                        )
+            except Exception:
+                logger.warning("MTM: failed to connect to Polymarket US, skipping %d positions", len(poly_us_pos))
 
         logger.info("Marked %d/%d open positions to market", marked, len(positions))
         return marked
@@ -438,6 +476,7 @@ class PortfolioManager:
 
         kalshi_pos = [p for p in positions if p.venue == "kalshi"]
         poly_pos = [p for p in positions if p.venue == "polymarket"]
+        poly_us_pos = [p for p in positions if p.venue == "polymarket_us"]
 
         # Fetch current bid prices (conservative exit prices)
         bid_prices: dict[str, float] = {}
@@ -471,6 +510,27 @@ class PortfolioManager:
                             bid_prices[pos.id] = float(outcome_prices[idx])
                     except Exception:
                         logger.warning("Exit: error fetching bid for %s", pos.ticker)
+
+        if poly_us_pos:
+            from neutralis.venues.polymarket_us_client import PolymarketUSClient
+            try:
+                with PolymarketUSClient(settings.polymarket_us) as us_client:
+                    for pos in poly_us_pos:
+                        try:
+                            raw = us_client.get_market_by_slug(pos.market_slug or pos.ticker)
+                            if raw is None:
+                                continue
+                            best_bid = raw.get("bestBid")
+                            best_ask = raw.get("bestAsk")
+                            if best_bid is not None and best_ask is not None:
+                                if pos.side == TradeSide.BUY_YES:
+                                    bid_prices[pos.id] = float(best_bid)
+                                else:
+                                    bid_prices[pos.id] = 1.0 - float(best_ask)
+                        except Exception:
+                            logger.warning("Exit: error fetching bid for PolyUS %s", pos.ticker)
+            except Exception:
+                logger.warning("Exit: failed to connect to Polymarket US")
 
         exits: list[tuple[Position, str, float]] = []
 
