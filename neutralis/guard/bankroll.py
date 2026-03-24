@@ -26,16 +26,22 @@ _MIN_BANKROLL = 5.0            # Below this, don't trade (dust)
 
 
 def extract_poly_us_balance(balance_data: dict[str, Any]) -> float:
-    """Extract USD cash balance from PolymarketUSExecutor.get_balance() response."""
+    """Extract USD available balance from PolymarketUSExecutor.get_balance() response.
+
+    Uses ``buyingPower`` (actual available cash) instead of ``currentBalance``
+    which inflates by margin collateral for open positions.  For a $10 deposit
+    with $28 in short-position margin, currentBalance reports $29 while
+    buyingPower correctly reports ~$1.
+    """
     if not balance_data:
         return 0.0
     # SDK returns {"balances": [{"currentBalance": ..., "buyingPower": ...}]}
     balances = balance_data.get("balances", [])
     if balances and len(balances) > 0:
-        return float(balances[0].get("currentBalance", 0) or 0)
+        return float(balances[0].get("buyingPower", 0) or 0)
     # Fallback: maybe the response IS the balance object directly
-    if "currentBalance" in balance_data:
-        return float(balance_data.get("currentBalance", 0) or 0)
+    if "buyingPower" in balance_data:
+        return float(balance_data.get("buyingPower", 0) or 0)
     return 0.0
 
 

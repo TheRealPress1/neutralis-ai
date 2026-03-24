@@ -140,6 +140,12 @@ class PolymarketUSExecutor:
             elif "FILL" in ex_type:
                 filled = True
 
+        # A FILL takes priority over a stale reject reason.
+        # Polymarket US returns ORD_REJECT_REASON_EXCHANGE_OPTION on
+        # moneyline fills and close_position — treat as success if filled.
+        if filled:
+            return {"success": True, "errorMsg": "", "orderID": order_id}
+
         if rejected:
             return {
                 "success": False,
@@ -149,7 +155,7 @@ class PolymarketUSExecutor:
 
         # If we got an order_id back, consider it successful
         # (order is accepted/pending/filled)
-        success = bool(order_id) and not rejected
+        success = bool(order_id)
         return {
             "success": success,
             "errorMsg": "" if success else "No order ID returned",
@@ -340,6 +346,45 @@ class PolymarketUSExecutor:
         except Exception:
             logger.exception("Failed to cancel all orders")
             return {}
+
+    def close_position(self, market_slug: str) -> dict[str, Any]:
+        """Close an entire position on a market.
+
+        Uses the dedicated ``close-position`` endpoint which works even on
+        moneyline markets where regular BUY_SHORT/SELL_SHORT intents are
+        rejected with ORD_REJECT_REASON_EXCHANGE_OPTION.
+        """
+        self._throttle()
+
+        logger.info("Closing Polymarket US position: slug=%s", market_slug)
+
+        def _do_close() -> Any:
+            return self._client.orders.close_position({
+                "marketSlug": market_slug,
+                "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC",
+                "synchronousExecution": True,
+                "maxBlockTime": "15",
+            })
+
+        try:
+            future = self._timeout_pool.submit(_do_close)
+            result = future.result(timeout=self._order_timeout)
+        except FuturesTimeoutError:
+            logger.error(
+                "Polymarket US close_position TIMED OUT after %.1fs: %s",
+                self._order_timeout, market_slug,
+            )
+            return dict(_TIMEOUT_ERROR_RESULT)
+        except Exception:
+            logger.exception("Polymarket US close_position failed: %s", market_slug)
+            return {"success": False, "errorMsg": "SDK exception", "orderID": ""}
+
+        normalized = self._normalize_result(result)
+        if normalized["success"]:
+            logger.info("Polymarket US position closed: %s order_id=%s", market_slug, normalized["orderID"])
+        else:
+            logger.warning("Polymarket US close_position rejected: %s error=%s", market_slug, normalized["errorMsg"])
+        return normalized
 
     # -- Context manager --
 

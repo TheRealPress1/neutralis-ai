@@ -44,9 +44,11 @@ def _kelly_optimal(signal: Signal) -> float:
             return (p - entry_price) / (1.0 - entry_price)
         return 0.0
 
-    # Arb signals: exact Kelly is net_edge / cost (risk-free, so this is precise)
+    # Arb signals: risk-free → Kelly optimal is 1.0 (bet everything).
+    # Fractional Kelly (0.25) and max_position_dollars will cap the actual size.
+    # The expected profit per trade = size * (net_edge / combined_cost).
     if signal.combined_cost > 0 and signal.net_edge > 0:
-        return signal.net_edge / signal.combined_cost
+        return 1.0
 
     # Fallback for signals without probability estimates
     if signal.edge_pct > 0:

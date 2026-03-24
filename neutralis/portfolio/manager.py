@@ -86,11 +86,21 @@ class PortfolioManager:
 
             quantity = leg_size / leg.price_dollars if leg.price_dollars > 0 else 0.0
 
-            # Use actual execution data if available
+            # Use actual execution data if available.
+            # Match by ticker (not position) to avoid venue-ordering mismatches
+            # when xp_results is [poly_result, kalshi_result] but signal.legs
+            # is [kalshi_leg, poly_leg].
             order_id = None
             fill_price = None
-            if execution_results and i < len(execution_results):
-                ex = execution_results[i]
+            ex = None
+            if execution_results:
+                ex = next(
+                    (er for er in execution_results if er.get("ticker") == leg.ticker),
+                    None,
+                )
+                if ex is None and i < len(execution_results):
+                    ex = execution_results[i]  # fallback to positional
+            if ex is not None:
                 order_id = ex.get("order_id")
                 # Kalshi returns prices in cents; convert to dollars
                 if leg.side == "yes" and ex.get("yes_price"):

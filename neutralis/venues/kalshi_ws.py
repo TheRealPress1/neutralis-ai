@@ -209,11 +209,18 @@ class KalshiWebSocket:
         """Connect, subscribe, and listen with auto-reconnect.
 
         Reconnects with exponential backoff on disconnection.
+        Re-subscribes to all previously subscribed channels after reconnect.
         """
         self._running = True
         while self._running:
             try:
                 await self.connect()
+                # Re-subscribe to all channels after reconnect
+                tickers = list(self._subscribed_tickers) if self._subscribed_tickers else None
+                await self.subscribe_ticker(tickers)
+                await self.subscribe_fills()
+                await self.subscribe_trades()
+                await self.subscribe_lifecycle()
                 await self.listen()
             except (websockets.ConnectionClosed, OSError) as exc:
                 if not self._running:

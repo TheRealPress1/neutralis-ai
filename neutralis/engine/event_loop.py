@@ -39,8 +39,6 @@ from neutralis.core.three_way import group_kalshi_three_way, merge_cross_venue_t
 from neutralis.core.volume_scanner import check_volume_momentum
 from neutralis.core.scoring import score_signal
 from neutralis.core.features import compute_market_features, estimate_costs
-from neutralis.execution.executor import PaperExecutor
-from neutralis.execution.models import TickContext
 from neutralis.fees import classify_poly_fee_tier, estimate_total_fee, estimate_cross_platform_fee, estimate_three_way_fee
 from neutralis.fees.performance import PerformanceFeeAccruer
 from neutralis.guard.constraints import check_daily_loss_limit
@@ -1636,27 +1634,22 @@ class EventEngine:
 
                     decision_id = storage.save_decision(dec)
 
-                    # Try live execution
-                    live_executed = False
-                    if settings.execution.live_trading_enabled:
-                        live_executed = self._try_live_execute(sig, dec, decision_id, settings, storage, portfolio)
-
-                    if not live_executed:
-                        # Paper execution fallback
-                        tick_ctx = TickContext(
-                            tick_id=f"ws_{state.run_number}_{datetime.now(timezone.utc).strftime('%H%M%S')}",
-                            run_number=state.run_number,
-                            timestamp=datetime.now(timezone.utc),
-                        )
-                        paper = PaperExecutor(storage, portfolio)
-                        paper.execute(sig, dec, decision_id, tick_ctx, market=market)
-
-                    state.orders_placed += 1
-                    logger.info(
-                        "RT execution: %s edge=%.2f%% %s",
-                        signal.ticker, signal.edge_pct,
-                        "LIVE" if live_executed else "PAPER",
+                    # Live execution only — no paper fallback
+                    live_executed = self._try_live_execute(
+                        sig, dec, decision_id, settings, storage, portfolio,
                     )
+
+                    if live_executed:
+                        state.orders_placed += 1
+                        logger.info(
+                            "RT execution: %s edge=%.2f%% LIVE",
+                            signal.ticker, signal.edge_pct,
+                        )
+                    else:
+                        logger.warning(
+                            "RT execution SKIPPED (live failed): %s edge=%.2f%%",
+                            signal.ticker, signal.edge_pct,
+                        )
 
         except Exception:
             logger.exception("Execution pipeline error for %s", signal.ticker)
@@ -1773,6 +1766,7 @@ class EventEngine:
                     if resp.get("success"):
                         poly_us_results.append({
                             "order_id": resp.get("orderID", ""),
+                            "ticker": leg.ticker,
                             "status": "executed",
                             "venue": "polymarket_us",
                         })
@@ -1805,6 +1799,7 @@ class EventEngine:
                     resp = k_exec.place_order(leg.ticker, leg.side, price_cents, count)
                     order = resp.get("order", {})
                     if order.get("status") == "executed":
+                        order.setdefault("ticker", leg.ticker)
                         kalshi_results.append(order)
                     else:
                         logger.warning(

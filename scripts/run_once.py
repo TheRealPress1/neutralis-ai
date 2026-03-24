@@ -887,6 +887,7 @@ def evaluate_and_execute_for_user(
                             if resp.get("success"):
                                 xp_results.append({
                                     "order_id": resp.get("orderID", ""),
+                                    "ticker": leg.ticker,
                                     "status": "executed",
                                     "venue": "polymarket",
                                 })
@@ -929,6 +930,7 @@ def evaluate_and_execute_for_user(
                                 )
                                 order = resp.get("order", {})
                                 if order.get("status") == "executed":
+                                    order.setdefault("ticker", leg.ticker)
                                     xp_results.append(order)
                                 else:
                                     logger.warning(
@@ -992,6 +994,7 @@ def evaluate_and_execute_for_user(
                             if resp.get("success"):
                                 xp_results.append({
                                     "order_id": resp.get("orderID", ""),
+                                    "ticker": leg.ticker,
                                     "status": "executed",
                                     "venue": "polymarket_us",
                                 })
@@ -1033,6 +1036,7 @@ def evaluate_and_execute_for_user(
                                 )
                                 order = resp.get("order", {})
                                 if order.get("status") == "executed":
+                                    order.setdefault("ticker", leg.ticker)
                                     xp_results.append(order)
                                 else:
                                     logger.warning(

@@ -72,7 +72,7 @@ class PipelineConfig:
         default_factory=lambda: float(os.environ.get("MAX_POSITION_DOLLARS", "25.0"))
     )
     min_xp_edge_pct: float = 0.10  # Cross-platform arb threshold (lower — one side is fee-free)
-    slippage_per_leg: float = 0.005  # $0.005 per leg execution buffer (price movement risk)
+    slippage_per_leg: float = 0.002  # $0.002 per leg execution buffer (price movement risk)
 
 
 @dataclass(frozen=True)
@@ -179,7 +179,7 @@ class DirectionalConfig:
 @dataclass(frozen=True)
 class ExecutionConfig:
     live_trading_enabled: bool = field(
-        default_factory=lambda: os.environ.get("LIVE_TRADING_ENABLED", "").lower()
+        default_factory=lambda: os.environ.get("LIVE_TRADING_ENABLED", "true").lower()
         in ("true", "1", "yes")
     )
     kalshi_api_key_id: str = field(
