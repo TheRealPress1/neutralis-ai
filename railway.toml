@@ -17,7 +17,7 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-healthcheckPath = "/health"
-healthcheckTimeout = 60
+# Health check paths differ per service — set them in the Railway dashboard:
+#   frontend: (none)    api: /api/health    daemon: /health
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
