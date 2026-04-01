@@ -1,8 +1,7 @@
-FROM python:3.13-slim AS base
+FROM python:3.13-slim
 
 WORKDIR /app
 
-# System deps for psycopg binary and cryptography
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev gcc \
     && rm -rf /var/lib/apt/lists/*
@@ -14,7 +13,5 @@ COPY neutralis/ neutralis/
 COPY scripts/ scripts/
 COPY migrations/ migrations/
 
-# Default: API server (port 8000)
-ENV PORT=8000
-EXPOSE 8000
-CMD ["python", "scripts/run_api.py"]
+EXPOSE 9091
+CMD ["python", "scripts/event_daemon.py"]
