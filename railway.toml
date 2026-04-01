@@ -1,25 +1,23 @@
 # Railway deployment configuration
 # https://docs.railway.app/reference/config-as-code
 #
-# This project runs TWO services on Railway (both built from this repo):
+# This project runs up to 3 services on Railway (all from this repo):
 #
-#   1. neutralis-daemon  → Dockerfile target: daemon  (event_daemon.py)
-#   2. neutralis-api     → Dockerfile target: api     (run_api.py)
+#   1. neutralis-frontend → Dockerfile target: frontend  (Next.js, port 3000)
+#   2. neutralis-api      → Dockerfile target: api       (FastAPI, port 8000)
+#   3. neutralis-daemon   → Dockerfile target: daemon    (event engine, port 9091)
 #
-# In the Railway dashboard, set the env var RAILWAY_DOCKERFILE_TARGET
-# to "daemon" or "api" per service. See RAILWAY.md for full setup guide.
+# In the Railway dashboard, set the Docker build target per service:
+#   Settings → Build → Docker Build Target → "frontend" / "api" / "daemon"
+#
+# Or set the env var RAILWAY_DOCKERFILE_TARGET per service.
 
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-# Railway uses this to confirm the service is alive before routing traffic.
-# Both the daemon (/health on port 9091) and the API (/health on port $PORT)
-# expose this path — no per-service override needed.
 healthcheckPath = "/health"
 healthcheckTimeout = 60
-
-# Auto-restart on crash (handles transient Kalshi/Polymarket API errors)
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10

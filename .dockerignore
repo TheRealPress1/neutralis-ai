@@ -1,23 +1,8 @@
-# Frontend (not needed in Python containers)
-node_modules/
-.next/
-src/
-public/
-*.ts
-*.tsx
-*.css
-tsconfig.json
-next.config.ts
-tailwind.config.ts
-postcss.config.mjs
-package.json
-package-lock.json
-
 # Git
 .git/
 .gitignore
 
-# Env/secrets (injected at runtime via env_file)
+# Env/secrets (injected at runtime via Railway env vars)
 .env*
 !.env.example
 *.pem
@@ -31,16 +16,20 @@ dist/
 venv/
 .venv/
 
+# Node artifacts (rebuilt in container)
+node_modules/
+.next/
+
 # IDE / OS
 .DS_Store
 .vscode/
 .idea/
+.claude/
 
-# Tests (not needed in prod image)
+# Tests
 tests/
 coverage/
 
-# Docker
-Dockerfile
+# Docker meta
 docker-compose.yml
 .dockerignore
