@@ -31,6 +31,7 @@ class SignalType(str, Enum):
     THREE_WAY_ARB = "three_way_arb"
     HIGH_PROBABILITY_DIRECTIONAL = "high_probability_directional"
     VOLUME_MOMENTUM = "volume_momentum"
+    LIVE_MOMENTUM = "live_momentum"
 
 
 class DecisionVerdict(str, Enum):

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import BalanceBar from "./BalanceBar";
 import StatsBar from "./StatsBar";
 import PositionsTable from "./PositionsTable";
@@ -13,16 +13,21 @@ import SetupBanner from "./SetupBanner";
 import ApiKeyManager from "./ApiKeyManager";
 import UpgradeBanner from "./UpgradeBanner";
 import AccessCodeGenerator from "./AccessCodeGenerator";
+import LivePanel from "./LivePanel";
+import MarketBrowser from "./MarketBrowser";
 import AuthNav from "@/app/components/AuthNav";
 import Link from "next/link";
 import { hasAccess, type SubscriptionTier } from "@/lib/subscription";
+import { useRealtimeDashboard } from "@/hooks/useRealtimeDashboard";
 
-type NavTab = "dashboard" | "automation" | "activity" | "matches" | "connections" | "settings" | "founder";
+type NavTab = "dashboard" | "live" | "automation" | "activity" | "markets" | "matches" | "connections" | "settings" | "founder";
 
 const BASE_NAV_ITEMS: { id: NavTab; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
+  { id: "live", label: "Live" },
   { id: "automation", label: "Automation" },
   { id: "activity", label: "Activity" },
+  { id: "markets", label: "Markets" },
   { id: "matches", label: "Explore" },
   { id: "connections", label: "Connections" },
   { id: "settings", label: "Settings" },
@@ -54,25 +59,26 @@ export default function DashboardShell({
   const tier = initialTier;
   const isFounder = initialIsFounder;
 
-  // Auto-refresh every 30 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setRefreshKey((k) => k + 1);
-      setLastRefreshed(new Date());
-    }, 30_000);
-    return () => clearInterval(interval);
+  const handleRefresh = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+    setLastRefreshed(new Date());
   }, []);
+
+  // Supabase Realtime: push-based updates on table changes
+  const { isConnected: realtimeConnected } = useRealtimeDashboard(handleRefresh);
+
+  // Fallback: poll every 30s if Realtime is not connected
+  useEffect(() => {
+    if (realtimeConnected) return;
+    const interval = setInterval(handleRefresh, 30_000);
+    return () => clearInterval(interval);
+  }, [realtimeConnected, handleRefresh]);
 
   // Update "Xs ago" display every second
   useEffect(() => {
     const tick = setInterval(() => setElapsed(secondsAgo(lastRefreshed)), 1000);
     return () => clearInterval(tick);
   }, [lastRefreshed]);
-
-  function handleRefresh() {
-    setRefreshKey((k) => k + 1);
-    setLastRefreshed(new Date());
-  }
 
   return (
     <div className="min-h-screen bg-[#050608] text-[#e8e9ea]">
@@ -130,6 +136,22 @@ export default function DashboardShell({
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {/* Realtime indicator */}
+            <span
+              className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                realtimeConnected
+                  ? "bg-emerald-400/10 text-emerald-400"
+                  : "bg-[#1a1d21] text-[#9ca3af]"
+              }`}
+              title={realtimeConnected ? "Live — updates pushed in real time" : `Polling — updated ${elapsed}s ago`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  realtimeConnected ? "bg-emerald-400 animate-pulse" : "bg-[#9ca3af]"
+                }`}
+              />
+              {realtimeConnected ? "Live" : `${elapsed}s`}
+            </span>
             <button
               onClick={handleRefresh}
               title={`Updated ${elapsed}s ago`}
@@ -175,6 +197,12 @@ export default function DashboardShell({
           </>
         )}
 
+        {activeTab === "live" && (
+          <section className="mt-2">
+            <LivePanel refreshKey={refreshKey} />
+          </section>
+        )}
+
         {activeTab === "automation" && (
           <section className="mt-2">
             {!hasAccess(tier, "starter") ? (
@@ -197,6 +225,12 @@ export default function DashboardShell({
         {activeTab === "activity" && (
           <section className="mt-2">
             <ActivityLog refreshKey={refreshKey} />
+          </section>
+        )}
+
+        {activeTab === "markets" && (
+          <section className="mt-2">
+            <MarketBrowser refreshKey={refreshKey} />
           </section>
         )}
 

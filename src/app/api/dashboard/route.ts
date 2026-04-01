@@ -25,6 +25,8 @@ import type {
   ExecutionStats,
   DecisionReasons,
   AutomationState,
+  PipelineLog,
+  MarketSnapshot,
 } from "@/types/api";
 
 function json<T>(data: T) {
@@ -94,6 +96,14 @@ export async function GET(request: Request) {
           configured: keyHex.length === 64,
         });
       }
+
+      // Pipeline logs (Live tab)
+      case "pipeline-logs":
+        return json(await getPipelineLogs(supabase, searchParams, userId));
+
+      // Market browser
+      case "market-browser":
+        return json(await getMarketSnapshots(supabase, searchParams));
 
       // Global data (not user-scoped)
       case "matches":
@@ -604,4 +614,39 @@ async function getAutomationState(supabase: SB, userId: string): Promise<Automat
     max_drawdown_dollars: 0,
     peak_portfolio_value: 0,
   } as AutomationState;
+}
+
+async function getPipelineLogs(supabase: SB, params: URLSearchParams, userId: string): Promise<PipelineLog[]> {
+  const limit = Math.min(Number(params.get("limit") ?? 100), 500);
+
+  const { data } = await supabase
+    .from("pipeline_logs")
+    .select("id, level, category, message, details, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  return (data ?? []) as PipelineLog[];
+}
+
+async function getMarketSnapshots(supabase: SB, params: URLSearchParams): Promise<MarketSnapshot[]> {
+  const limit = Math.min(Number(params.get("limit") ?? 100), 500);
+  const venue = params.get("venue");
+  const q = params.get("q");
+
+  let query = supabase
+    .from("market_snapshots")
+    .select("ticker, event_ticker, title, venue, yes_bid, yes_ask, no_bid, no_ask, volume, liquidity, snapshot_ts")
+    .order("snapshot_ts", { ascending: false })
+    .limit(limit);
+
+  if (venue) {
+    query = query.eq("venue", venue);
+  }
+  if (q) {
+    query = query.ilike("title", `%${q}%`);
+  }
+
+  const { data } = await query;
+  return (data ?? []) as MarketSnapshot[];
 }

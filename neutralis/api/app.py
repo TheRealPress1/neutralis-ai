@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import dataclasses
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from enum import Enum
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -81,6 +83,45 @@ def health_root():
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/api/engine/health")
+async def engine_health():
+    """Proxy to the event daemon's health endpoint."""
+    settings = load_settings()
+    port = settings.websocket.health_port
+    daemon_url = os.getenv("ENGINE_HEALTH_URL", f"http://localhost:{port}/health")
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            resp = await client.get(daemon_url)
+            resp.raise_for_status()
+            return resp.json()
+    except Exception:
+        return JSONResponse(content={"status": "unreachable"}, status_code=503)
+
+
+# --- Pipeline Logs ---
+
+@app.get("/api/pipeline-logs")
+def list_pipeline_logs(
+    limit: int = Query(100, ge=1, le=500),
+):
+    storage = _get_storage()
+    return JSONResponse(content=_serialize(storage.get_pipeline_logs(limit=limit)))
+
+
+# --- Market Browser ---
+
+@app.get("/api/market-browser")
+def market_browser(
+    limit: int = Query(100, ge=1, le=500),
+    venue: str | None = Query(None),
+    q: str | None = Query(None),
+):
+    storage = _get_storage()
+    return JSONResponse(
+        content=_serialize(storage.get_market_browser(limit=limit, venue=venue, q=q)),
+    )
 
 
 # --- Portfolio ---

@@ -25,6 +25,10 @@ import type {
   GuardStat,
   EnrichedSignal,
   RegimeState,
+  PipelineLog,
+  EngineHealth,
+  MarketSnapshot,
+  ManualOrderResult,
 } from "@/types/api";
 
 function apiBase() {
@@ -231,4 +235,59 @@ export async function fetchAuditLogs(
   const res = await fetch(url.toString());
   if (!res.ok) throw new Error(`Activity ${res.status}: ${res.statusText}`);
   return res.json() as Promise<AuditLogEntry[]>;
+}
+
+// --- Pipeline Logs (Live tab) ---
+
+export function fetchPipelineLogs(limit = 100) {
+  return dashFetch<PipelineLog[]>("pipeline-logs", { limit: String(limit) });
+}
+
+// --- Engine Health ---
+
+export async function fetchEngineHealth(): Promise<EngineHealth> {
+  const url = new URL("/api/engine/health", apiBase());
+  const res = await fetch(url.toString());
+  if (!res.ok) return { status: "unreachable" };
+  return res.json() as Promise<EngineHealth>;
+}
+
+// --- Market Browser ---
+
+export function fetchMarketSnapshots(params?: {
+  limit?: number;
+  venue?: string;
+  q?: string;
+}) {
+  const p: Record<string, string> = {};
+  if (params?.limit) p.limit = String(params.limit);
+  if (params?.venue) p.venue = params.venue;
+  if (params?.q) p.q = params.q;
+  return dashFetch<MarketSnapshot[]>("market-browser", p);
+}
+
+// --- Manual Orders ---
+
+export async function placeManualOrder(req: {
+  venue: string;
+  ticker: string;
+  side: "yes" | "no";
+  quantity: number;
+  price_cents: number;
+}): Promise<ManualOrderResult> {
+  const url = new URL("/api/orders/manual", apiBase());
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return {
+      success: false,
+      order_id: "",
+      error: body.error ?? `Request failed: ${res.status}`,
+    };
+  }
+  return res.json() as Promise<ManualOrderResult>;
 }

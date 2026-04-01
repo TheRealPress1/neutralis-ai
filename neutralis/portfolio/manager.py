@@ -575,6 +575,17 @@ class PortfolioManager:
                 if current_bid <= dir_cfg.probability_floor:
                     exit_reason = "probability_floor"
 
+            # 6. Momentum reversal (tighter trailing stop for live momentum)
+            if exit_reason is None and pos.signal_type == SignalType.LIVE_MOMENTUM.value:
+                prev_hwm = self._hwm.get(pos.id, 0.0)
+                if prev_hwm >= 3.0:  # Activate after +3% profit (vs default +5%)
+                    drawdown = prev_hwm - pnl_pct
+                    if drawdown >= 7.0:  # 7% drawdown from peak (vs default ~10%)
+                        exit_reason = "momentum_reversal"
+                # Also check probability floor (looser than directional: 0.50)
+                if exit_reason is None and current_bid <= 0.50:
+                    exit_reason = "probability_floor"
+
             if exit_reason is not None:
                 # Clean up HWM on exit
                 self._hwm.pop(pos.id, None)

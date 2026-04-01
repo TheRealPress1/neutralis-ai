@@ -328,3 +328,73 @@ export interface AuditLogEntry {
   details: Record<string, unknown>;
   created_at: string;
 }
+
+// --- Pipeline Logs (Live tab) ---
+
+export interface PipelineLog {
+  id: number;
+  level: string;
+  category: string;
+  message: string;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
+// --- Engine Health (Live tab) ---
+
+export interface EngineHealth {
+  status: "ok" | "degraded" | "stopped" | "paused" | "unreachable";
+  paused?: boolean;
+  kalshi_ws_connected?: boolean;
+  kalshi_ws_subscriptions?: number;
+  poly_ws_connected?: boolean;
+  poly_ws_subscriptions?: number;
+  poly_us_ws_connected?: boolean;
+  poly_us_ws_subscriptions?: number;
+  kalshi_markets?: number;
+  poly_markets?: number;
+  poly_us_markets?: number;
+  xp_pairs?: number;
+  three_way_groups?: number;
+  ticker_updates?: number;
+  arb_checks?: number;
+  signals_detected?: number;
+  orders_placed?: number;
+  prices_stale?: boolean;
+  oldest_kalshi_price_age_sec?: number;
+  oldest_poly_price_age_sec?: number;
+}
+
+// --- Market Browser ---
+
+export interface MarketSnapshot {
+  ticker: string;
+  event_ticker: string;
+  title: string;
+  venue: string;
+  yes_bid: number;
+  yes_ask: number;
+  no_bid: number;
+  no_ask: number;
+  volume: number | null;
+  liquidity: number | null;
+  snapshot_ts: string;
+}
+
+// --- Manual Orders ---
+
+export interface ManualOrderRequest {
+  venue: string;
+  ticker: string;
+  side: "yes" | "no";
+  quantity: number;
+  price_cents: number;
+}
+
+export interface ManualOrderResult {
+  success: boolean;
+  order_id: string;
+  error: string;
+  filled_price?: number;
+  filled_quantity?: number;
+}

@@ -177,6 +177,34 @@ class DirectionalConfig:
 
 
 @dataclass(frozen=True)
+class MomentumConfig:
+    enabled: bool = True
+    # Price velocity: min price move in 5-min window to trigger
+    min_price_velocity: float = 0.10
+    # Volume surge: current 5m vol must be Nx the rolling average
+    volume_surge_multiplier: float = 3.0
+    # Flow imbalance: must agree with price direction
+    flow_imbalance_threshold: float = 0.75
+    # Implied probability range (entry must be in this band)
+    min_implied_probability: float = 0.75
+    max_entry_price: float = 0.95
+    min_entry_price: float = 0.30
+    # Minimum contracts in 5m window
+    min_volume_5m: int = 30
+    # Position sizing
+    max_position_dollars: float = 40.0
+    # Probability floor for exit (lower than directional — momentum exits faster)
+    probability_floor: float = 0.50
+    # Per-sport overrides (tennis momentum is faster than soccer)
+    tennis_min_velocity: float = 0.08
+    tennis_surge_mult: float = 2.5
+    soccer_min_velocity: float = 0.12
+    soccer_surge_mult: float = 3.0
+    basketball_min_velocity: float = 0.10
+    basketball_surge_mult: float = 3.0
+
+
+@dataclass(frozen=True)
 class ExecutionConfig:
     live_trading_enabled: bool = field(
         default_factory=lambda: os.environ.get("LIVE_TRADING_ENABLED", "true").lower()
@@ -362,6 +390,7 @@ class Settings:
     polymarket_us: PolymarketUSConfig = field(default_factory=PolymarketUSConfig)
     polymarket_us_ws: PolymarketUSWSConfig = field(default_factory=PolymarketUSWSConfig)
     directional: DirectionalConfig = field(default_factory=DirectionalConfig)
+    momentum: MomentumConfig = field(default_factory=MomentumConfig)
     performance_fees: PerformanceFeeConfig = field(default_factory=PerformanceFeeConfig)
 
 

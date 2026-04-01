@@ -37,6 +37,17 @@ _THREE_WAY_WEIGHTS = {
     "venue_diversification": 0.20,  # Cross-venue = lower fee risk
 }
 
+# Live momentum: velocity and surge are the core signals, flow confirms
+_LIVE_MOMENTUM_WEIGHTS = {
+    "edge_robustness": 0.15,
+    "liquidity_robustness": 0.15,
+    "price_stability": 0.05,   # We WANT instability (price moving fast)
+    "spread_health": 0.05,
+    "time_efficiency": 0.10,
+    "flow_strength": 0.20,
+    "momentum_strength": 0.30,  # Velocity + surge composite
+}
+
 
 def score_signal(
     signal: Signal,
@@ -61,6 +72,8 @@ def score_signal(
     # Select weights based on signal type
     if weights is not None:
         w = weights
+    elif signal.signal_type == SignalType.LIVE_MOMENTUM:
+        w = _LIVE_MOMENTUM_WEIGHTS
     elif signal.signal_type == SignalType.VOLUME_MOMENTUM:
         w = _VOLUME_MOMENTUM_WEIGHTS
     elif signal.signal_type == SignalType.THREE_WAY_ARB:
@@ -110,7 +123,15 @@ def score_signal(
     components["time_efficiency"] = min(1.0, 1.0 / max(ttr_days, 1.0))
 
     # 6. Signal-type-specific components
-    if signal.signal_type == SignalType.VOLUME_MOMENTUM:
+    if signal.signal_type == SignalType.LIVE_MOMENTUM:
+        # Momentum strength: velocity + surge from features_json (injected by scanner)
+        vel_score = signal.features_json.get("velocity_score", 0.0)
+        surge_score = signal.features_json.get("surge_score", 0.0)
+        components["momentum_strength"] = _saturate((vel_score + surge_score) / 2.0)
+        # Flow strength from imbalance
+        imbalance = signal.features_json.get("flow_imbalance", 0.75)
+        components["flow_strength"] = _saturate((imbalance - 0.70) / 0.30)
+    elif signal.signal_type == SignalType.VOLUME_MOMENTUM:
         # Flow strength: imbalance above threshold + price momentum alignment
         imbalance = signal.implied_probability if signal.implied_probability > 0 else 0.7
         base_flow = _saturate((imbalance - 0.70) / 0.30)

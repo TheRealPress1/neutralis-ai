@@ -2064,3 +2064,86 @@ class PostgresStorage:
             raise
 
         return pending
+
+    # ── Pipeline Logs ──────────────────────────────────────────────────
+
+    _LOG_BATCH_SIZE = 20
+
+    def save_pipeline_log(
+        self,
+        level: str,
+        category: str,
+        message: str,
+        details: dict | None = None,
+    ) -> None:
+        """Buffer a pipeline log entry; auto-flushes at batch threshold."""
+        if not hasattr(self, "_log_batch"):
+            self._log_batch: list[tuple] = []
+        self._log_batch.append((
+            self._user_id, level, category, message, json.dumps(details or {}),
+        ))
+        if len(self._log_batch) >= self._LOG_BATCH_SIZE:
+            self.flush_pipeline_logs()
+
+    def flush_pipeline_logs(self) -> None:
+        """Write all buffered pipeline logs in a single transaction."""
+        batch = getattr(self, "_log_batch", None)
+        if not batch:
+            return
+        conn = self._ensure_connected()
+        try:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    "INSERT INTO pipeline_logs (user_id, level, category, message, details) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    batch,
+                )
+            conn.commit()
+        except Exception:
+            self._safe_rollback()
+            logger.debug("Failed to flush %d pipeline logs", len(batch), exc_info=True)
+        self._log_batch.clear()
+
+    def get_pipeline_logs(self, limit: int = 100) -> list[dict]:
+        """Fetch recent pipeline logs (newest first)."""
+        conn = self._ensure_connected()
+        sql = (
+            "SELECT id, level, category, message, details, created_at "
+            "FROM pipeline_logs"
+            + self._user_where()
+            + " ORDER BY created_at DESC LIMIT %(limit)s"
+        )
+        return self._fetch_dicts(sql, {**self._uid_params, "limit": limit})
+
+    # ── Market Browser ─────────────────────────────────────────────────
+
+    def get_market_browser(
+        self,
+        limit: int = 100,
+        venue: str | None = None,
+        q: str | None = None,
+    ) -> list[dict]:
+        """Fetch distinct recent market snapshots for browsing."""
+        conn = self._ensure_connected()
+        conditions = []
+        params: dict = {"limit": limit}
+
+        if venue:
+            conditions.append("venue = %(venue)s")
+            params["venue"] = venue
+        if q:
+            conditions.append("title ILIKE %(q)s")
+            params["q"] = f"%{q}%"
+
+        where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+
+        sql = (
+            "SELECT DISTINCT ON (ticker, venue) "
+            "ticker, event_ticker, title, venue, yes_bid, yes_ask, no_bid, no_ask, "
+            "volume, liquidity, snapshot_ts "
+            "FROM market_snapshots"
+            + where
+            + " ORDER BY ticker, venue, snapshot_ts DESC "
+            "LIMIT %(limit)s"
+        )
+        return self._fetch_dicts(sql, params)

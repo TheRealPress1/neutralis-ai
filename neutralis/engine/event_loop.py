@@ -106,6 +106,7 @@ class TradeFlowStats:
     buy_volume_5m: int = 0
     sell_volume_5m: int = 0
     last_trade_ts: float = 0.0
+    last_volume_snapshot_ts: float = 0.0
 
 
 @dataclass
@@ -153,6 +154,10 @@ class _LiveState:
     discrepancy_buffer: list[dict] = field(default_factory=list)
     discrepancy_last_observed: dict[str, float] = field(default_factory=dict)
     discrepancy_total: int = 0
+    # Momentum scanner: per-ticker price history (monotonic_ts, yes_mid)
+    price_history: dict[str, deque] = field(default_factory=dict)
+    # Momentum scanner: per-ticker rolling average 5m volume (EMA)
+    rolling_avg_volume: dict[str, float] = field(default_factory=dict)
     # Counters
     ticker_updates: int = 0
     arb_checks: int = 0
@@ -195,7 +200,8 @@ class EventEngine:
         self._poly_ws: PolymarketWebSocket | None = None
         self._poly_us_ws: PolymarketUSWebSocket | None = None
         self._state: _LiveState | None = None
-        self._executor_pool = ThreadPoolExecutor(max_workers=4)
+        self._executor_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="exec")
+        self._log_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="log")
         self._market_cache = MarketCache()
         self._running = False
         self._paused = False
@@ -210,10 +216,52 @@ class EventEngine:
         self._kalshi_ws_connected: bool = False
         self._poly_ws_connected: bool = False
         self._poly_us_ws_connected: bool = False
+        # Pipeline log storage (dedicated connection for non-blocking logging)
+        self._log_storage: PostgresStorage | None = None
+
+    def _init_log_storage(self) -> None:
+        """Create a dedicated storage connection for pipeline logging."""
+        try:
+            user_id = os.environ.get("NEUTRALIS_USER_ID")
+            self._log_storage = PostgresStorage(self._settings.db, user_id=user_id)
+            self._log_storage.connect()
+        except Exception:
+            logger.debug("Pipeline log storage init failed", exc_info=True)
+            self._log_storage = None
+
+    def _log_pipeline(
+        self,
+        level: str,
+        category: str,
+        message: str,
+        details: dict | None = None,
+    ) -> None:
+        """Fire-and-forget pipeline log entry (dedicated log thread, never blocks trades)."""
+        if not self._log_storage:
+            return
+        try:
+            self._log_executor.submit(
+                self._log_storage.save_pipeline_log,
+                level, category, message, details,
+            )
+        except Exception:
+            pass
+
+    async def _periodic_flush_logs(self) -> None:
+        """Flush buffered pipeline logs every 2s so dashboard stays fresh."""
+        while self._running:
+            await asyncio.sleep(2.0)
+            if self._log_storage:
+                try:
+                    self._log_executor.submit(self._log_storage.flush_pipeline_logs)
+                except Exception:
+                    pass
 
     async def start(self) -> None:
         """Initialize state, connect WS, and start all tasks."""
         logger.info("EventEngine starting — building initial state")
+        self._init_log_storage()
+        self._log_pipeline("info", "engine", "Engine starting — building initial state")
 
         # Step 1: Full REST fetch and normalization (runs in thread pool)
         loop = asyncio.get_event_loop()
@@ -224,6 +272,11 @@ class EventEngine:
             "Initial state: %d Kalshi, %d Polymarket, %d cross-platform pairs",
             len(state.kalshi_markets), len(state.poly_markets), len(state.xp_pairs),
         )
+        self._log_pipeline("info", "engine", "Initial state built", {
+            "kalshi_markets": len(state.kalshi_markets),
+            "poly_markets": len(state.poly_markets),
+            "xp_pairs": len(state.xp_pairs),
+        })
 
         # Step 2: Build focus ticker set
         focus_tickers = self._build_focus_tickers(state)
@@ -243,6 +296,7 @@ class EventEngine:
 
         await self._ws.connect()
         self._kalshi_ws_connected = True
+        self._log_pipeline("info", "ws", "Kalshi WebSocket connected")
 
         # If focus set is small, subscribe to ALL tickers for broad coverage
         # (complement arb detection works across the full market)
@@ -280,10 +334,14 @@ class EventEngine:
                     "Polymarket WS connected: %d assets subscribed for %d XP pairs",
                     len(asset_ids), len(state.xp_pairs),
                 )
+                self._log_pipeline("info", "ws", "Polymarket WebSocket connected", {
+                    "assets": len(asset_ids), "xp_pairs": len(state.xp_pairs),
+                })
             except Exception:
                 logger.warning("Failed to connect Polymarket WS, falling back to REST polling", exc_info=True)
                 self._poly_ws = None
                 self._poly_ws_connected = False
+                self._log_pipeline("warn", "ws", "Polymarket WS failed — REST fallback")
 
         # Step 4b: Connect Polymarket US WebSocket (10-instrument hard limit)
         poly_us_ws_cfg = self._settings.polymarket_us_ws
@@ -306,10 +364,14 @@ class EventEngine:
                         "Polymarket US WS connected: %d slugs subscribed",
                         len(top_slugs),
                     )
+                    self._log_pipeline("info", "ws", "Polymarket US WebSocket connected", {
+                        "slugs": len(top_slugs),
+                    })
                 except Exception:
                     logger.warning("Failed to connect Polymarket US WS, falling back to REST polling", exc_info=True)
                     self._poly_us_ws = None
                     self._poly_us_ws_connected = False
+                    self._log_pipeline("warn", "ws", "Polymarket US WS failed — REST fallback")
 
         # Step 5: Start periodic tasks
         self._running = True
@@ -324,6 +386,7 @@ class EventEngine:
             asyncio.create_task(self._periodic_kill_switch_check(), name="kill_switch"),
             asyncio.create_task(self._periodic_daily_loss_check(), name="daily_loss_check"),
             asyncio.create_task(self._periodic_bankroll_refresh(), name="bankroll_refresh"),
+            asyncio.create_task(self._periodic_flush_logs(), name="flush_logs"),
         ]
         if self._poly_ws:
             self._tasks.append(
@@ -341,6 +404,12 @@ class EventEngine:
             f"{self._poly_us_ws.subscribed_count} slugs" if self._poly_us_ws else "REST-only",
             len(self._tasks) - sum([1, bool(self._poly_ws), bool(self._poly_us_ws)]),
         )
+        self._log_pipeline("info", "engine", "Engine running — all feeds connected", {
+            "kalshi_ws_subs": len(focus_tickers),
+            "poly_ws": self._poly_ws.subscribed_count if self._poly_ws else 0,
+            "poly_us_ws": self._poly_us_ws.subscribed_count if self._poly_us_ws else 0,
+            "tasks": len(self._tasks),
+        })
 
     async def run_until_stopped(self) -> None:
         """Run all tasks until shutdown signal."""
@@ -396,6 +465,7 @@ class EventEngine:
 
     async def stop(self) -> None:
         """Graceful shutdown."""
+        self._log_pipeline("info", "engine", "Engine shutting down")
         self._running = False
         self._kalshi_ws_connected = False
         self._poly_ws_connected = False
@@ -409,6 +479,7 @@ class EventEngine:
         if self._poly_us_ws:
             await self._poly_us_ws.close()
         self._executor_pool.shutdown(wait=False)
+        self._log_executor.shutdown(wait=False)
         logger.info(
             "EventEngine stopped — %d ticker updates, %d arb checks, %d signals, %d orders",
             self._state.ticker_updates if self._state else 0,
@@ -416,6 +487,14 @@ class EventEngine:
             self._state.signals_detected if self._state else 0,
             self._state.orders_placed if self._state else 0,
         )
+        # Flush remaining logs and close dedicated connection
+        if self._log_storage:
+            try:
+                self._log_storage.flush_pipeline_logs()
+                self._log_storage.close()
+            except Exception:
+                pass
+            self._log_storage = None
 
     # ── Initial state ──────────────────────────────────────────────────
 
@@ -677,6 +756,15 @@ class EventEngine:
         updated = replace(nm, yes_bid=yes_bid, yes_ask=yes_ask, no_bid=no_bid, no_ask=no_ask)
         state.kalshi_markets[ticker] = updated
 
+        # Record price for momentum scanner (one tuple per tick, maxlen=60)
+        mid = (yes_ask + yes_bid) / 2.0
+        if mid > 0:
+            hist = state.price_history.get(ticker)
+            if hist is None:
+                hist = deque(maxlen=60)
+                state.price_history[ticker] = hist
+            hist.append((time.monotonic(), mid))
+
         # Update raw dict for REST-refresh consistency
         raw = state.kalshi_raw.get(ticker)
         if raw:
@@ -697,6 +785,12 @@ class EventEngine:
             msg.get("ticker"), msg.get("side"),
             msg.get("count"), msg.get("yes_price") or msg.get("no_price"),
         )
+        self._log_pipeline("order", "fill", f"Fill received: {msg.get('ticker', '?')}", {
+            "ticker": msg.get("ticker"),
+            "side": msg.get("side"),
+            "count": msg.get("count"),
+            "price": msg.get("yes_price") or msg.get("no_price"),
+        })
 
     async def _on_trade(self, msg: dict[str, Any]) -> None:
         """Handle public trade notification — track per-ticker volume and flow."""
@@ -739,6 +833,13 @@ class EventEngine:
             elif old_side == "no":
                 stats.sell_volume_5m -= old_count
 
+        # Update rolling average volume EMA every 5 minutes (for momentum surge detection)
+        if ts - stats.last_volume_snapshot_ts >= _TRADE_FLOW_WINDOW_SEC:
+            from neutralis.core.momentum_scanner import update_rolling_volume
+            prev = state.rolling_avg_volume.get(ticker, 0.0)
+            state.rolling_avg_volume[ticker] = update_rolling_volume(prev, stats.total_volume_5m)
+            stats.last_volume_snapshot_ts = ts
+
     async def _on_lifecycle(self, msg: dict[str, Any]) -> None:
         """Handle market lifecycle events — remove settled/closed markets from state."""
         state = self._state
@@ -756,6 +857,8 @@ class EventEngine:
             state.kalshi_raw.pop(ticker, None)
             state.trade_flow.pop(ticker, None)
             state.last_kalshi_update.pop(ticker, None)
+            state.price_history.pop(ticker, None)
+            state.rolling_avg_volume.pop(ticker, None)
 
             # Remove from cross-platform pairs
             pair_info = state.xp_pairs.pop(ticker, None)
@@ -1125,13 +1228,14 @@ class EventEngine:
         now = time.monotonic()
 
         # Cross-type ticker cooldown — prevents double-trades on same ticker
-        ticker_key = f"_any_:{ticker}"
+        # Use tuples instead of f-strings: avoids allocation in hot path
+        ticker_key = (None, ticker)
         ticker_last = state.signal_cooldown.get(ticker_key, 0.0)
         if now - ticker_last < _SIGNAL_COOLDOWN_SEC:
             return True
 
         # Per-type cooldown
-        key = f"{signal_type}:{ticker}"
+        key = (signal_type, ticker)
         last = state.signal_cooldown.get(key, 0.0)
         if now - last < _SIGNAL_COOLDOWN_SEC:
             return True
@@ -1211,6 +1315,10 @@ class EventEngine:
                                 ticker, market.yes_ask, market.no_ask, edge_pct,
                             )
                             state.signals_detected += 1
+                            self._log_pipeline("signal", "arb", f"Complement arb detected: {ticker}", {
+                                "ticker": ticker, "yes_ask": market.yes_ask,
+                                "no_ask": market.no_ask, "edge_pct": round(edge_pct, 2),
+                            })
                             loop = asyncio.get_event_loop()
                             loop.run_in_executor(
                                 self._executor_pool,
@@ -1263,19 +1371,24 @@ class EventEngine:
                     if other_no > 0:
                         combined = favored_yes + other_no
                         gross_edge = 1.0 - combined
-                        use_maker = state.settings.execution.use_maker_orders
-                        # Determine fee tiers for each leg
-                        k_tier = market.poly_fee_tier
-                        p_tier = poly_market.poly_fee_tier
-                        yes_ft = k_tier if yes_venue == "kalshi" else p_tier
-                        no_ft = k_tier if no_venue == "kalshi" else p_tier
-                        fee = estimate_cross_platform_fee(
-                            yes_price=favored_yes, yes_venue=yes_venue,
-                            no_price=other_no, no_venue=no_venue,
-                            maker=use_maker,
-                            yes_fee_tier=yes_ft, no_fee_tier=no_ft,
-                        )
-                        net_edge = gross_edge - fee - slippage_2
+
+                        # Fast path: skip fee calc if gross edge is already negative
+                        if gross_edge > slippage_2:
+                            use_maker = state.settings.execution.use_maker_orders
+                            k_tier = market.poly_fee_tier
+                            p_tier = poly_market.poly_fee_tier
+                            yes_ft = k_tier if yes_venue == "kalshi" else p_tier
+                            no_ft = k_tier if no_venue == "kalshi" else p_tier
+                            fee = estimate_cross_platform_fee(
+                                yes_price=favored_yes, yes_venue=yes_venue,
+                                no_price=other_no, no_venue=no_venue,
+                                maker=use_maker,
+                                yes_fee_tier=yes_ft, no_fee_tier=no_ft,
+                            )
+                            net_edge = gross_edge - fee - slippage_2
+                        else:
+                            fee = 0.0
+                            net_edge = gross_edge - slippage_2
                         edge_pct = (net_edge / combined) * 100.0 if combined > 0 else 0.0
 
                         # Record discrepancy observation (rate-limited per pair)
@@ -1312,6 +1425,11 @@ class EventEngine:
                                     ticker, k_yes, p_yes, edge_pct, yes_venue,
                                 )
                                 state.signals_detected += 1
+                                self._log_pipeline("signal", "arb", f"Cross-platform arb: {ticker} — buy YES on {yes_venue}", {
+                                    "ticker": ticker, "kalshi_yes": k_yes,
+                                    "poly_yes": p_yes, "edge_pct": round(edge_pct, 2),
+                                    "yes_venue": yes_venue, "no_venue": no_venue,
+                                })
                                 loop = asyncio.get_event_loop()
                                 loop.run_in_executor(
                                     self._executor_pool,
@@ -1365,6 +1483,10 @@ class EventEngine:
                                     group.outcome_draw.ask, combined, edge_pct_3w,
                                 )
                                 state.signals_detected += 1
+                                self._log_pipeline("signal", "arb", f"3-way Dutch book: {event_id}", {
+                                    "event_id": event_id, "combined": round(combined, 4),
+                                    "edge_pct": round(edge_pct_3w, 2),
+                                })
                                 loop = asyncio.get_event_loop()
                                 loop.run_in_executor(
                                     self._executor_pool,
@@ -1404,6 +1526,43 @@ class EventEngine:
                         self._execute_volume_momentum,
                         ticker, market, vol_signal,
                     )
+
+        # ── Check 5: Live event momentum (sports only) ──
+        if flow and flow.total_volume_5m >= 30:
+            if not self._signal_on_cooldown(state, ticker, "momentum"):
+                from neutralis.categories import classify_sport
+                sport = classify_sport(market.title, market.event_ticker)
+                if sport is not None:
+                    price_hist = state.price_history.get(ticker)
+                    if price_hist and len(price_hist) >= 3:
+                        from neutralis.core.momentum_scanner import check_live_momentum
+                        momentum_signal = check_live_momentum(
+                            ticker=ticker,
+                            market=market,
+                            sport=sport,
+                            buy_volume_5m=flow.buy_volume_5m,
+                            sell_volume_5m=flow.sell_volume_5m,
+                            total_volume_5m=flow.total_volume_5m,
+                            price_history=price_hist,
+                            rolling_avg_volume=state.rolling_avg_volume.get(ticker, 0.0),
+                            config=state.settings.momentum,
+                        )
+                        if momentum_signal is not None:
+                            state.signals_detected += 1
+                            self._log_pipeline("signal", "momentum",
+                                f"Live momentum: {ticker} ({sport})", {
+                                    "ticker": ticker, "sport": sport,
+                                    "edge_pct": round(momentum_signal.edge_pct, 2),
+                                    "side": momentum_signal.entry_side,
+                                    "velocity": momentum_signal.features_json.get("velocity", 0),
+                                    "surge": momentum_signal.features_json.get("surge_ratio", 0),
+                                })
+                            loop = asyncio.get_event_loop()
+                            loop.run_in_executor(
+                                self._executor_pool,
+                                self._execute_live_momentum,
+                                ticker, market, momentum_signal,
+                            )
 
     # ── Execution (runs in thread pool) ────────────────────────────────
 
@@ -1500,6 +1659,15 @@ class EventEngine:
             return
         self._score_and_execute(vol_signal, market, state.settings)
 
+    def _execute_live_momentum(
+        self, ticker: str, market: NormalizedMarket, momentum_signal: Signal,
+    ) -> None:
+        """Score, guard-check, and execute a live momentum signal. Runs sync in thread pool."""
+        state = self._state
+        if state is None:
+            return
+        self._score_and_execute(momentum_signal, market, state.settings)
+
     def _execute_xp_arb(
         self, ticker: str, k_market: NormalizedMarket, p_market: NormalizedMarket,
         match_confidence: float, net_edge: float, edge_pct: float,
@@ -1578,6 +1746,10 @@ class EventEngine:
         if state is None:
             return
 
+        if not settings.execution.live_trading_enabled:
+            self._log_pipeline("info", "guard", f"Live trading disabled — skipping {signal.ticker}")
+            return
+
         try:
             with PostgresStorage(settings.db) as storage:
                 fee_accruer = None
@@ -1618,6 +1790,10 @@ class EventEngine:
 
                 if decision.verdict != DecisionVerdict.PASS:
                     storage.save_decision(decision)
+                    self._log_pipeline("guard", "guard", f"Guard rejected: {ticker}", {
+                        "ticker": ticker, "edge_pct": round(edge_pct, 2),
+                        "verdict": "reject",
+                    })
                     return
 
                 # Ranked selection (single signal)
@@ -1633,6 +1809,11 @@ class EventEngine:
                         continue
 
                     decision_id = storage.save_decision(dec)
+                    self._log_pipeline("guard", "guard", f"Guard passed: {ticker} — executing", {
+                        "ticker": ticker, "edge_pct": round(edge_pct, 2),
+                        "suggested_size": dec.suggested_size,
+                        "verdict": "pass",
+                    })
 
                     # Live execution only — no paper fallback
                     live_executed = self._try_live_execute(
@@ -1645,14 +1826,24 @@ class EventEngine:
                             "RT execution: %s edge=%.2f%% LIVE",
                             signal.ticker, signal.edge_pct,
                         )
+                        self._log_pipeline("order", "execution", f"Order filled: {signal.ticker}", {
+                            "ticker": signal.ticker, "edge_pct": round(signal.edge_pct, 2),
+                            "size": dec.suggested_size,
+                        })
                     else:
                         logger.warning(
                             "RT execution SKIPPED (live failed): %s edge=%.2f%%",
                             signal.ticker, signal.edge_pct,
                         )
+                        self._log_pipeline("error", "execution", f"Order failed: {signal.ticker}", {
+                            "ticker": signal.ticker, "edge_pct": round(signal.edge_pct, 2),
+                        })
 
-        except Exception:
+        except Exception as exc:
             logger.exception("Execution pipeline error for %s", signal.ticker)
+            self._log_pipeline("error", "engine", f"Pipeline error: {signal.ticker} — {exc}", {
+                "ticker": signal.ticker,
+            })
 
     def _try_live_execute(
         self, signal: Signal, decision: Decision, decision_id: int,
@@ -2365,6 +2556,10 @@ class EventEngine:
             "Kalshi refresh: %d markets, %d cross-platform pairs, %d 3-way groups (%d cross-venue)",
             len(kalshi_markets), len(xp_pairs), len(three_way_kalshi), len(xv_three_way),
         )
+        self._log_pipeline("info", "refresh", "Kalshi markets refreshed", {
+            "markets": len(kalshi_markets), "xp_pairs": len(xp_pairs),
+            "three_way": len(three_way_kalshi),
+        })
         return state
 
     async def _periodic_poly_refresh(self) -> None:
@@ -2486,6 +2681,10 @@ class EventEngine:
             "Polymarket refresh: %d markets, %d pairs, %d 3-way (%d cross-venue)",
             len(poly_markets), len(xp_pairs), len(three_way_kalshi), len(xv_three_way),
         )
+        self._log_pipeline("info", "refresh", "Polymarket markets refreshed", {
+            "markets": len(poly_markets), "xp_pairs": len(xp_pairs),
+            "three_way": len(three_way_kalshi),
+        })
 
     # ── Discrepancy flush ────────────────────────────────────────────
 

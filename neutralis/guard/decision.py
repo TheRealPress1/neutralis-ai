@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from dataclasses import replace
+
 from neutralis.categories import classify_market, is_category_enabled, resolve_pipeline_config
 from neutralis.config import DirectionalConfig, PipelineConfig, PortfolioConfig
 from neutralis.guard.constraints import (
@@ -30,6 +32,7 @@ from neutralis.models import (
     NormalizedMarket,
     PortfolioSnapshot,
     Signal,
+    SignalType,
 )
 
 logger = get_logger(__name__)
@@ -73,6 +76,10 @@ def evaluate_signal(
             )
         # Adjust config thresholds for this category's risk level
         cfg = resolve_pipeline_config(cfg, category, category_overrides)
+
+    # Momentum signals use a lower edge threshold (multi-factor confirmation)
+    if signal.signal_type == SignalType.LIVE_MOMENTUM:
+        cfg = replace(cfg, min_edge_pct=0.5)
 
     # Preliminary size for depth check and exposure checks (base sizing, no headroom)
     preliminary_size = compute_size(signal, market, cfg, regime_params=regime_params)
