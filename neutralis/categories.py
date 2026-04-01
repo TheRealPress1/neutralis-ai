@@ -230,6 +230,94 @@ def classify_directional_category(title: str, event_ticker: str = "") -> str | N
 
 
 # ---------------------------------------------------------------------------
+# Player/team name extraction for live score matching
+# ---------------------------------------------------------------------------
+
+_VS_PATTERN = re.compile(
+    r"^(.+?)\s+vs\.?\s+(.+?)(?:\s*[-–—]|\s*$)",
+    re.IGNORECASE,
+)
+
+
+def extract_match_names(title: str) -> tuple[str, str] | None:
+    """Extract two competitor names from a market title.
+
+    Examples:
+        "Djokovic vs Sinner - ATP French Open" → ("Djokovic", "Sinner")
+        "Arsenal vs Chelsea" → ("Arsenal", "Chelsea")
+        "Lakers vs Celtics - NBA" → ("Lakers", "Celtics")
+
+    Returns (name1, name2) or None if parsing fails.
+    """
+    m = _VS_PATTERN.match(title)
+    if not m:
+        return None
+    return m.group(1).strip(), m.group(2).strip()
+
+
+def _normalize_name(name: str) -> str:
+    """Lowercase, strip common suffixes/prefixes for fuzzy matching."""
+    n = name.lower().strip()
+    # Remove common sport suffixes
+    for suffix in (" fc", " sc", " cf", " afc"):
+        if n.endswith(suffix):
+            n = n[: -len(suffix)].strip()
+    return n
+
+
+def match_score_to_market_names(
+    score_home: str,
+    score_away: str,
+    market_name1: str,
+    market_name2: str,
+) -> str | None:
+    """Match ESPN score names to market title names.
+
+    Returns "home" if market_name1 maps to score_home,
+    "away" if market_name1 maps to score_away,
+    or None if no match.
+
+    Uses token-level substring matching — "Djokovic" matches "N. Djokovic"
+    and "C. Tabur" matches "Clement Tabur".
+    """
+    sh = _normalize_name(score_home)
+    sa = _normalize_name(score_away)
+    m1 = _normalize_name(market_name1)
+    m2 = _normalize_name(market_name2)
+
+    # Extract last tokens (surnames) for matching
+    sh_tokens = sh.split()
+    sa_tokens = sa.split()
+    m1_tokens = m1.split()
+    m2_tokens = m2.split()
+
+    def _matches(score_tokens: list[str], market_tokens: list[str]) -> bool:
+        """Check if the last name in score matches any token in market name, or vice versa."""
+        if not score_tokens or not market_tokens:
+            return False
+        # Last name match (most reliable for athletes)
+        s_last = score_tokens[-1]
+        m_last = market_tokens[-1]
+        if s_last == m_last:
+            return True
+        # Substring: "djokovic" in "n. djokovic" or "djokovic" in "novak djokovic"
+        s_full = " ".join(score_tokens)
+        m_full = " ".join(market_tokens)
+        if s_last in m_full or m_last in s_full:
+            return True
+        return False
+
+    # Try: market_name1 = home, market_name2 = away
+    if _matches(sh_tokens, m1_tokens) and _matches(sa_tokens, m2_tokens):
+        return "home"
+    # Try: market_name1 = away, market_name2 = home
+    if _matches(sa_tokens, m1_tokens) and _matches(sh_tokens, m2_tokens):
+        return "away"
+
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Risk multipliers per risk level
 # ---------------------------------------------------------------------------
 

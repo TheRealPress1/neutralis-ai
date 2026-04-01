@@ -158,6 +158,10 @@ class _LiveState:
     price_history: dict[str, deque] = field(default_factory=dict)
     # Momentum scanner: per-ticker rolling average 5m volume (EMA)
     rolling_avg_volume: dict[str, float] = field(default_factory=dict)
+    # Live scores from ESPN: kalshi_ticker -> LiveScore
+    live_scores: dict[str, Any] = field(default_factory=dict)
+    # Score match cache: espn_source_id -> kalshi_ticker (avoids re-matching)
+    score_match_cache: dict[str, str] = field(default_factory=dict)
     # Counters
     ticker_updates: int = 0
     arb_checks: int = 0
@@ -256,6 +260,69 @@ class EventEngine:
                     self._log_executor.submit(self._log_storage.flush_pipeline_logs)
                 except Exception:
                     pass
+
+    async def _periodic_score_poll(self) -> None:
+        """Poll ESPN for live sports scores every 30s, match to Kalshi tickers."""
+        while self._running:
+            await asyncio.sleep(self._settings.scores.poll_interval_sec)
+            if not self._settings.scores.enabled:
+                continue
+            try:
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(self._executor_pool, self._run_score_poll)
+            except Exception:
+                logger.debug("Score poll failed", exc_info=True)
+
+    def _run_score_poll(self) -> None:
+        """Fetch live scores and match them to Kalshi market tickers. Runs sync."""
+        from neutralis.venues.score_provider import ScoreProvider
+        from neutralis.categories import extract_match_names, match_score_to_market_names
+
+        state = self._state
+        if state is None:
+            return
+
+        try:
+            with ScoreProvider(self._settings.scores) as provider:
+                scores = provider.fetch_all_live_scores()
+        except Exception:
+            logger.debug("Score provider fetch failed", exc_info=True)
+            return
+
+        if not scores:
+            return
+
+        matched = 0
+        for score in scores:
+            if score.status != "in_progress":
+                continue
+
+            # Check cache first
+            cached_ticker = state.score_match_cache.get(score.source_id)
+            if cached_ticker and cached_ticker in state.kalshi_markets:
+                state.live_scores[cached_ticker] = score
+                matched += 1
+                continue
+
+            # Try to match against all Kalshi sport markets
+            for ticker, market in state.kalshi_markets.items():
+                names = extract_match_names(market.title)
+                if not names:
+                    continue
+
+                orientation = match_score_to_market_names(
+                    score.home_name, score.away_name, names[0], names[1],
+                )
+                if orientation:
+                    state.live_scores[ticker] = score
+                    state.score_match_cache[score.source_id] = ticker
+                    matched += 1
+                    break
+
+        if matched > 0:
+            self._log_pipeline("info", "scores", f"Live scores updated: {matched} matches", {
+                "matched": matched, "total_scores": len(scores),
+            })
 
     async def start(self) -> None:
         """Initialize state, connect WS, and start all tasks."""
@@ -387,6 +454,7 @@ class EventEngine:
             asyncio.create_task(self._periodic_daily_loss_check(), name="daily_loss_check"),
             asyncio.create_task(self._periodic_bankroll_refresh(), name="bankroll_refresh"),
             asyncio.create_task(self._periodic_flush_logs(), name="flush_logs"),
+            asyncio.create_task(self._periodic_score_poll(), name="score_poll"),
         ]
         if self._poly_ws:
             self._tasks.append(
@@ -1536,6 +1604,7 @@ class EventEngine:
                     price_hist = state.price_history.get(ticker)
                     if price_hist and len(price_hist) >= 3:
                         from neutralis.core.momentum_scanner import check_live_momentum
+                        score_ctx = state.live_scores.get(ticker)
                         momentum_signal = check_live_momentum(
                             ticker=ticker,
                             market=market,
@@ -1546,6 +1615,8 @@ class EventEngine:
                             price_history=price_hist,
                             rolling_avg_volume=state.rolling_avg_volume.get(ticker, 0.0),
                             config=state.settings.momentum,
+                            score_context=score_ctx,
+                            score_config=state.settings.scores,
                         )
                         if momentum_signal is not None:
                             state.signals_detected += 1

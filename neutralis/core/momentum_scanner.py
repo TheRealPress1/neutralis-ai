@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import time
 from collections import deque
+from typing import Any
 
 from neutralis.config import MomentumConfig
 from neutralis.logging import get_logger
@@ -56,11 +57,18 @@ def check_live_momentum(
     price_history: deque[tuple[float, float]],
     rolling_avg_volume: float,
     config: MomentumConfig | None = None,
+    score_context: Any | None = None,
+    score_config: Any | None = None,
 ) -> Signal | None:
     """Check if a sports market has a live momentum signal.
 
     All four factors must align: price velocity, volume surge, flow imbalance,
     and implied probability within the entry band. Returns Signal or None.
+
+    When ``score_context`` (a LiveScore) is provided:
+      - Confirms signals (score agrees with momentum) → boost edge
+      - Rejects false signals (score contradicts) → return None
+      - Enables pre-emptive entries (score moved but price hasn't) → lower thresholds
 
     Args:
         ticker: Market ticker.
@@ -120,7 +128,28 @@ def check_live_momentum(
         min_vel = cfg.basketball_min_velocity
         surge_mult = cfg.basketball_surge_mult
 
-    if abs(velocity) < min_vel:
+    # ── Score-aware threshold adjustment ──
+    # If live score confirms the direction, relax the velocity requirement
+    # (score moved first, price is catching up → pre-emptive entry)
+    score_confirms = False
+    score_contradicts = False
+    if score_context and hasattr(score_context, "status") and score_context.status == "in_progress":
+        # Determine which side the score favors
+        score_prob = score_context.home_win_probability
+        if velocity > 0 and score_prob >= 0.65:
+            score_confirms = True
+        elif velocity < 0 and score_prob <= 0.35:
+            score_confirms = True
+        elif abs(score_prob - 0.50) < 0.10:
+            # Score says match is close — contradicts strong momentum
+            score_contradicts = True
+
+    effective_min_vel = min_vel
+    if score_confirms and score_config:
+        discount = getattr(score_config, "score_velocity_discount", 0.50)
+        effective_min_vel = min_vel * discount
+
+    if abs(velocity) < effective_min_vel:
         return None
 
     # ── 2. Volume surge ──
@@ -167,6 +196,18 @@ def check_live_momentum(
     flow_edge = (imbalance - cfg.flow_imbalance_threshold) * 0.10
 
     total_edge = base_edge + momentum_edge + surge_edge + flow_edge
+
+    # ── Score-based edge adjustment ──
+    if score_contradicts:
+        # Score says match is close but price is moving fast — likely noise
+        logger.debug("Momentum rejected: score contradicts for %s", ticker)
+        return None
+
+    if score_confirms and score_config:
+        boost = getattr(score_config, "score_confirm_boost", 1.5)
+        total_edge *= boost
+        logger.info("Score confirms momentum for %s — edge boosted %.0f%%", ticker, (boost - 1) * 100)
+
     edge_pct = max(0.5, min(total_edge * 100.0, 8.0))
 
     # ── Position sizing ──
@@ -211,6 +252,9 @@ def check_live_momentum(
             "surge_ratio": round(surge_ratio, 2),
             "flow_imbalance": round(imbalance, 4),
             "total_volume_5m": total_volume_5m,
+            "score_confirms": score_confirms,
+            "score_available": score_context is not None,
+            "score_home_prob": getattr(score_context, "home_win_probability", None),
         },
     )
 

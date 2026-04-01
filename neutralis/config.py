@@ -205,6 +205,24 @@ class MomentumConfig:
 
 
 @dataclass(frozen=True)
+class ScoreConfig:
+    enabled: bool = True
+    poll_interval_sec: float = 30.0
+    timeout_sec: float = 10.0
+    # ESPN league slugs to poll
+    tennis_leagues: tuple[str, ...] = ("atp", "wta")
+    soccer_leagues: tuple[str, ...] = (
+        "eng.1", "ger.1", "ita.1", "esp.1", "fra.1",
+        "usa.1", "uefa.champions", "uefa.europa",
+    )
+    basketball_leagues: tuple[str, ...] = ("nba",)
+    # Edge multiplier when score confirms momentum
+    score_confirm_boost: float = 1.5
+    # Velocity threshold reduction when score confirms direction
+    score_velocity_discount: float = 0.50
+
+
+@dataclass(frozen=True)
 class ExecutionConfig:
     live_trading_enabled: bool = field(
         default_factory=lambda: os.environ.get("LIVE_TRADING_ENABLED", "true").lower()
@@ -391,6 +409,7 @@ class Settings:
     polymarket_us_ws: PolymarketUSWSConfig = field(default_factory=PolymarketUSWSConfig)
     directional: DirectionalConfig = field(default_factory=DirectionalConfig)
     momentum: MomentumConfig = field(default_factory=MomentumConfig)
+    scores: ScoreConfig = field(default_factory=ScoreConfig)
     performance_fees: PerformanceFeeConfig = field(default_factory=PerformanceFeeConfig)
 
 
