@@ -175,7 +175,7 @@ export default function LivePanel({
 
   /* ── Automation handlers ────────────────────────────────────── */
   async function handleToggle() {
-    if (!autoState || autoState.status === "killed") return;
+    if (!autoState) return;
     if (autoState.status !== "running" && !hasBothVenues) return;
     setToggling(true);
     setActionError(null);
@@ -205,7 +205,7 @@ export default function LivePanel({
   const enginePaused = h?.paused === true;
   const isKilled = autoState?.status === "killed";
   const isRunning = autoState?.status === "running";
-  const canStart = hasBothVenues && !isKilled;
+  const canStart = hasBothVenues;
   const guardPassCount = (d: Decision) => d.guard_results?.filter((g) => g.passed).length ?? 0;
   const guardTotalCount = (d: Decision) => d.guard_results?.length ?? 0;
 
@@ -242,9 +242,9 @@ export default function LivePanel({
           <div className="flex items-center gap-3">
             <button
               onClick={handleToggle}
-              disabled={toggling || isKilled || (!isRunning && !canStart)}
+              disabled={toggling || (!isRunning && !canStart)}
               className={`rounded-lg px-6 py-3 text-sm font-semibold transition-colors ${
-                isKilled || (!isRunning && !canStart)
+                !isRunning && !canStart
                   ? "cursor-not-allowed bg-[#1a1d21] text-[#9ca3af]"
                   : isRunning
                     ? "bg-amber-400/10 text-amber-400 hover:bg-amber-400/20"
@@ -252,7 +252,6 @@ export default function LivePanel({
               }`}
             >
               {toggling ? "Processing..."
-                : isKilled ? "Automation Killed"
                 : isRunning ? "Pause Automation"
                 : !canStart ? "Configure API Keys to Start"
                 : "Start Automation"}
