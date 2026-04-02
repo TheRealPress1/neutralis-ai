@@ -212,9 +212,93 @@ export default function LivePanel({
   return (
     <div className="space-y-6">
       {/* ══════════════════════════════════════════════════════════
-          HERO: Engine Status + Automation Controls
+          Automation Controls — ALWAYS visible
           ══════════════════════════════════════════════════════════ */}
-      {engineConnected ? (
+      <div className="card-panel rounded-xl">
+        <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-5">
+          <div className="flex items-center gap-4">
+            {/* Status indicator */}
+            <div className="relative flex h-4 w-4 items-center justify-center">
+              {isRunning && (
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
+              )}
+              <span className={`relative inline-flex h-3 w-3 rounded-full ${
+                isKilled ? "bg-red-400" : isRunning ? "bg-emerald-400" : "bg-amber-400"
+              }`} />
+            </div>
+            <div>
+              <h2 className="font-[family-name:var(--font-italiana)] text-xl font-normal tracking-[0.04em]">
+                Automation{" "}
+                <span className={isKilled ? "text-red-400" : isRunning ? "text-emerald-400" : "text-amber-400"}>
+                  {isKilled ? "Killed" : isRunning ? "Running" : "Paused"}
+                </span>
+              </h2>
+              {autoState?.started_at && isRunning && (
+                <p className="mt-0.5 text-xs text-[#9ca3af]">Running since {new Date(autoState.started_at).toLocaleString()}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleToggle}
+              disabled={toggling || isKilled || (!isRunning && !canStart)}
+              className={`rounded-lg px-6 py-3 text-sm font-semibold transition-colors ${
+                isKilled || (!isRunning && !canStart)
+                  ? "cursor-not-allowed bg-[#1a1d21] text-[#9ca3af]"
+                  : isRunning
+                    ? "bg-amber-400/10 text-amber-400 hover:bg-amber-400/20"
+                    : "bg-emerald-400/10 text-emerald-400 hover:bg-emerald-400/20"
+              }`}
+            >
+              {toggling ? "Processing..."
+                : isKilled ? "Automation Killed"
+                : isRunning ? "Pause Automation"
+                : !canStart ? "Configure API Keys to Start"
+                : "Start Automation"}
+            </button>
+            <button
+              onClick={handleKill}
+              disabled={isKilled}
+              className={`rounded-lg px-6 py-3 text-sm font-bold uppercase tracking-wider transition-all ${
+                isKilled
+                  ? "cursor-not-allowed bg-[#1a1d21] text-[#9ca3af]"
+                  : killArmed
+                    ? "animate-pulse bg-red-500 text-white ring-2 ring-red-400 ring-offset-2 ring-offset-[#050608]"
+                    : "bg-red-400/10 text-red-400 hover:bg-red-400/20"
+              }`}
+            >
+              {isKilled ? "Kill Switch Triggered" : killArmed ? "Click Again to Confirm" : "Kill Switch"}
+            </button>
+          </div>
+        </div>
+
+        {actionError && <p className="px-6 pb-4 text-sm text-red-400">{actionError}</p>}
+
+        {isKilled && autoState?.killed_reason && (
+          <div className="mx-6 mb-4 rounded-lg border border-red-400/20 bg-red-400/5 px-4 py-3 text-sm text-red-400">
+            <span className="font-medium">Reason:</span> {autoState.killed_reason}
+          </div>
+        )}
+
+        {!isRunning && !hasBothVenues && (
+          <div className="mx-6 mb-4 rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-3">
+            <p className="text-xs text-amber-400">
+              {!hasKalshi && "Kalshi keys missing. "}{!hasPoly && "Polymarket keys missing. "}
+              {onNavigate && (
+                <button onClick={() => onNavigate("connections")} className="underline hover:no-underline">
+                  Go to Connections
+                </button>
+              )}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════
+          Engine Status Banner
+          ══════════════════════════════════════════════════════════ */}
+      {engineConnected && h ? (
         <div
           className={`rounded-xl border ${
             enginePaused
@@ -246,62 +330,11 @@ export default function LivePanel({
                 </p>
               </div>
             </div>
-
-            {/* Automation controls inline */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleToggle}
-                disabled={toggling || isKilled || (!isRunning && !canStart)}
-                className={`rounded-lg px-5 py-2 text-xs font-semibold transition-colors ${
-                  isKilled || (!isRunning && !canStart)
-                    ? "cursor-not-allowed bg-[#1a1d21] text-[#9ca3af]"
-                    : isRunning
-                      ? "bg-amber-400/10 text-amber-400 hover:bg-amber-400/20"
-                      : "bg-emerald-400/10 text-emerald-400 hover:bg-emerald-400/20"
-                }`}
-              >
-                {toggling ? "..." : isKilled ? "Killed" : isRunning ? "Pause" : !canStart ? "Configure Keys" : "Start"}
-              </button>
-              <button
-                onClick={handleKill}
-                disabled={isKilled}
-                className={`rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
-                  isKilled
-                    ? "cursor-not-allowed bg-[#1a1d21] text-[#9ca3af]"
-                    : killArmed
-                      ? "animate-pulse bg-red-500 text-white ring-2 ring-red-400 ring-offset-2 ring-offset-[#050608]"
-                      : "bg-red-400/10 text-red-400 hover:bg-red-400/20"
-                }`}
-              >
-                {isKilled ? "Killed" : killArmed ? "Confirm Kill" : "Kill"}
-              </button>
-            </div>
+            <span className="rounded-md bg-[#1a1d21] px-3 py-1.5 text-xs font-medium text-[#9ca3af]">
+              {h.status?.toUpperCase()}
+            </span>
           </div>
 
-          {actionError && <p className="mt-2 text-xs text-red-400">{actionError}</p>}
-
-          {/* Killed reason */}
-          {isKilled && autoState?.killed_reason && (
-            <div className="mt-3 rounded-lg border border-red-400/20 bg-red-400/5 px-4 py-2 text-sm text-red-400">
-              <span className="font-medium">Reason:</span> {autoState.killed_reason}
-            </div>
-          )}
-
-          {/* Missing keys warning */}
-          {!isRunning && !hasBothVenues && (
-            <div className="mt-3 rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-2">
-              <p className="text-xs text-amber-400">
-                {!hasKalshi && "Kalshi keys missing. "}{!hasPoly && "Polymarket keys missing. "}
-                {onNavigate && (
-                  <button onClick={() => onNavigate("connections")} className="underline hover:no-underline">
-                    Go to Connections
-                  </button>
-                )}
-              </p>
-            </div>
-          )}
-
-          {/* Stale price warning */}
           {h.prices_stale && (
             <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-2">
               <span className="h-2 w-2 rounded-full bg-amber-400" />
@@ -316,64 +349,26 @@ export default function LivePanel({
           )}
         </div>
       ) : (
-        /* ── Disconnected Banner ──────────────────────────────── */
-        <div className="rounded-xl border border-red-400/20 bg-red-400/5 px-6 py-8">
+        <div className="rounded-xl border border-red-400/20 bg-red-400/5 px-6 py-6">
           <div className="flex flex-col items-center text-center">
-            <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-400/10">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-6 w-6 text-red-400">
+            <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-red-400/10">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5 text-red-400">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.288 15.038a5.25 5.25 0 0 1 7.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 0 1 1.06 0Z" />
               </svg>
             </span>
             <h2 className="text-lg font-semibold text-red-400">ENGINE DISCONNECTED</h2>
-            <p className="mt-2 max-w-md text-sm text-[#9ca3af]">
+            <p className="mt-1 max-w-md text-sm text-[#9ca3af]">
               The trading engine is not responding.
             </p>
-
-            {/* Still show automation controls when disconnected */}
-            {autoState && (
-              <div className="mt-4 flex items-center gap-3">
-                <button
-                  onClick={handleToggle}
-                  disabled={toggling || isKilled || (!isRunning && !canStart)}
-                  className={`rounded-lg px-5 py-2 text-xs font-semibold transition-colors ${
-                    isKilled || (!isRunning && !canStart)
-                      ? "cursor-not-allowed bg-[#1a1d21] text-[#9ca3af]"
-                      : isRunning
-                        ? "bg-amber-400/10 text-amber-400 hover:bg-amber-400/20"
-                        : "bg-emerald-400/10 text-emerald-400 hover:bg-emerald-400/20"
-                  }`}
-                >
-                  {toggling ? "..." : isKilled ? "Killed" : isRunning ? "Pause" : !canStart ? "Configure Keys" : "Start"}
-                </button>
-                <button
-                  onClick={handleKill}
-                  disabled={isKilled}
-                  className={`rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
-                    isKilled
-                      ? "cursor-not-allowed bg-[#1a1d21] text-[#9ca3af]"
-                      : killArmed
-                        ? "animate-pulse bg-red-500 text-white"
-                        : "bg-red-400/10 text-red-400 hover:bg-red-400/20"
-                  }`}
-                >
-                  {isKilled ? "Killed" : killArmed ? "Confirm Kill" : "Kill"}
-                </button>
-              </div>
-            )}
-
-            {actionError && <p className="mt-2 text-xs text-red-400">{actionError}</p>}
-
-            <div className="mt-4 text-left text-xs text-[#3b3f46]">
-              <p className="mb-1 font-medium text-[#9ca3af]">Troubleshooting:</p>
+            <div className="mt-3 text-left text-xs text-[#3b3f46]">
               <ul className="list-inside list-disc space-y-1">
                 <li>Check that the daemon service is running on Railway</li>
                 <li>Verify <code className="rounded bg-[#1a1d21] px-1 text-[#9ca3af]">WEBSOCKET_ENABLED=true</code> is set</li>
-                <li>Check Railway logs for startup errors</li>
               </ul>
             </div>
             <button
               onClick={handleRetry}
-              className="mt-5 rounded-lg border border-red-400/30 bg-red-400/10 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-400/20"
+              className="mt-4 rounded-lg border border-red-400/30 bg-red-400/10 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-400/20"
             >
               Retry Now
             </button>
