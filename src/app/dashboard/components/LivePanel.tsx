@@ -51,13 +51,24 @@ function WsDot({ connected }: { connected?: boolean }) {
 function wsCount(h: EngineHealth) {
   let count = 0;
   if (h.kalshi_ws_connected) count++;
-  if (h.poly_ws_connected) count++;
-  if (h.poly_us_ws_connected) count++;
+  if (h.poly_ws_connected || h.poly_us_ws_connected) count++;
   return count;
 }
 
 function totalMarkets(h: EngineHealth) {
   return (h.kalshi_markets ?? 0) + (h.poly_markets ?? 0) + (h.poly_us_markets ?? 0);
+}
+
+function polyWsConnected(h: EngineHealth) {
+  return h.poly_ws_connected || h.poly_us_ws_connected;
+}
+
+function polyWsSubs(h: EngineHealth) {
+  return (h.poly_ws_subscriptions ?? 0) + (h.poly_us_ws_subscriptions ?? 0);
+}
+
+function polyMarkets(h: EngineHealth) {
+  return (h.poly_markets ?? 0) + (h.poly_us_markets ?? 0);
 }
 
 /* ── Component ───────────────────────────────────────────────────── */
@@ -323,7 +334,7 @@ export default function LivePanel({
                     : `ENGINE ${h.status?.toUpperCase()}`}
                 </h2>
                 <p className="mt-0.5 text-xs text-[#9ca3af]">
-                  {wsCount(h)} WS feed{wsCount(h) !== 1 ? "s" : ""} active
+                  {wsCount(h)}/2 feeds active
                   {" \u00b7 "}{totalMarkets(h).toLocaleString()} markets
                   {" \u00b7 "}{h.xp_pairs ?? 0} pairs
                 </p>
@@ -384,9 +395,8 @@ export default function LivePanel({
             <p className="text-[10px] font-medium uppercase tracking-wider text-[#9ca3af]">WebSocket Feeds</p>
             <div className="mt-3 space-y-2">
               {[
-                { label: "Kalshi", connected: h.kalshi_ws_connected, subs: h.kalshi_ws_subscriptions },
-                { label: "Polymarket", connected: h.poly_ws_connected, subs: h.poly_ws_subscriptions },
-                { label: "Poly US", connected: h.poly_us_ws_connected, subs: h.poly_us_ws_subscriptions },
+                { label: "Kalshi", connected: h.kalshi_ws_connected, subs: h.kalshi_ws_subscriptions ?? 0 },
+                { label: "Polymarket", connected: polyWsConnected(h), subs: polyWsSubs(h) },
               ].map((ws) => (
                 <div key={ws.label} className="flex items-center justify-between text-xs">
                   <span className="flex items-center gap-2"><WsDot connected={ws.connected} /> {ws.label}</span>
@@ -401,8 +411,7 @@ export default function LivePanel({
             <div className="mt-3 space-y-2 text-xs">
               {[
                 { label: "Kalshi", count: h.kalshi_markets },
-                { label: "Polymarket", count: h.poly_markets },
-                { label: "Poly US", count: h.poly_us_markets },
+                { label: "Polymarket", count: polyMarkets(h) },
               ].map((m) => (
                 <div key={m.label} className="flex justify-between">
                   <span>{m.label}</span>

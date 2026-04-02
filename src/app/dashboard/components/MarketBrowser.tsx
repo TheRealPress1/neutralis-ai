@@ -5,7 +5,7 @@ import type { MarketSnapshot } from "@/types/api";
 import { fetchMarketSnapshots } from "@/lib/api";
 import MatchesTable from "./MatchesTable";
 
-const VENUES = ["all", "kalshi", "polymarket", "polymarket_us"] as const;
+const VENUES = ["all", "kalshi", "polymarket"] as const;
 const SUB_TABS = ["browse", "pairs"] as const;
 type SubTab = (typeof SUB_TABS)[number];
 
@@ -86,7 +86,7 @@ export default function MarketBrowser({ refreshKey }: { refreshKey: number }) {
                         : "text-[#9ca3af] hover:text-[#e8e9ea]"
                     }`}
                   >
-                    {v === "all" ? "All" : v === "polymarket_us" ? "Poly US" : v.charAt(0).toUpperCase() + v.slice(1)}
+                    {v === "all" ? "All" : v === "polymarket" ? "Polymarket" : "Kalshi"}
                   </button>
                 ))}
               </div>
@@ -140,11 +140,9 @@ export default function MarketBrowser({ refreshKey }: { refreshKey: number }) {
                         <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                           m.venue === "kalshi"
                             ? "bg-blue-400/10 text-blue-400"
-                            : m.venue === "polymarket_us"
-                              ? "bg-amber-400/10 text-amber-400"
-                              : "bg-purple-400/10 text-purple-400"
+                            : "bg-purple-400/10 text-purple-400"
                         }`}>
-                          {m.venue === "polymarket_us" ? "Poly US" : m.venue}
+                          {m.venue === "kalshi" ? "Kalshi" : "Polymarket"}
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-right font-mono text-[#e8e9ea]">
