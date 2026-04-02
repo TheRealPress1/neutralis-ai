@@ -94,6 +94,7 @@ export default function LivePanel({
 
   // Automation state
   const [autoState, setAutoState] = useState<AutomationState | null>(null);
+  const [autoLoading, setAutoLoading] = useState(true);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [toggling, setToggling] = useState(false);
   const [killArmed, setKillArmed] = useState(false);
@@ -127,9 +128,11 @@ export default function LivePanel({
   /* ── Automation state + decisions ───────────────────────────── */
   useEffect(() => {
     let cancelled = false;
+    setAutoLoading(true);
     Promise.all([fetchAutomationState(), fetchDecisions(20)])
       .then(([s, d]) => { if (!cancelled) { setAutoState(s); setDecisions(d); } })
-      .catch(() => { if (!cancelled) { setAutoState(null); setDecisions([]); } });
+      .catch(() => { if (!cancelled) { setAutoState(null); setDecisions([]); } })
+      .finally(() => { if (!cancelled) setAutoLoading(false); });
     return () => { cancelled = true; };
   }, [refreshKey]);
 
@@ -230,19 +233,24 @@ export default function LivePanel({
           <div className="flex items-center gap-4">
             {/* Status indicator */}
             <div className="relative flex h-4 w-4 items-center justify-center">
-              {isRunning && (
+              {isRunning && !autoLoading && (
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
               )}
               <span className={`relative inline-flex h-3 w-3 rounded-full ${
-                isKilled ? "bg-red-400" : isRunning ? "bg-emerald-400" : "bg-amber-400"
+                autoLoading ? "bg-[#3b3f46] animate-pulse"
+                  : isKilled ? "bg-red-400" : isRunning ? "bg-emerald-400" : "bg-amber-400"
               }`} />
             </div>
             <div>
               <h2 className="font-[family-name:var(--font-italiana)] text-xl font-normal tracking-[0.04em]">
                 Automation{" "}
-                <span className={isKilled ? "text-red-400" : isRunning ? "text-emerald-400" : "text-amber-400"}>
-                  {isKilled ? "Killed" : isRunning ? "Running" : "Paused"}
-                </span>
+                {autoLoading ? (
+                  <span className="text-[#3b3f46]">Loading...</span>
+                ) : (
+                  <span className={isKilled ? "text-red-400" : isRunning ? "text-emerald-400" : "text-amber-400"}>
+                    {isKilled ? "Killed" : isRunning ? "Running" : "Paused"}
+                  </span>
+                )}
               </h2>
               {autoState?.started_at && isRunning && (
                 <p className="mt-0.5 text-xs text-[#9ca3af]">Running since {new Date(autoState.started_at).toLocaleString()}</p>
