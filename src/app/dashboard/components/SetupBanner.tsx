@@ -4,7 +4,7 @@ type NavTab =
   | "dashboard"
   | "automation"
   | "activity"
-  | "matches"
+  | "markets"
   | "connections"
   | "settings";
 

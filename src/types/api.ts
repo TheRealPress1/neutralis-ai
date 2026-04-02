@@ -398,3 +398,12 @@ export interface ManualOrderResult {
   filled_price?: number;
   filled_quantity?: number;
 }
+
+// --- Activity Timeline ---
+
+export type TimelineItem =
+  | { kind: "signal"; data: Signal; ts: string }
+  | { kind: "decision"; data: Decision; ts: string }
+  | { kind: "order"; data: Order; ts: string }
+  | { kind: "fill"; data: Fill; ts: string }
+  | { kind: "position"; data: Position; ts: string };

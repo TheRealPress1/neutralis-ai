@@ -412,6 +412,21 @@ def evaluate_and_execute_for_user(
     result = UserRunResult(user_id=uid)
 
     with PostgresStorage(settings.db, user_id=uid) as storage:
+        # ── Step -1: Check automation state (respects dashboard toggle) ──
+        auto_state = storage.get_automation_state()
+        if auto_state:
+            status = auto_state.get("status", "")
+            kill_switch = auto_state.get("kill_switch", False)
+            if status == "killed" or kill_switch:
+                logger.warning(
+                    "Automation killed for user %s (reason: %s) — skipping",
+                    uid[:8], auto_state.get("killed_reason", "unknown"),
+                )
+                return result
+            if status == "paused":
+                logger.info("Automation paused for user %s — skipping", uid[:8])
+                return result
+
         # ── Step 0: Settle resolved positions ──
         settlement = run_settlement(
             settings, notifier=notifier, storage=storage, user_id=uid,

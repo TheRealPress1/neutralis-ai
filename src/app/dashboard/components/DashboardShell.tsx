@@ -5,10 +5,9 @@ import BalanceBar from "./BalanceBar";
 import StatsBar from "./StatsBar";
 import PositionsTable from "./PositionsTable";
 import ActivityFeed from "./ActivityFeed";
-import MatchesTable from "./MatchesTable";
 import SettingsPage from "./SettingsPage";
 import AutomationPanel from "./AutomationPanel";
-import ActivityLog from "./ActivityLog";
+import ActivityTimeline from "./ActivityTimeline";
 import SetupBanner from "./SetupBanner";
 import ApiKeyManager from "./ApiKeyManager";
 import UpgradeBanner from "./UpgradeBanner";
@@ -20,7 +19,7 @@ import Link from "next/link";
 import { hasAccess, type SubscriptionTier } from "@/lib/subscription";
 import { useRealtimeDashboard } from "@/hooks/useRealtimeDashboard";
 
-type NavTab = "dashboard" | "live" | "automation" | "activity" | "markets" | "matches" | "connections" | "settings" | "founder";
+type NavTab = "dashboard" | "live" | "automation" | "activity" | "markets" | "connections" | "settings" | "founder";
 
 const BASE_NAV_ITEMS: { id: NavTab; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
@@ -28,7 +27,6 @@ const BASE_NAV_ITEMS: { id: NavTab; label: string }[] = [
   { id: "automation", label: "Automation" },
   { id: "activity", label: "Activity" },
   { id: "markets", label: "Markets" },
-  { id: "matches", label: "Explore" },
   { id: "connections", label: "Connections" },
   { id: "settings", label: "Settings" },
 ];
@@ -224,19 +222,13 @@ export default function DashboardShell({
 
         {activeTab === "activity" && (
           <section className="mt-2">
-            <ActivityLog refreshKey={refreshKey} />
+            <ActivityTimeline refreshKey={refreshKey} />
           </section>
         )}
 
         {activeTab === "markets" && (
           <section className="mt-2">
             <MarketBrowser refreshKey={refreshKey} />
-          </section>
-        )}
-
-        {activeTab === "matches" && (
-          <section className="mt-2">
-            <MatchesTable refreshKey={refreshKey} />
           </section>
         )}
 

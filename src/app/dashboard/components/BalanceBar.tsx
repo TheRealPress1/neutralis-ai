@@ -15,7 +15,7 @@ export default function BalanceBar({
   onNavigate,
 }: {
   refreshKey: number;
-  onNavigate?: (tab: "dashboard" | "automation" | "activity" | "matches" | "connections" | "settings") => void;
+  onNavigate?: (tab: "dashboard" | "automation" | "activity" | "markets" | "connections" | "settings") => void;
 }) {
   const [balances, setBalances] = useState<ExchangeBalances | null>(null);
   const [loading, setLoading] = useState(true);

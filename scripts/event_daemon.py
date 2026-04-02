@@ -37,47 +37,75 @@ from neutralis.services.user_credentials import load_active_users, load_user_cre
 logger = get_logger("event_daemon")
 
 
-def _start_health_server(engine: EventEngine, port: int) -> None:
-    """Start a minimal HTTP health server on a background daemon thread."""
+_health_engine: EventEngine | None = None
+_health_server: HTTPServer | None = None
 
-    class _Handler(BaseHTTPRequestHandler):
-        def do_GET(self) -> None:
-            if self.path != "/health":
-                self.send_response(404)
-                self.end_headers()
-                return
-            body = json.dumps(engine.health_snapshot())
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
+
+class _HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:
+        if self.path != "/health":
+            self.send_response(404)
             self.end_headers()
-            self.wfile.write(body.encode())
+            return
+        if _health_engine is not None:
+            body = json.dumps(_health_engine.health_snapshot())
+        else:
+            body = json.dumps({"status": "starting", "engine": "initializing"})
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(body.encode())
 
-        def log_message(self, format: str, *args: object) -> None:
-            pass
+    def log_message(self, format: str, *args: object) -> None:
+        pass
 
+
+def _start_health_server_early(port: int) -> None:
+    """Start the health server immediately (before engine/DB init)."""
+    global _health_server  # noqa: PLW0603
     try:
-        server = HTTPServer(("0.0.0.0", port), _Handler)
+        _health_server = HTTPServer(("0.0.0.0", port), _HealthHandler)
     except OSError:
         logger.warning("Health server failed to bind to port %d", port, exc_info=True)
         return
-
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread = threading.Thread(target=_health_server.serve_forever, daemon=True)
     thread.start()
-    logger.info("Health server listening on port %d", port)
+    logger.info("Health server listening on port %d (pre-init)", port)
+
+
+def _promote_health_server(engine: EventEngine) -> None:
+    """Attach the real engine to the health server for detailed snapshots."""
+    global _health_engine  # noqa: PLW0603
+    _health_engine = engine
+    logger.info("Health server promoted to engine-backed responses")
 
 
 async def main() -> None:
     settings = load_settings()
     ws_cfg = settings.websocket
 
-    # Startup health check
-    logger.info("Running startup health check")
-    try:
-        with PostgresStorage(settings.db):
-            pass
-        logger.info("Health check passed: database reachable")
-    except Exception:
-        logger.exception("Health check failed: database unreachable")
+    # Start health server FIRST so Railway sees the service is alive
+    # (even if DB is temporarily unreachable)
+    _start_health_server_early(ws_cfg.health_port)
+
+    # Startup DB connectivity check (retry up to 5 times)
+    logger.info("Running startup database connectivity check")
+    db_ok = False
+    for attempt in range(1, 6):
+        try:
+            with PostgresStorage(settings.db):
+                pass
+            logger.info("Database reachable (attempt %d)", attempt)
+            db_ok = True
+            break
+        except Exception:
+            logger.warning(
+                "Database unreachable (attempt %d/5)", attempt, exc_info=True
+            )
+            if attempt < 5:
+                await asyncio.sleep(5 * attempt)  # 5s, 10s, 15s, 20s backoff
+    if not db_ok:
+        logger.error("Database unreachable after 5 attempts — exiting")
         sys.exit(1)
 
     # Check automation state before starting — refuse to start if killed or paused
@@ -158,8 +186,8 @@ async def main() -> None:
     # Create engine with DB credentials if available
     engine = EventEngine(settings, kalshi_key_id=kalshi_key_id, kalshi_pem=kalshi_pem)
 
-    # Health endpoint
-    _start_health_server(engine, ws_cfg.health_port)
+    # Promote health endpoint with real engine data
+    _promote_health_server(engine)
 
     # Graceful shutdown
     loop = asyncio.get_event_loop()

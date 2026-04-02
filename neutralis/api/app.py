@@ -29,7 +29,8 @@ _storage: PostgresStorage | None = None
 
 
 def _get_storage() -> PostgresStorage:
-    assert _storage is not None, "Storage not initialized"
+    if _storage is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
     return _storage
 
 
@@ -52,11 +53,21 @@ def _serialize(obj: Any) -> Any:
 async def lifespan(application: FastAPI):  # noqa: ARG001
     global _storage  # noqa: PLW0603
     settings = load_settings()
-    _storage = PostgresStorage(settings.db)
-    _storage.connect()
+    try:
+        _storage = PostgresStorage(settings.db)
+        _storage.connect()
+    except Exception:
+        import logging
+        logging.getLogger("neutralis.api").warning(
+            "Database unavailable at startup — health endpoints active, "
+            "data endpoints will return 503 until DB reconnects",
+            exc_info=True,
+        )
+        _storage = None
     yield
-    _storage.close()
-    _storage = None
+    if _storage is not None:
+        _storage.close()
+        _storage = None
 
 
 app = FastAPI(

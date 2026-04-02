@@ -28,7 +28,7 @@ export default function MatchesTable({ refreshKey }: { refreshKey: number }) {
     let cancelled = false;
     function load() {
       setLoading(true);
-      fetchMatches(25)
+      fetchMatches(50)
         .then((d) => { if (!cancelled) setMatches(d); })
         .catch(() => { if (!cancelled) setMatches([]); })
         .finally(() => { if (!cancelled) setLoading(false); });
@@ -38,13 +38,7 @@ export default function MatchesTable({ refreshKey }: { refreshKey: number }) {
   }, [refreshKey]);
 
   return (
-    <div className="card-panel rounded-xl">
-      <div className="border-b border-[#1a1d21] px-5 py-4">
-        <h2 className="font-[family-name:var(--font-cormorant)] text-base font-medium tracking-wide text-[#9ca3af]">
-          Cross-Platform Matches
-        </h2>
-      </div>
-
+    <div>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
@@ -118,3 +112,4 @@ export default function MatchesTable({ refreshKey }: { refreshKey: number }) {
     </div>
   );
 }
+

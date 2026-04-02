@@ -12,10 +12,12 @@ const WATCHED_TABLES = [
   "orders",
   "trades",
   "pipeline_logs",
+  "market_snapshots",
+  "market_matches",
 ] as const;
 
 /** Minimum ms between onUpdate calls — prevents refetch storms during signal bursts. */
-const THROTTLE_MS = 2_000;
+const THROTTLE_MS = 1_000;
 
 /**
  * Subscribe to Supabase Realtime postgres_changes on dashboard-critical tables.
