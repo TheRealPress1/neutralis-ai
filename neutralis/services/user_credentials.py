@@ -71,7 +71,7 @@ def load_user_credentials(
                 private_key_pem=pem_str,
             )
 
-        elif platform == "polymarket":
+        elif platform in ("polymarket", "polymarket_us"):
             secret = try_decrypt(row.get("api_secret", ""))
             passphrase = try_decrypt(row.get("private_key_pem", ""))
             poly_creds = PolymarketCredentials(
