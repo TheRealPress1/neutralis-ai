@@ -624,16 +624,20 @@ class EventEngine:
         # Fetch Polymarket US (if credentials configured)
         poly_us_markets: dict[str, NormalizedMarket] = {}
         if settings.execution.polymarket_us_key_id:
+            logger.info("Fetching Polymarket US markets (key_id=%s...)", settings.execution.polymarket_us_key_id[:8])
             try:
                 with PolymarketUSClient(settings.polymarket_us) as us_client:
                     raw_poly_us = us_client.get_all_active_markets()
+                logger.info("Polymarket US: %d raw markets fetched", len(raw_poly_us))
                 for raw in raw_poly_us:
                     nm = poly_us_normalize(raw)
                     if nm and nm.market_type == MarketType.BINARY:
                         poly_us_markets[nm.ticker] = nm
-                logger.info("Polymarket US: %d binary markets fetched", len(poly_us_markets))
+                logger.info("Polymarket US: %d binary markets after normalization", len(poly_us_markets))
             except Exception:
                 logger.warning("Failed to fetch Polymarket US markets", exc_info=True)
+        else:
+            logger.info("Skipping Polymarket US (no polymarket_us_key_id in settings)")
 
         # Match cross-platform (international + US Polymarket combined)
         all_poly_for_matching = list(poly_markets.values()) + list(poly_us_markets.values())
