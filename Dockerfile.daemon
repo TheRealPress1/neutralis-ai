@@ -9,8 +9,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Bust cache on code changes
-ARG CACHE_BUST=1
 COPY neutralis/ neutralis/
 COPY scripts/ scripts/
 COPY migrations/ migrations/
