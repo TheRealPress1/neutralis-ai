@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import BalanceBar from "./BalanceBar";
 import StatsBar from "./StatsBar";
 import PositionsTable from "./PositionsTable";
@@ -50,9 +51,26 @@ export default function DashboardShell({
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [elapsed, setElapsed] = useState(0);
-  const [activeTab, setActiveTab] = useState<NavTab>("dashboard");
   const tier = initialTier;
   const isFounder = initialIsFounder;
+
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const VALID_TABS = useMemo(() => new Set<NavTab>(["dashboard", "live", "activity", "markets", "connections", "settings", "founder"]), []);
+
+  const rawTab = searchParams.get("tab") ?? "dashboard";
+  const activeTab: NavTab = VALID_TABS.has(rawTab as NavTab) ? (rawTab as NavTab) : "dashboard";
+
+  const setActiveTab = useCallback((tab: NavTab) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (tab === "dashboard") {
+      params.delete("tab");
+    } else {
+      params.set("tab", tab);
+    }
+    const qs = params.toString();
+    router.push(`/dashboard${qs ? `?${qs}` : ""}`, { scroll: false });
+  }, [router, searchParams]);
 
   const handleRefresh = useCallback(() => {
     setRefreshKey((k) => k + 1);
