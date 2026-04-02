@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 const PYTHON_API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+  process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 /** Cache the last successful health response for 1s to coalesce concurrent requests. */
 let cachedResponse: Record<string, unknown> | null = null;
