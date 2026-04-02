@@ -14,7 +14,6 @@
 
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
 
 [deploy]
 # Health check paths differ per service — set them in the Railway dashboard:
