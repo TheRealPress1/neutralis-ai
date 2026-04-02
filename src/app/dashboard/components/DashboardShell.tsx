@@ -6,11 +6,9 @@ import StatsBar from "./StatsBar";
 import PositionsTable from "./PositionsTable";
 import ActivityFeed from "./ActivityFeed";
 import SettingsPage from "./SettingsPage";
-import AutomationPanel from "./AutomationPanel";
 import ActivityTimeline from "./ActivityTimeline";
 import SetupBanner from "./SetupBanner";
 import ApiKeyManager from "./ApiKeyManager";
-import UpgradeBanner from "./UpgradeBanner";
 import AccessCodeGenerator from "./AccessCodeGenerator";
 import LivePanel from "./LivePanel";
 import MarketBrowser from "./MarketBrowser";
@@ -19,12 +17,11 @@ import Link from "next/link";
 import { hasAccess, type SubscriptionTier } from "@/lib/subscription";
 import { useRealtimeDashboard } from "@/hooks/useRealtimeDashboard";
 
-type NavTab = "dashboard" | "live" | "automation" | "activity" | "markets" | "connections" | "settings" | "founder";
+type NavTab = "dashboard" | "live" | "activity" | "markets" | "connections" | "settings" | "founder";
 
 const BASE_NAV_ITEMS: { id: NavTab; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
   { id: "live", label: "Live" },
-  { id: "automation", label: "Automation" },
   { id: "activity", label: "Activity" },
   { id: "markets", label: "Markets" },
   { id: "connections", label: "Connections" },
@@ -197,26 +194,13 @@ export default function DashboardShell({
 
         {activeTab === "live" && (
           <section className="mt-2">
-            <LivePanel refreshKey={refreshKey} />
-          </section>
-        )}
-
-        {activeTab === "automation" && (
-          <section className="mt-2">
-            {!hasAccess(tier, "starter") ? (
-              <UpgradeBanner
-                feature="Automated execution"
-                requiredTier="starter"
-              />
-            ) : (
-              <AutomationPanel
-                refreshKey={refreshKey}
-                hasBothVenues={initialHasBothVenues}
-                hasKalshi={initialHasKalshi}
-                hasPoly={initialHasPoly}
-                onNavigate={setActiveTab}
-              />
-            )}
+            <LivePanel
+              refreshKey={refreshKey}
+              hasBothVenues={initialHasBothVenues}
+              hasKalshi={initialHasKalshi}
+              hasPoly={initialHasPoly}
+              onNavigate={setActiveTab}
+            />
           </section>
         )}
 
