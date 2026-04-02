@@ -151,22 +151,32 @@ async def main() -> None:
             exc_info=True,
         )
 
-    # Load credentials from DB — find the first active user with valid Kalshi keys
+    # Load credentials from DB — find the first active user with valid keys
     kalshi_key_id = ""
     kalshi_pem = ""
+    poly_us_key_id = ""
+    poly_us_secret = ""
     try:
         with PostgresStorage(settings.db) as storage:
             users = load_active_users(storage)
             for user in users:
                 uid = str(user["user_id"])
                 creds = load_user_credentials(storage, uid)
-                if creds.kalshi:
+                if creds.kalshi and not kalshi_key_id:
                     kalshi_key_id = creds.kalshi.api_key_id
                     kalshi_pem = creds.kalshi.private_key_pem
                     logger.info(
                         "Loaded Kalshi credentials from user %s for WS auth",
                         uid[:8],
                     )
+                if creds.polymarket and not poly_us_key_id:
+                    poly_us_key_id = creds.polymarket.api_key
+                    poly_us_secret = creds.polymarket.api_secret
+                    logger.info(
+                        "Loaded Polymarket US credentials from user %s",
+                        uid[:8],
+                    )
+                if kalshi_key_id and poly_us_key_id:
                     break
     except Exception:
         logger.warning("Failed to load user credentials from DB", exc_info=True)
@@ -182,6 +192,19 @@ async def main() -> None:
             "A user must save Kalshi API keys in the dashboard and start automation."
         )
         sys.exit(1)
+
+    # Inject Polymarket US credentials into settings so market fetch works
+    if poly_us_key_id and not settings.execution.polymarket_us_key_id:
+        import dataclasses
+        settings = dataclasses.replace(
+            settings,
+            execution=dataclasses.replace(
+                settings.execution,
+                polymarket_us_key_id=poly_us_key_id,
+                polymarket_us_secret_key=poly_us_secret,
+            ),
+        )
+        logger.info("Injected Polymarket US credentials from DB into settings")
 
     # Create engine with DB credentials if available
     engine = EventEngine(settings, kalshi_key_id=kalshi_key_id, kalshi_pem=kalshi_pem)
