@@ -106,7 +106,7 @@ class PortfolioConfig:
     max_ticker_exposure_dollars: float = field(
         default_factory=lambda: float(os.environ.get("MAX_TICKER_EXPOSURE", "50.0"))
     )
-    max_venue_exposure_pct: float = 0.80
+    max_venue_exposure_pct: float = 0.95
     max_open_positions: int = 50
     # Daily loss circuit breaker — auto-pause trading when either limit is hit
     max_daily_loss_dollars: float = field(
