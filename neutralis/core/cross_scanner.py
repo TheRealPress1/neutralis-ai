@@ -102,6 +102,16 @@ def scan_cross_platform(
         if gross_edge <= 0:
             continue  # No arb exists
 
+        # Sanity check: edges above 50% are almost certainly false matches
+        # (e.g. draw ticker matched to team-win market)
+        edge_pct = (gross_edge / combined_cost) * 100.0 if combined_cost > 0 else 0
+        if edge_pct > 50.0:
+            logger.debug(
+                "Skipping suspicious edge %.1f%%: %s (%.2f) vs %s (%.2f)",
+                edge_pct, k.ticker, kalshi_yes, p.ticker, poly_yes,
+            )
+            continue
+
         # Deduct per-venue fees from each leg
         # Determine Polymarket fee tiers for each leg
         yes_tier = (k if yes_venue == "kalshi" else p).poly_fee_tier
