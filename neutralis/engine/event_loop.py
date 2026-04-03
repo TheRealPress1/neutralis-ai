@@ -1867,10 +1867,24 @@ class EventEngine:
 
                 if decision.verdict != DecisionVerdict.PASS:
                     storage.save_decision(decision)
-                    self._log_pipeline("guard", "guard", f"Guard rejected: {ticker}", {
-                        "ticker": ticker, "edge_pct": round(edge_pct, 2),
+                    failed_guards = [
+                        g.guard_name for g in (decision.guard_results or []) if not g.passed
+                    ]
+                    reasons = [
+                        g.reason for g in (decision.guard_results or []) if not g.passed
+                    ]
+                    self._log_pipeline("guard", "guard", f"Guard rejected: {scored.ticker}", {
+                        "ticker": scored.ticker, "edge_pct": round(scored.edge_pct, 2),
                         "verdict": "reject",
+                        "failed_guards": failed_guards[:5],
+                        "reasons": reasons[:3],
+                        "signal_type": scored.signal_type.value,
                     })
+                    logger.info(
+                        "Guard rejected %s (edge=%.1f%%, type=%s): %s",
+                        scored.ticker, scored.edge_pct, scored.signal_type.value,
+                        ", ".join(failed_guards),
+                    )
                     return
 
                 # Ranked selection (single signal)
@@ -3050,7 +3064,11 @@ class EventEngine:
 
         signals = scan_high_probability(all_markets, settings.directional)
         if signals:
-            logger.info("Directional scan: %d signals found", len(signals))
+            logger.info(
+                "Directional scan: %d signals — %s",
+                len(signals),
+                ", ".join(f"{s.ticker}@{s.yes_ask:.0%}" for s in signals[:5]),
+            )
             self._log_pipeline("signal", "directional", f"{len(signals)} directional signals", {
                 "count": len(signals),
                 "tickers": [s.ticker for s in signals[:5]],
