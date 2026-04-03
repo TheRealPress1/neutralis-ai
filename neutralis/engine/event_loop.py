@@ -1900,8 +1900,8 @@ class EventEngine:
                         continue
 
                     decision_id = storage.save_decision(dec)
-                    self._log_pipeline("guard", "guard", f"Guard passed: {ticker} — executing", {
-                        "ticker": ticker, "edge_pct": round(edge_pct, 2),
+                    self._log_pipeline("guard", "guard", f"Guard passed: {scored.ticker} — executing", {
+                        "ticker": scored.ticker, "edge_pct": round(scored.edge_pct, 2),
                         "suggested_size": dec.suggested_size,
                         "verdict": "pass",
                     })
@@ -3039,12 +3039,13 @@ class EventEngine:
             if self._paused or not self._running:
                 continue
             try:
+                logger.info("Running periodic directional scan...")
                 loop = asyncio.get_event_loop()
                 await loop.run_in_executor(
                     self._executor_pool, self._run_directional_scan,
                 )
             except Exception:
-                logger.warning("Directional scan failed", exc_info=True)
+                logger.exception("Directional scan failed")
 
     def _run_directional_scan(self) -> None:
         """Run the directional scanner across all markets and fire signals."""
@@ -3063,10 +3064,13 @@ class EventEngine:
             return
 
         signals = scan_high_probability(all_markets, settings.directional)
+        logger.info(
+            "Directional scan complete: %d markets scanned, %d signals found",
+            len(all_markets), len(signals),
+        )
         if signals:
             logger.info(
-                "Directional scan: %d signals — %s",
-                len(signals),
+                "Directional signals: %s",
                 ", ".join(f"{s.ticker}@{s.yes_ask:.0%}" for s in signals[:5]),
             )
             self._log_pipeline("signal", "directional", f"{len(signals)} directional signals", {
