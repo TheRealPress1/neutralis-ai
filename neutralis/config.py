@@ -158,11 +158,11 @@ class DirectionalConfig:
     min_implied_probability: float = 0.80
     probability_floor: float = 0.60
     min_liquidity_dollars: float = 50.0
-    max_position_dollars: float = 50.0
-    max_total_exposure_dollars: float = 1000.0
-    max_event_exposure_dollars: float = 100.0
-    max_ticker_exposure_dollars: float = 50.0
-    max_open_positions: int = 30
+    max_position_dollars: float = 100.0
+    max_total_exposure_dollars: float = 2000.0
+    max_event_exposure_dollars: float = 200.0
+    max_ticker_exposure_dollars: float = 100.0
+    max_open_positions: int = 50
     min_time_to_expiry_hours: float = 1.0
     max_time_to_expiry_hours: float = 168.0  # 7 days
     # Per-category probability thresholds (override min_implied_probability)
