@@ -568,12 +568,12 @@ class EventEngine:
 
     def _build_initial_state(self) -> _LiveState:
         """Synchronous: fetch all markets, normalize, match. Runs in thread pool."""
-        # Load settings with the active risk profile so time_horizon and other
-        # user preferences are respected in the event engine.
-        base_settings = load_settings()
+        # Start from constructor settings (which include DB-injected credentials)
+        # and overlay the active risk profile.
+        base_settings = self._settings
         try:
             with PostgresStorage(base_settings.db) as _profile_storage:
-                settings = load_settings_with_profile(_profile_storage)
+                settings = load_settings_with_profile(_profile_storage, base=base_settings)
         except Exception:
             logger.warning(
                 "Failed to load risk profile for event engine, using env defaults",

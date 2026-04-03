@@ -418,14 +418,16 @@ def load_settings() -> Settings:
     return Settings()
 
 
-def load_settings_with_profile(storage: object) -> Settings:
+def load_settings_with_profile(storage: object, base: Settings | None = None) -> Settings:
     """Build settings, overriding pipeline/portfolio/matching from the active DB profile.
 
     Falls back to environment defaults if no profile exists or DB query fails.
+    If ``base`` is provided, use it instead of creating fresh Settings from env.
     """
     from neutralis.profiles import load_active_profile
 
-    base = Settings()
+    if base is None:
+        base = Settings()
 
     try:
         profile = load_active_profile(storage)
