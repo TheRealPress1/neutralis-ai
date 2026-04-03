@@ -34,6 +34,7 @@ from neutralis.guard.bankroll import build_dynamic_config, fetch_bankroll_from_e
 from neutralis.services.user_credentials import load_active_users
 from neutralis.core.cross_scanner import scan_cross_platform
 from neutralis.core.matcher import MarketPair, match_markets
+from neutralis.core.directional_scanner import scan_high_probability
 from neutralis.core.scanners import scan_complement_arb
 from neutralis.core.three_way import group_kalshi_three_way, merge_cross_venue_three_way
 from neutralis.core.volume_scanner import check_volume_momentum
@@ -455,6 +456,7 @@ class EventEngine:
             asyncio.create_task(self._periodic_bankroll_refresh(), name="bankroll_refresh"),
             asyncio.create_task(self._periodic_flush_logs(), name="flush_logs"),
             asyncio.create_task(self._periodic_score_poll(), name="score_poll"),
+            asyncio.create_task(self._periodic_directional_scan(), name="directional_scan"),
         ]
         if self._poly_ws:
             self._tasks.append(
@@ -3013,6 +3015,54 @@ class EventEngine:
         bankroll = self._fetch_startup_bankroll(state.settings)
         if bankroll >= 5.0:
             state.settings = build_dynamic_config(bankroll, state.settings)
+
+    # ── Directional scan ────────────────────────────────────────────────
+
+    async def _periodic_directional_scan(self) -> None:
+        """Scan all markets for high-probability directional signals every 2 min."""
+        while self._running:
+            await asyncio.sleep(120.0)
+            if self._paused or not self._running:
+                continue
+            try:
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(
+                    self._executor_pool, self._run_directional_scan,
+                )
+            except Exception:
+                logger.warning("Directional scan failed", exc_info=True)
+
+    def _run_directional_scan(self) -> None:
+        """Run the directional scanner across all markets and fire signals."""
+        state = self._state
+        if state is None:
+            return
+        settings = state.settings
+
+        # Combine all markets from all venues
+        all_markets = (
+            list(state.kalshi_markets.values())
+            + list(state.poly_markets.values())
+            + list(state.poly_us_markets.values())
+        )
+        if not all_markets:
+            return
+
+        signals = scan_high_probability(all_markets, settings.directional)
+        if signals:
+            logger.info("Directional scan: %d signals found", len(signals))
+            self._log_pipeline("signal", "directional", f"{len(signals)} directional signals", {
+                "count": len(signals),
+                "tickers": [s.ticker for s in signals[:5]],
+            })
+        for signal in signals:
+            market = state.kalshi_markets.get(signal.ticker)
+            if not market:
+                market = state.poly_markets.get(signal.ticker)
+            if not market:
+                market = state.poly_us_markets.get(signal.ticker)
+            if market:
+                self._score_and_execute(signal, market, settings)
 
     # ── Health ─────────────────────────────────────────────────────────
 
