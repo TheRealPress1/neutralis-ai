@@ -1491,6 +1491,14 @@ class EventEngine:
                             })
                             state.discrepancy_total += 1
 
+                        # Sanity check: edges above 50% are almost certainly false matches
+                        if edge_pct > 50.0:
+                            logger.debug(
+                                "Skipping suspicious edge %.1f%%: %s K=%.4f P=%.4f",
+                                edge_pct, ticker, k_yes, p_yes,
+                            )
+                            net_edge = -1.0  # suppress signal
+
                         # Only dispatch signal if actionable
                         if net_edge > 0 and edge_pct >= cfg.min_xp_edge_pct:
                             if not self._signal_on_cooldown(state, ticker, "xp"):
