@@ -56,6 +56,8 @@ from neutralis.models import (
     ThreeWayGroup,
     TradeLeg,
 )
+from neutralis.execution.executor import PaperExecutor
+from neutralis.execution.models import TickContext
 from neutralis.portfolio.manager import PortfolioManager
 from neutralis.settlement.settler import run_settlement
 from neutralis.storage.postgres import PostgresStorage
@@ -1910,11 +1912,11 @@ class EventEngine:
                     decision_id = storage.save_decision(dec)
                     self._log_pipeline("guard", "guard", f"Guard passed: {scored.ticker} — executing", {
                         "ticker": scored.ticker, "edge_pct": round(scored.edge_pct, 2),
-                        "suggested_size": dec.suggested_size,
+                        "suggested_size": dec.suggested_size_dollars,
                         "verdict": "pass",
                     })
 
-                    # Live execution only — no paper fallback
+                    # Try live execution first, fall back to paper
                     live_executed = self._try_live_execute(
                         sig, dec, decision_id, settings, storage, portfolio,
                     )
@@ -1927,16 +1929,38 @@ class EventEngine:
                         )
                         self._log_pipeline("order", "execution", f"Order filled: {signal.ticker}", {
                             "ticker": signal.ticker, "edge_pct": round(signal.edge_pct, 2),
-                            "size": dec.suggested_size,
+                            "size": dec.suggested_size_dollars,
                         })
                     else:
-                        logger.warning(
-                            "RT execution SKIPPED (live failed): %s edge=%.2f%%",
-                            signal.ticker, signal.edge_pct,
+                        # Paper fallback — record the trade for tracking
+                        tick_ctx = TickContext(
+                            tick_id=f"rt_{int(time.time())}_{signal.ticker}",
+                            run_number=0,
+                            timestamp=datetime.now(timezone.utc),
                         )
-                        self._log_pipeline("error", "execution", f"Order failed: {signal.ticker}", {
-                            "ticker": signal.ticker, "edge_pct": round(signal.edge_pct, 2),
-                        })
+                        paper = PaperExecutor(storage, portfolio)
+                        exec_result = paper.execute(
+                            sig, dec, decision_id, tick_ctx, market=market,
+                        )
+                        if exec_result.orders:
+                            state.orders_placed += len(exec_result.orders)
+                            logger.info(
+                                "RT execution: %s edge=%.2f%% PAPER (%d orders)",
+                                signal.ticker, signal.edge_pct, len(exec_result.orders),
+                            )
+                            self._log_pipeline("order", "execution", f"Paper order filled: {signal.ticker}", {
+                                "ticker": signal.ticker, "edge_pct": round(signal.edge_pct, 2),
+                                "size": dec.suggested_size_dollars,
+                                "mode": "paper",
+                            })
+                        else:
+                            logger.warning(
+                                "RT execution SKIPPED (live + paper failed): %s edge=%.2f%%",
+                                signal.ticker, signal.edge_pct,
+                            )
+                            self._log_pipeline("error", "execution", f"Order failed: {signal.ticker}", {
+                                "ticker": signal.ticker, "edge_pct": round(signal.edge_pct, 2),
+                            })
 
         except Exception as exc:
             logger.exception("Execution pipeline error for %s", signal.ticker)
