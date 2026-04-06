@@ -1,0 +1,15 @@
+node_modules/
+.next/
+.git/
+.env*
+!.env.example
+*.pem
+*.key
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+.DS_Store
+.claude/
+tests/
+coverage/
