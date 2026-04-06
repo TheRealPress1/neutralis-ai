@@ -62,35 +62,35 @@ export default function AuthNav() {
       <li className="relative list-none" ref={dropdownRef}>
         <button
           onClick={() => setOpen((o) => !o)}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1a1d21] border border-[#22262d] text-sm font-semibold text-[#eceef0] transition-colors hover:border-[#c0c5cb]/40 hover:text-white"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-bg-elevated border border-border text-sm font-semibold text-text-primary transition-colors hover:border-neon-green/40 hover:text-neon-green"
         >
           {initial}
         </button>
 
         {open && (
-          <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-[#22262d] bg-[#0e1117] p-1.5 shadow-xl shadow-black/40">
-            <p className="px-3 py-2 text-xs text-[#a1a8b3] truncate">
+          <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-border bg-bg-primary p-1.5 shadow-xl shadow-black/40">
+            <p className="px-3 py-2 text-xs text-text-secondary truncate">
               {user.email}
             </p>
-            <div className="my-1 h-px bg-[#22262d]" />
+            <div className="my-1 h-px bg-border" />
             <Link
               href="/dashboard"
               onClick={() => setOpen(false)}
-              className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-[#eceef0] transition-colors hover:bg-[#1a1d21]"
+              className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-text-primary transition-colors hover:bg-bg-elevated"
             >
               My Portfolio
             </Link>
             <Link
               href="/profile"
               onClick={() => setOpen(false)}
-              className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-[#eceef0] transition-colors hover:bg-[#1a1d21]"
+              className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-text-primary transition-colors hover:bg-bg-elevated"
             >
               My Profile
             </Link>
-            <div className="my-1 h-px bg-[#22262d]" />
+            <div className="my-1 h-px bg-border" />
             <button
               onClick={handleSignOut}
-              className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-[#a1a8b3] transition-colors hover:bg-[#1a1d21] hover:text-[#eceef0]"
+              className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-bg-elevated hover:text-text-primary"
             >
               Sign out
             </button>
@@ -113,7 +113,7 @@ export default function AuthNav() {
       <li>
         <Link
           href="/signup"
-          className="btn-sheen btn-pill bg-[#e8e9ea] px-5 py-2 text-sm font-medium text-[#050608] transition-all duration-250 ease-out hover:-translate-y-[1px] hover:bg-[#c0c5cb] hover:shadow-[0_0_12px_rgba(232,233,234,0.3)]"
+          className="btn-sheen btn-pill border border-neon-green/50 bg-neon-green/10 px-5 py-2 text-sm font-medium text-neon-green transition-all duration-250 ease-out hover:-translate-y-[1px] hover:bg-neon-green/20 hover:shadow-[0_0_12px_rgba(0,255,170,0.3)]"
         >
           Sign up
         </Link>

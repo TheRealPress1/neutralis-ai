@@ -44,12 +44,12 @@ export default function Navbar() {
       <div className="relative z-10 mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
         <Link
           href="/"
-          className="font-[family-name:var(--font-italiana)] text-xl font-normal tracking-[0.08em] text-white/90"
+          className="font-[family-name:var(--font-italiana)] text-xl font-normal tracking-[0.08em] text-text-primary"
         >
           Neutralis.ai
         </Link>
 
-        <ul className="hidden items-center gap-6 text-sm font-medium text-white/70 sm:flex">
+        <ul className="hidden items-center gap-6 text-sm font-medium text-text-secondary sm:flex">
           <li>
             <a
               href="#features"
@@ -85,7 +85,7 @@ export default function Navbar() {
           <AuthNav />
         </ul>
 
-        <div className="flex items-center gap-4 text-sm font-medium text-white/70 sm:hidden">
+        <div className="flex items-center gap-4 text-sm font-medium text-text-secondary sm:hidden">
           <AuthNav />
         </div>
       </div>
