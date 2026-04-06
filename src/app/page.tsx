@@ -1,6 +1,9 @@
 import Navbar from "./navbar";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import StatsTicker from "./components/landing/StatsTicker";
+import PipelineViz from "./components/landing/PipelineViz";
+import TerminalDemo from "./components/landing/TerminalDemo";
 
 const features = [
   {
@@ -71,6 +74,12 @@ export default async function Home() {
         </header>
       </div>
 
+      {/* ── Stats Ticker ────────────────────────────────────── */}
+      <StatsTicker />
+
+      {/* ── Pipeline Visualization ──────────────────────────── */}
+      <PipelineViz />
+
       {/* ── Features ──────────────────────────────────────── */}
       <section id="features" className="border-t border-border py-24">
         <div className="mx-auto max-w-5xl px-6">
@@ -92,6 +101,9 @@ export default async function Home() {
           </div>
         </div>
       </section>
+
+      {/* ── Terminal Demo ───────────────────────────────────── */}
+      <TerminalDemo />
 
       {/* ── Footer ──────────────────────────────────────────── */}
       <footer className="border-t border-border py-10">
