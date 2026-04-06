@@ -10,12 +10,12 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 /* ── Helpers ─────────────────────────────────────────────────────── */
 
 const LEVEL_STYLES: Record<string, { dot: string; text: string }> = {
-  info: { dot: "bg-[#9ca3af]", text: "text-[#9ca3af]" },
-  warn: { dot: "bg-amber-400", text: "text-amber-400" },
-  error: { dot: "bg-red-400", text: "text-red-400" },
-  signal: { dot: "bg-blue-400", text: "text-blue-400" },
-  order: { dot: "bg-emerald-400", text: "text-emerald-400" },
-  guard: { dot: "bg-purple-400", text: "text-purple-400" },
+  info:   { dot: "bg-text-secondary",  text: "text-text-secondary" },
+  warn:   { dot: "bg-neon-amber",      text: "text-neon-amber" },
+  error:  { dot: "bg-neon-red",        text: "text-neon-red" },
+  signal: { dot: "bg-neon-blue",       text: "text-neon-blue" },
+  order:  { dot: "bg-neon-green",      text: "text-neon-green" },
+  guard:  { dot: "bg-neon-purple",     text: "text-neon-purple" },
 };
 
 function levelStyle(level: string) {
@@ -44,7 +44,7 @@ function fmt(n: number, d = 2) {
 
 function WsDot({ connected }: { connected?: boolean }) {
   return (
-    <span className={`inline-block h-2 w-2 rounded-full ${connected ? "bg-emerald-400" : "bg-red-400"}`} />
+    <span className={`inline-block h-2 w-2 rounded-full ${connected ? "bg-neon-green shadow-[0_0_6px_rgba(0,255,170,0.6)]" : "bg-neon-red shadow-[0_0_6px_rgba(255,51,102,0.6)]"}`} />
   );
 }
 
@@ -228,32 +228,32 @@ export default function LivePanel({
       {/* ══════════════════════════════════════════════════════════
           Automation Controls — ALWAYS visible
           ══════════════════════════════════════════════════════════ */}
-      <div className="card-panel rounded-xl">
+      <div className="hud-panel rounded-xl">
         <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-5">
           <div className="flex items-center gap-4">
             {/* Status indicator */}
             <div className="relative flex h-4 w-4 items-center justify-center">
               {isRunning && !autoLoading && (
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-neon-green opacity-40" />
               )}
               <span className={`relative inline-flex h-3 w-3 rounded-full ${
                 autoLoading ? "bg-[#3b3f46] animate-pulse"
-                  : isKilled ? "bg-red-400" : isRunning ? "bg-emerald-400" : "bg-amber-400"
+                  : isKilled ? "bg-neon-red" : isRunning ? "bg-neon-green" : "bg-neon-amber"
               }`} />
             </div>
             <div>
-              <h2 className="font-[family-name:var(--font-italiana)] text-xl font-normal tracking-[0.04em]">
+              <h2 className="font-mono text-xs font-medium uppercase tracking-[0.15em] text-text-secondary">
                 Automation{" "}
                 {autoLoading ? (
                   <span className="text-[#3b3f46]">Loading...</span>
                 ) : (
-                  <span className={isKilled ? "text-red-400" : isRunning ? "text-emerald-400" : "text-amber-400"}>
+                  <span className={isKilled ? "text-neon-red" : isRunning ? "text-neon-green" : "text-neon-amber"}>
                     {isKilled ? "Killed" : isRunning ? "Running" : "Paused"}
                   </span>
                 )}
               </h2>
               {autoState?.started_at && isRunning && (
-                <p className="mt-0.5 text-xs text-[#9ca3af]">Running since {new Date(autoState.started_at).toLocaleString()}</p>
+                <p className="mt-0.5 text-xs text-text-secondary">Running since {new Date(autoState.started_at).toLocaleString()}</p>
               )}
             </div>
           </div>
@@ -264,10 +264,10 @@ export default function LivePanel({
               disabled={toggling || (!isRunning && !canStart)}
               className={`rounded-lg px-6 py-3 text-sm font-semibold transition-colors ${
                 !isRunning && !canStart
-                  ? "cursor-not-allowed bg-[#1a1d21] text-[#9ca3af]"
+                  ? "cursor-not-allowed bg-bg-elevated text-text-secondary"
                   : isRunning
-                    ? "bg-amber-400/10 text-amber-400 hover:bg-amber-400/20"
-                    : "bg-emerald-400/10 text-emerald-400 hover:bg-emerald-400/20"
+                    ? "bg-neon-amber/10 text-neon-amber hover:bg-neon-amber/20"
+                    : "bg-neon-green/10 text-neon-green hover:bg-neon-green/20 shadow-[0_0_8px_rgba(0,255,170,0.3)]"
               }`}
             >
               {toggling ? "Processing..."
@@ -280,10 +280,10 @@ export default function LivePanel({
               disabled={isKilled}
               className={`rounded-lg px-6 py-3 text-sm font-bold uppercase tracking-wider transition-all ${
                 isKilled
-                  ? "cursor-not-allowed bg-[#1a1d21] text-[#9ca3af]"
+                  ? "cursor-not-allowed bg-bg-elevated text-text-secondary"
                   : killArmed
-                    ? "animate-pulse bg-red-500 text-white ring-2 ring-red-400 ring-offset-2 ring-offset-[#050608]"
-                    : "bg-red-400/10 text-red-400 hover:bg-red-400/20"
+                    ? "neon-pulse border-neon-red/50 bg-neon-red text-white ring-2 ring-neon-red ring-offset-2 ring-offset-bg-primary"
+                    : "border border-neon-red/50 text-neon-red hover:bg-neon-red/10"
               }`}
             >
               {isKilled ? "Kill Switch Triggered" : killArmed ? "Click Again to Confirm" : "Kill Switch"}
@@ -291,17 +291,17 @@ export default function LivePanel({
           </div>
         </div>
 
-        {actionError && <p className="px-6 pb-4 text-sm text-red-400">{actionError}</p>}
+        {actionError && <p className="px-6 pb-4 text-sm text-neon-red">{actionError}</p>}
 
         {isKilled && autoState?.killed_reason && (
-          <div className="mx-6 mb-4 rounded-lg border border-red-400/20 bg-red-400/5 px-4 py-3 text-sm text-red-400">
+          <div className="mx-6 mb-4 rounded-lg border border-neon-red/20 bg-neon-red/5 px-4 py-3 text-sm text-neon-red">
             <span className="font-medium">Reason:</span> {autoState.killed_reason}
           </div>
         )}
 
         {!isRunning && !hasBothVenues && (
-          <div className="mx-6 mb-4 rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-3">
-            <p className="text-xs text-amber-400">
+          <div className="mx-6 mb-4 rounded-lg border border-neon-amber/20 bg-neon-amber/5 px-4 py-3">
+            <p className="text-xs text-neon-amber">
               {!hasKalshi && "Kalshi keys missing. "}{!hasPoly && "Polymarket keys missing. "}
               {onNavigate && (
                 <button onClick={() => onNavigate("connections")} className="underline hover:no-underline">
@@ -320,43 +320,43 @@ export default function LivePanel({
         <div
           className={`rounded-xl border ${
             enginePaused
-              ? "border-amber-400/20 bg-amber-400/5"
+              ? "border-neon-amber/20 bg-neon-amber/5"
               : h.status === "ok"
-                ? "border-emerald-400/20 bg-emerald-400/5"
-                : "border-amber-400/20 bg-amber-400/5"
+                ? "border-neon-green/20 bg-neon-green/5"
+                : "border-neon-amber/20 bg-neon-amber/5"
           } px-6 py-5`}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className={`h-3 w-3 rounded-full animate-pulse ${
-                enginePaused ? "bg-amber-400"
-                  : h.status === "ok" ? "bg-emerald-400" : "bg-amber-400"
+                enginePaused ? "bg-neon-amber"
+                  : h.status === "ok" ? "bg-neon-green" : "bg-neon-amber"
               }`} />
               <div>
                 <h2 className={`text-lg font-semibold tracking-wide ${
-                  enginePaused ? "text-amber-400"
-                    : h.status === "ok" ? "text-emerald-400" : "text-amber-400"
+                  enginePaused ? "text-neon-amber"
+                    : h.status === "ok" ? "text-neon-green" : "text-neon-amber"
                 }`}>
                   {enginePaused ? "ENGINE PAUSED"
                     : h.status === "ok" ? "ENGINE CONNECTED"
                     : `ENGINE ${h.status?.toUpperCase()}`}
                 </h2>
-                <p className="mt-0.5 text-xs text-[#9ca3af]">
+                <p className="mt-0.5 text-xs text-text-secondary">
                   {wsCount(h)}/2 feeds active
                   {" \u00b7 "}{totalMarkets(h).toLocaleString()} markets
                   {" \u00b7 "}{h.xp_pairs ?? 0} pairs
                 </p>
               </div>
             </div>
-            <span className="rounded-md bg-[#1a1d21] px-3 py-1.5 text-xs font-medium text-[#9ca3af]">
+            <span className="rounded-md bg-bg-elevated px-3 py-1.5 text-xs font-medium text-text-secondary">
               {h.status?.toUpperCase()}
             </span>
           </div>
 
           {h.prices_stale && (
-            <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-2">
-              <span className="h-2 w-2 rounded-full bg-amber-400" />
-              <span className="text-xs text-amber-400">
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-neon-amber/20 bg-neon-amber/5 px-4 py-2">
+              <span className="h-2 w-2 rounded-full bg-neon-amber" />
+              <span className="text-xs text-neon-amber">
                 Stale prices detected
                 {h.oldest_kalshi_price_age_sec != null && h.oldest_kalshi_price_age_sec > 60 &&
                   ` \u00b7 Kalshi: ${Math.round(h.oldest_kalshi_price_age_sec)}s old`}
@@ -367,26 +367,26 @@ export default function LivePanel({
           )}
         </div>
       ) : (
-        <div className="rounded-xl border border-red-400/20 bg-red-400/5 px-6 py-6">
+        <div className="rounded-xl border border-neon-red/20 bg-neon-red/5 px-6 py-6">
           <div className="flex flex-col items-center text-center">
-            <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-red-400/10">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5 text-red-400">
+            <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-neon-red/10">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5 text-neon-red">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.288 15.038a5.25 5.25 0 0 1 7.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 0 1 1.06 0Z" />
               </svg>
             </span>
-            <h2 className="text-lg font-semibold text-red-400">ENGINE DISCONNECTED</h2>
-            <p className="mt-1 max-w-md text-sm text-[#9ca3af]">
+            <h2 className="text-lg font-semibold text-neon-red">ENGINE DISCONNECTED</h2>
+            <p className="mt-1 max-w-md text-sm text-text-secondary">
               The trading engine is not responding.
             </p>
             <div className="mt-3 text-left text-xs text-[#3b3f46]">
               <ul className="list-inside list-disc space-y-1">
                 <li>Check that the daemon service is running on Railway</li>
-                <li>Verify <code className="rounded bg-[#1a1d21] px-1 text-[#9ca3af]">WEBSOCKET_ENABLED=true</code> is set</li>
+                <li>Verify <code className="rounded bg-bg-elevated px-1 text-text-secondary">WEBSOCKET_ENABLED=true</code> is set</li>
               </ul>
             </div>
             <button
               onClick={handleRetry}
-              className="mt-4 rounded-lg border border-red-400/30 bg-red-400/10 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-400/20"
+              className="mt-4 rounded-lg border border-neon-red/30 bg-neon-red/10 px-4 py-2 text-sm font-medium text-neon-red transition-colors hover:bg-neon-red/20"
             >
               Retry Now
             </button>
@@ -399,8 +399,8 @@ export default function LivePanel({
           ══════════════════════════════════════════════════════════ */}
       {engineConnected && h && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="card-panel rounded-xl p-4">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-[#9ca3af]">WebSocket Feeds</p>
+          <div className="hud-panel rounded-xl p-4">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-text-secondary">WebSocket Feeds</p>
             <div className="mt-3 space-y-2">
               {[
                 { label: "Kalshi", connected: h.kalshi_ws_connected, subs: h.kalshi_ws_subscriptions ?? 0 },
@@ -408,14 +408,14 @@ export default function LivePanel({
               ].map((ws) => (
                 <div key={ws.label} className="flex items-center justify-between text-xs">
                   <span className="flex items-center gap-2"><WsDot connected={ws.connected} /> {ws.label}</span>
-                  <span className="font-mono text-[#9ca3af]">{ws.subs ?? 0}</span>
+                  <span className="font-mono text-text-secondary">{ws.subs ?? 0}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="card-panel rounded-xl p-4">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-[#9ca3af]">Markets Tracked</p>
+          <div className="hud-panel rounded-xl p-4">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-text-secondary">Markets Tracked</p>
             <div className="mt-3 space-y-2 text-xs">
               {[
                 { label: "Kalshi", count: h.kalshi_markets },
@@ -423,24 +423,24 @@ export default function LivePanel({
               ].map((m) => (
                 <div key={m.label} className="flex justify-between">
                   <span>{m.label}</span>
-                  <span className="font-mono font-bold text-[#e8e9ea]">{(m.count ?? 0).toLocaleString()}</span>
+                  <span className="font-mono font-bold text-text-primary">{(m.count ?? 0).toLocaleString()}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="card-panel rounded-xl p-4">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-[#9ca3af]">Active Pairs</p>
-            <p className="mt-2 font-mono text-2xl font-bold text-[#e8e9ea]">{h.xp_pairs ?? 0}</p>
-            <p className="mt-1 text-xs text-[#9ca3af]">+ {h.three_way_groups ?? 0} three-way groups</p>
+          <div className="hud-panel rounded-xl p-4">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-text-secondary">Active Pairs</p>
+            <p className="mt-2 font-mono text-2xl font-bold text-text-primary">{h.xp_pairs ?? 0}</p>
+            <p className="mt-1 text-xs text-text-secondary">+ {h.three_way_groups ?? 0} three-way groups</p>
           </div>
 
-          <div className="card-panel rounded-xl p-4">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-[#9ca3af]">Session Activity</p>
+          <div className="hud-panel rounded-xl p-4">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-text-secondary">Session Activity</p>
             <div className="mt-3 space-y-2 text-xs">
-              <div className="flex justify-between"><span>Arb Checks</span><span className="font-mono font-bold text-[#e8e9ea]">{(h.arb_checks ?? 0).toLocaleString()}</span></div>
-              <div className="flex justify-between"><span>Signals</span><span className="font-mono font-bold text-blue-400">{h.signals_detected ?? 0}</span></div>
-              <div className="flex justify-between"><span>Orders</span><span className="font-mono font-bold text-emerald-400">{h.orders_placed ?? 0}</span></div>
+              <div className="flex justify-between"><span>Arb Checks</span><span className="font-mono font-bold text-text-primary">{(h.arb_checks ?? 0).toLocaleString()}</span></div>
+              <div className="flex justify-between"><span>Signals</span><span className="font-mono font-bold text-neon-blue">{h.signals_detected ?? 0}</span></div>
+              <div className="flex justify-between"><span>Orders</span><span className="font-mono font-bold text-neon-green">{h.orders_placed ?? 0}</span></div>
             </div>
           </div>
         </div>
@@ -451,28 +451,28 @@ export default function LivePanel({
           ══════════════════════════════════════════════════════════ */}
       {autoState && (
         <div className="grid gap-4 sm:grid-cols-3">
-          <div className="card-panel rounded-xl p-4">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-[#9ca3af]">Daily Loss</p>
+          <div className="hud-panel rounded-xl p-4">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-text-secondary">Daily Loss</p>
             <p className="mt-2 font-mono text-xl font-bold">
-              <span className={autoState.daily_loss_dollars > 0 ? "text-red-400" : "text-[#e8e9ea]"}>
+              <span className={autoState.daily_loss_dollars > 0 ? "text-neon-red" : "text-text-primary"}>
                 ${fmt(autoState.daily_loss_dollars)}
               </span>
             </p>
             {autoState.daily_loss_reset_at && (
-              <p className="mt-1 text-[11px] text-[#9ca3af]">Resets {timeAgo(autoState.daily_loss_reset_at)}</p>
+              <p className="mt-1 text-[11px] text-text-secondary">Resets {timeAgo(autoState.daily_loss_reset_at)}</p>
             )}
           </div>
-          <div className="card-panel rounded-xl p-4">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-[#9ca3af]">Max Drawdown</p>
+          <div className="hud-panel rounded-xl p-4">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-text-secondary">Max Drawdown</p>
             <p className="mt-2 font-mono text-xl font-bold">
-              <span className={autoState.max_drawdown_dollars > 0 ? "text-red-400" : "text-[#e8e9ea]"}>
+              <span className={autoState.max_drawdown_dollars > 0 ? "text-neon-red" : "text-text-primary"}>
                 ${fmt(autoState.max_drawdown_dollars)}
               </span>
             </p>
           </div>
-          <div className="card-panel rounded-xl p-4">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-[#9ca3af]">Peak Portfolio</p>
-            <p className="mt-2 font-mono text-xl font-bold text-[#e8e9ea]">${fmt(autoState.peak_portfolio_value)}</p>
+          <div className="hud-panel rounded-xl p-4">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-text-secondary">Peak Portfolio</p>
+            <p className="mt-2 font-mono text-xl font-bold text-text-primary">${fmt(autoState.peak_portfolio_value)}</p>
           </div>
         </div>
       )}
@@ -481,16 +481,16 @@ export default function LivePanel({
           Recent Candidates (decisions)
           ══════════════════════════════════════════════════════════ */}
       {decisions.length > 0 && (
-        <div className="card-panel rounded-xl">
-          <div className="border-b border-[#1a1d21] px-6 py-4">
-            <h2 className="font-[family-name:var(--font-italiana)] text-base font-normal tracking-[0.04em] text-[#9ca3af]">
+        <div className="hud-panel rounded-xl">
+          <div className="border-b border-border px-6 py-4">
+            <h2 className="font-mono text-xs font-medium uppercase tracking-[0.15em] text-text-secondary">
               Recent Candidates
             </h2>
           </div>
           <div className="max-h-[320px] overflow-y-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="text-[10px] uppercase tracking-wider text-[#9ca3af]">
+                <tr className="text-[10px] uppercase tracking-wider text-text-secondary">
                   <th className="px-6 py-3 font-medium">Ticker</th>
                   <th className="px-6 py-3 font-medium">Verdict</th>
                   <th className="px-6 py-3 font-medium text-right">Edge</th>
@@ -503,21 +503,21 @@ export default function LivePanel({
                 {decisions.map((d) => {
                   const isPass = d.verdict === "pass";
                   return (
-                    <tr key={d.id} className="border-t border-[#1a1d21] transition-colors hover:bg-[#0a0d10]">
+                    <tr key={d.id} className="border-t border-border transition-colors hover:bg-bg-primary">
                       <td className="px-6 py-3 font-mono text-xs">{d.ticker}</td>
                       <td className="px-6 py-3">
                         <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                          isPass ? "bg-emerald-400/10 text-emerald-400" : "bg-red-400/10 text-red-400"
+                          isPass ? "bg-neon-green/10 text-neon-green" : "bg-neon-red/10 text-neon-red"
                         }`}>{d.verdict.toUpperCase()}</span>
                       </td>
                       <td className="px-6 py-3 text-right font-mono text-xs">{d.edge_pct.toFixed(1)}%</td>
                       <td className="px-6 py-3 text-right font-mono text-xs">${fmt(d.suggested_size)}</td>
                       <td className="px-6 py-3 text-right">
                         <span className={`font-mono text-xs ${
-                          guardPassCount(d) === guardTotalCount(d) ? "text-emerald-400" : "text-amber-400"
+                          guardPassCount(d) === guardTotalCount(d) ? "text-neon-green" : "text-neon-amber"
                         }`}>{guardPassCount(d)}/{guardTotalCount(d)}</span>
                       </td>
-                      <td className="px-6 py-3 text-right text-xs text-[#9ca3af]">{timeAgo(d.created_at)}</td>
+                      <td className="px-6 py-3 text-right text-xs text-text-secondary">{timeAgo(d.created_at)}</td>
                     </tr>
                   );
                 })}
@@ -530,16 +530,16 @@ export default function LivePanel({
       {/* ══════════════════════════════════════════════════════════
           Pipeline Log Stream
           ══════════════════════════════════════════════════════════ */}
-      <div className="card-panel rounded-xl">
-        <div className="flex items-center justify-between border-b border-[#1a1d21] px-6 py-4">
-          <h2 className="font-[family-name:var(--font-italiana)] text-base font-normal tracking-[0.04em] text-[#9ca3af]">
+      <div className="hud-panel rounded-xl">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <h2 className="font-mono text-xs font-medium uppercase tracking-[0.15em] text-text-secondary">
             Pipeline Log
           </h2>
           <div className="flex items-center gap-3">
             {!autoScroll && (
               <button
                 onClick={() => { setAutoScroll(true); logEndRef.current?.scrollIntoView({ behavior: "smooth" }); }}
-                className="rounded bg-[#1a1d21] px-2 py-1 text-[10px] text-[#9ca3af] transition-colors hover:text-[#e8e9ea]"
+                className="rounded bg-bg-elevated px-2 py-1 text-[10px] text-text-secondary transition-colors hover:text-text-primary"
               >
                 Scroll to bottom
               </button>
@@ -548,10 +548,10 @@ export default function LivePanel({
           </div>
         </div>
 
-        <div ref={logContainerRef} onScroll={handleScroll} className="h-[400px] overflow-y-auto bg-[#050608] font-mono text-xs">
+        <div ref={logContainerRef} onScroll={handleScroll} className="h-[400px] overflow-y-auto bg-[#040508] border border-border rounded-lg font-mono text-xs">
           {logs.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-center">
-              <p className="text-sm text-[#9ca3af]">No log entries yet</p>
+              <p className="text-sm text-text-secondary">No log entries yet</p>
               <p className="mt-1 text-xs text-[#3b3f46]">Pipeline events will stream here when the engine is running.</p>
             </div>
           ) : (
@@ -559,11 +559,11 @@ export default function LivePanel({
               {logs.map((log) => {
                 const style = levelStyle(log.level);
                 return (
-                  <div key={log.id} className="group flex items-start gap-2 rounded px-2 py-1 transition-colors hover:bg-[#0a0d10]">
+                  <div key={log.id} className="group flex items-start gap-2 rounded px-2 py-1 transition-colors hover:bg-bg-primary">
                     <span className="mt-1.5 shrink-0"><span className={`inline-block h-1.5 w-1.5 rounded-full ${style.dot}`} /></span>
                     <span className="shrink-0 text-[#3b3f46]">{fmtTime(log.created_at)}</span>
                     <span className={`shrink-0 rounded px-1 text-[10px] font-medium uppercase ${style.text}`}>{log.category}</span>
-                    <span className="text-[#e8e9ea]">{log.message}</span>
+                    <span className="text-text-primary">{log.message}</span>
                     {log.details && Object.keys(log.details).length > 0 && (
                       <span className="hidden text-[#3b3f46] group-hover:inline">{JSON.stringify(log.details)}</span>
                     )}
