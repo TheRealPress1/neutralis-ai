@@ -9,9 +9,9 @@ function fmt(n: number, d = 2) {
 }
 
 function pnlColor(v: number) {
-  if (v > 0) return "text-emerald-400";
-  if (v < 0) return "text-red-400";
-  return "text-[#9ca3af]";
+  if (v > 0) return "text-neon-green";
+  if (v < 0) return "text-neon-red";
+  return "text-text-secondary";
 }
 
 function timeAgo(iso: string) {
@@ -25,9 +25,15 @@ function timeAgo(iso: string) {
 }
 
 function venueBadge(venue: string) {
+  const isKalshi = venue === "kalshi";
   const label = venue === "polymarket_us" ? "POLY US" : venue.toUpperCase();
   return (
-    <span className="rounded border border-[#1a1d21] bg-[#0a0d10] px-2 py-0.5 text-xs uppercase">
+    <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${
+      isKalshi
+        ? "border-neon-blue/20 bg-neon-blue/5 text-neon-blue"
+        : "border-neon-purple/20 bg-neon-purple/5 text-neon-purple"
+    }`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${isKalshi ? "bg-neon-blue" : "bg-neon-purple"}`} />
       {label}
     </span>
   );
@@ -59,10 +65,10 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
   const isEmpty = positions.length === 0;
 
   return (
-    <div className="card-panel rounded-xl">
+    <div className="hud-panel">
       {/* Header + tabs */}
-      <div className="flex items-center justify-between border-b border-[#1a1d21] px-5 py-4">
-        <h2 className="font-[family-name:var(--font-cormorant)] text-base font-medium tracking-wide text-[#9ca3af]">
+      <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <h2 className="font-mono text-xs font-medium uppercase tracking-[0.15em] text-text-secondary">
           Positions
         </h2>
         <div className="flex gap-1">
@@ -72,8 +78,8 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
               onClick={() => setTab(t)}
               className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
                 tab === t
-                  ? "bg-[#1a1d21] text-[#e8e9ea]"
-                  : "text-[#9ca3af] hover:text-[#e8e9ea]"
+                  ? "bg-neon-green/10 text-neon-green"
+                  : "text-text-secondary hover:text-text-primary"
               }`}
             >
               {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -86,7 +92,7 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="text-xs uppercase tracking-wider text-[#9ca3af]">
+            <tr className="text-xs uppercase tracking-wider text-text-secondary">
               <th className="px-5 py-3 font-medium">Ticker</th>
               <th className="px-5 py-3 font-medium">Venue</th>
               <th className="px-5 py-3 font-medium">Side</th>
@@ -103,10 +109,10 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
           <tbody>
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <tr key={i} className="border-t border-[#1a1d21]">
+                <tr key={i} className="border-t border-border">
                   {Array.from({ length: isOpen ? 7 : 6 }).map((_, j) => (
                     <td key={j} className="px-5 py-3">
-                      <div className="h-4 w-16 animate-pulse rounded bg-[#12151a]" />
+                      <div className="h-4 w-16 skeleton" />
                     </td>
                   ))}
                 </tr>
@@ -118,7 +124,7 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mb-3 h-10 w-10 text-[#2a2d31]">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6" />
                     </svg>
-                    <p className="text-sm text-[#9ca3af]">No {tab} positions</p>
+                    <p className="font-mono text-sm text-text-secondary">No {tab} positions</p>
                     <p className="mt-1 text-xs text-[#3b3f46]">
                       {isOpen
                         ? "Positions will appear here when the bot opens trades."
@@ -131,14 +137,14 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
               positions.map((p) => {
                 const pnl = isOpen ? p.unrealized_pnl : p.realized_pnl;
                 return (
-                  <tr key={p.id} className="border-t border-[#1a1d21] transition-colors hover:bg-white/[0.02]">
+                  <tr key={p.id} className="border-t border-border transition-colors hover:bg-white/[0.02]">
                     <td className="px-5 py-3 font-mono text-xs">{p.ticker}</td>
                     <td className="px-5 py-3">{venueBadge(p.venue)}</td>
                     <td className="px-5 py-3">
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                         p.side === "buy_yes"
-                          ? "bg-emerald-400/10 text-emerald-400"
-                          : "bg-red-400/10 text-red-400"
+                          ? "bg-neon-green/10 text-neon-green"
+                          : "bg-neon-red/10 text-neon-red"
                       }`}>
                         {p.side === "buy_yes" ? "Yes" : "No"}
                       </span>
