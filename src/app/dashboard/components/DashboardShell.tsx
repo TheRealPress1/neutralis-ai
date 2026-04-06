@@ -94,9 +94,9 @@ export default function DashboardShell({
   }, [lastRefreshed]);
 
   return (
-    <div className="min-h-screen bg-[#050608] text-[#e8e9ea]">
+    <div className="min-h-screen bg-bg-primary text-text-primary dashboard-grid scan-line">
       {/* Top Nav */}
-      <nav className="fixed top-0 z-50 w-full border-b border-[#1a1d21] bg-[#050608]/80 backdrop-blur-lg">
+      <nav className="fixed top-0 z-50 w-full bg-bg-primary/85 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-8">
             <Link href="/" className="font-[family-name:var(--font-italiana)] text-xl font-normal tracking-[0.08em] text-white/90">
@@ -108,32 +108,35 @@ export default function DashboardShell({
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  className={`relative rounded-md px-3 py-1.5 text-xs font-mono font-medium uppercase tracking-wider transition-colors ${
                     activeTab === item.id
-                      ? "bg-[#1a1d21] text-[#e8e9ea]"
-                      : "text-[#9ca3af] hover:text-[#e8e9ea]"
+                      ? "text-neon-green"
+                      : "text-text-secondary hover:text-text-primary"
                   }`}
                 >
                   {item.label}
+                  {activeTab === item.id && (
+                    <span className="absolute bottom-0 left-1 right-1 h-px bg-neon-green" />
+                  )}
                 </button>
               ))}
               {!hasAccess(tier, "starter") && (
                 <Link
                   href="/pricing"
-                  className="ml-2 rounded-md bg-[#e8e9ea] px-3 py-1.5 text-xs font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb]"
+                  className="ml-2 rounded-md border border-neon-green/30 bg-neon-green/10 px-3 py-1.5 text-xs font-mono font-medium uppercase tracking-wider text-neon-green transition-colors hover:bg-neon-green/20"
                 >
                   Upgrade
                 </Link>
               )}
 
               {/* External exchange links */}
-              <span className="mx-2 h-4 w-px bg-[#3b3f46]" />
+              <span className="mx-2 h-4 w-px bg-border" />
               <a
                 href="https://kalshi.com/portfolio"
                 target="_blank"
                 rel="noopener noreferrer"
                 title="Kalshi"
-                className="flex items-center justify-center rounded opacity-85 transition-opacity hover:opacity-100"
+                className="flex items-center justify-center rounded opacity-60 transition-all hover:opacity-100 hover:drop-shadow-[0_0_4px_rgba(0,255,170,0.3)]"
               >
                 <img src="/kalshi-icon.png" alt="Kalshi" className="h-[22px] w-[22px]" />
               </a>
@@ -142,7 +145,7 @@ export default function DashboardShell({
                 target="_blank"
                 rel="noopener noreferrer"
                 title="Polymarket US"
-                className="flex items-center justify-center rounded opacity-85 transition-opacity hover:opacity-100"
+                className="flex items-center justify-center rounded opacity-60 transition-all hover:opacity-100 hover:drop-shadow-[0_0_4px_rgba(0,255,170,0.3)]"
               >
                 <img src="/polymarket-icon.svg" alt="Polymarket US" className="h-[22px] w-[22px]" />
               </a>
@@ -153,14 +156,14 @@ export default function DashboardShell({
             <span
               className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${
                 realtimeConnected
-                  ? "bg-emerald-400/10 text-emerald-400"
-                  : "bg-[#1a1d21] text-[#9ca3af]"
+                  ? "bg-neon-green/10 text-neon-green"
+                  : "bg-bg-elevated text-text-secondary"
               }`}
               title={realtimeConnected ? "Live — updates pushed in real time" : `Polling — updated ${elapsed}s ago`}
             >
               <span
                 className={`h-1.5 w-1.5 rounded-full ${
-                  realtimeConnected ? "bg-emerald-400 animate-pulse" : "bg-[#9ca3af]"
+                  realtimeConnected ? "bg-neon-green neon-pulse shadow-[0_0_6px_rgba(0,255,170,0.6)]" : "bg-text-secondary"
                 }`}
               />
               {realtimeConnected ? "Live" : `${elapsed}s`}
@@ -168,13 +171,13 @@ export default function DashboardShell({
             <button
               onClick={handleRefresh}
               title={`Updated ${elapsed}s ago`}
-              className="group flex h-8 w-8 items-center justify-center rounded-md border border-[#1a1d21] text-[#9ca3af] transition-colors hover:border-[#c0c5cb] hover:text-[#e8e9ea]"
+              className="group flex h-8 w-8 items-center justify-center rounded-md border border-border text-text-secondary transition-all hover:border-neon-green/30 hover:text-neon-green hover:shadow-[0_0_8px_rgba(0,255,170,0.1)]"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 20 20"
                 fill="currentColor"
-                className="h-3.5 w-3.5 transition-transform group-hover:rotate-45"
+                className="h-3.5 w-3.5 transition-transform duration-500 group-hover:rotate-180"
               >
                 <path
                   fillRule="evenodd"
@@ -186,10 +189,11 @@ export default function DashboardShell({
             <AuthNav />
           </div>
         </div>
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-green/20 to-transparent" />
       </nav>
 
       {/* Content */}
-      <main className="mx-auto max-w-6xl px-6 pt-20 pb-16">
+      <main className="mx-auto max-w-6xl px-6 pt-20 pb-16 relative">
         {activeTab === "dashboard" && (
           <>
             {!initialHasApiKeys && (
