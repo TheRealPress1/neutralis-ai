@@ -39,38 +39,38 @@ export default function BalanceBar({
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       {/* Kalshi */}
-      <div className="card-panel rounded-xl p-5">
+      <div className="hud-panel p-5">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1a1d21]">
-            <span className="text-sm font-bold text-[#e8e9ea]">K</span>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-neon-blue/10 ring-1 ring-neon-blue/20">
+            <span className="text-sm font-bold text-neon-blue">K</span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-[family-name:var(--font-cormorant)] text-xs font-medium uppercase tracking-[0.15em] text-[#9ca3af]">
+            <p className="font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-text-secondary">
               Kalshi Balance
             </p>
           </div>
         </div>
         {loading ? (
-          <div className="mt-3 h-7 w-24 animate-pulse rounded bg-[#12151a]" />
+          <div className="mt-3 h-7 w-24 skeleton" />
         ) : balances?.kalshi ? (
           <div className="mt-3">
-            <p className="font-mono text-2xl font-bold text-[#e8e9ea]">
+            <p className="font-mono text-3xl font-bold tabular-nums text-text-primary">
               ${fmt(balances.kalshi.balance)}
             </p>
-            <p className="mt-1 text-xs text-[#9ca3af]">
+            <p className="mt-1 text-xs text-text-secondary">
               Portfolio value:{" "}
-              <span className="font-mono text-[#c0c5cb]">
+              <span className="font-mono text-text-mono">
                 ${fmt(balances.kalshi.portfolio_value)}
               </span>
             </p>
           </div>
         ) : (
           <div className="mt-3">
-            <p className="text-sm text-[#3b3f46]">Not connected</p>
+            <p className="text-sm text-text-secondary">Not connected</p>
             {onNavigate && (
               <button
                 onClick={() => onNavigate("connections")}
-                className="mt-1 text-xs text-[#9ca3af] underline underline-offset-2 transition-colors hover:text-[#e8e9ea]"
+                className="mt-1 text-xs text-neon-blue transition-colors hover:text-neon-green"
               >
                 Connect Kalshi
               </button>
@@ -80,33 +80,33 @@ export default function BalanceBar({
       </div>
 
       {/* Polymarket US */}
-      <div className="card-panel rounded-xl p-5">
+      <div className="hud-panel p-5">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1a1d21]">
-            <span className="text-sm font-bold text-[#e8e9ea]">P</span>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-neon-purple/10 ring-1 ring-neon-purple/20">
+            <span className="text-sm font-bold text-neon-purple">P</span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-[family-name:var(--font-cormorant)] text-xs font-medium uppercase tracking-[0.15em] text-[#9ca3af]">
+            <p className="font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-text-secondary">
               Polymarket US
             </p>
           </div>
         </div>
         {loading ? (
-          <div className="mt-3 h-7 w-24 animate-pulse rounded bg-[#12151a]" />
+          <div className="mt-3 h-7 w-24 skeleton" />
         ) : balances?.polymarket_us ? (
           <div className="mt-3">
-            <p className="font-mono text-2xl font-bold text-[#e8e9ea]">
+            <p className="font-mono text-3xl font-bold tabular-nums text-text-primary">
               ${fmt(balances.polymarket_us.balance)}
             </p>
-            <p className="mt-1 text-xs text-[#9ca3af]">
+            <p className="mt-1 text-xs text-text-secondary">
               Buying power:{" "}
-              <span className="font-mono text-[#c0c5cb]">
+              <span className="font-mono text-text-mono">
                 ${fmt(balances.polymarket_us.buying_power)}
               </span>
               {balances.polymarket_us.asset_value > 0 && (
                 <>
                   {" "}&middot; Positions:{" "}
-                  <span className="font-mono text-[#c0c5cb]">
+                  <span className="font-mono text-text-mono">
                     ${fmt(balances.polymarket_us.asset_value)}
                   </span>
                 </>
@@ -115,11 +115,11 @@ export default function BalanceBar({
           </div>
         ) : (
           <div className="mt-3">
-            <p className="text-sm text-[#3b3f46]">Not connected</p>
+            <p className="text-sm text-text-secondary">Not connected</p>
             {onNavigate && (
               <button
                 onClick={() => onNavigate("connections")}
-                className="mt-1 text-xs text-[#9ca3af] underline underline-offset-2 transition-colors hover:text-[#e8e9ea]"
+                className="mt-1 text-xs text-neon-blue transition-colors hover:text-neon-green"
               >
                 Connect Polymarket US
               </button>

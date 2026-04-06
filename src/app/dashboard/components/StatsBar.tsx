@@ -43,10 +43,10 @@ export default function StatsBar({ refreshKey }: { refreshKey: number }) {
       value: (s) => `${s.total_realized_pnl >= 0 ? "+" : ""}$${fmt(s.total_realized_pnl)}`,
       color: (s) =>
         s.total_realized_pnl > 0
-          ? "text-emerald-400"
+          ? "text-neon-green drop-shadow-[0_0_8px_rgba(0,255,170,0.3)]"
           : s.total_realized_pnl < 0
-            ? "text-red-400"
-            : "text-[#e8e9ea]",
+            ? "text-neon-red drop-shadow-[0_0_8px_rgba(255,51,102,0.3)]"
+            : "text-text-primary",
     },
     {
       label: "Win Rate",
@@ -57,20 +57,20 @@ export default function StatsBar({ refreshKey }: { refreshKey: number }) {
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
       {cards.map((c, i) => (
-        <div key={i} className="card-panel rounded-xl p-5">
-          <p className="font-[family-name:var(--font-cormorant)] text-xs font-medium uppercase tracking-[0.15em] text-[#9ca3af]">
+        <div key={i} className="hud-panel p-5">
+          <p className="font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-text-secondary">
             {c.label}
           </p>
           {stats ? (
             <p
-              className={`mt-2 font-mono text-2xl font-bold ${
+              className={`mt-2 font-mono text-3xl font-bold tabular-nums ${
                 c.color ? c.color(stats) : "text-[#e8e9ea]"
               }`}
             >
               {c.value(stats)}
             </p>
           ) : (
-            <div className="mt-3 h-7 w-20 animate-pulse rounded bg-[#12151a]" />
+            <div className="mt-3 h-7 w-20 skeleton" />
           )}
         </div>
       ))}
