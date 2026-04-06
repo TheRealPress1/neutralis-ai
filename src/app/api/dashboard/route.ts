@@ -142,9 +142,11 @@ async function getStats(supabase: SB, userId: string): Promise<PortfolioStats> {
     .eq("status", "closed")
     .eq("user_id", userId);
 
-  const totalTrades = closedData?.length ?? 0;
   const totalRealizedPnl = closedData?.reduce((s, r) => s + (r.realized_pnl ?? 0), 0) ?? 0;
-  const wins = closedData?.filter((r) => r.realized_pnl > 0).length ?? 0;
+  // Exclude paper/unsettled positions ($0 P&L) from win rate calculation
+  const settledTrades = closedData?.filter((r) => r.realized_pnl !== 0) ?? [];
+  const totalTrades = settledTrades.length;
+  const wins = settledTrades.filter((r) => r.realized_pnl > 0).length;
   const losses = totalTrades - wins;
   const winRate = totalTrades > 0 ? wins / totalTrades : 0;
 

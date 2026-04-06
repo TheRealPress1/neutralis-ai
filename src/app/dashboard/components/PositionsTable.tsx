@@ -24,6 +24,47 @@ function timeAgo(iso: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+/** Parse raw exchange tickers into readable event names.
+ *  Kalshi:  "KXEPLGAME-26APR12SUNTOT-TOT" → "Sunderland vs Tottenham · TOT"
+ *  Poly US: "atc-epl-sun-tot-2026-04-12-tot" → "Sunderland vs Tottenham · TOT"
+ */
+const TEAM_NAMES: Record<string, string> = {
+  ARS: "Arsenal", AVL: "Aston Villa", BOU: "Bournemouth", BRE: "Brentford",
+  BRI: "Brighton", BUR: "Burnley", CHE: "Chelsea", CRY: "Crystal Palace",
+  EVE: "Everton", FUL: "Fulham", LFC: "Liverpool", LIV: "Liverpool",
+  MCI: "Man City", MUN: "Man United", NEW: "Newcastle", NFO: "Nott Forest",
+  SUN: "Sunderland", TOT: "Tottenham", WHU: "West Ham", WOL: "Wolves",
+  NAP: "Napoli", ACM: "AC Milan", INT: "Inter Milan", JUV: "Juventus",
+  ATA: "Atalanta", LAZ: "Lazio", ROM: "Roma", FIO: "Fiorentina",
+  BOL: "Bologna", CAG: "Cagliari", CRE: "Cremonese", COM: "Como",
+  SCH: "Schalke", WOB: "Wolfsburg", SGE: "Frankfurt", FRE: "Freiburg",
+  BOR: "Dortmund", BAY: "Bayern",
+};
+
+function parseTicker(raw: string): { event: string; outcome: string; date: string } {
+  // Kalshi format: KXEPLGAME-26APR12SUNTOT-TOT
+  const kalshiMatch = raw.match(/^KX\w+-(\d{2})([A-Z]{3})(\d{2})([A-Z]{3,})([A-Z]{3,})-([A-Z]+)$/);
+  if (kalshiMatch) {
+    const [, , month, day, team1, team2, outcome] = kalshiMatch;
+    const t1 = TEAM_NAMES[team1] ?? team1;
+    const t2 = TEAM_NAMES[team2] ?? team2;
+    return { event: `${t1} vs ${t2}`, outcome, date: `${month} ${day}` };
+  }
+
+  // Polymarket US format: atc-epl-sun-tot-2026-04-12-tot or atc-sea-ata-juv-2026-04-11-juv
+  const polyMatch = raw.match(/^atc-\w+-(\w+)-(\w+)-\d{4}-(\d{2})-(\d{2})-(\w+)$/);
+  if (polyMatch) {
+    const [, t1raw, t2raw, mo, day, outcomeRaw] = polyMatch;
+    const t1 = TEAM_NAMES[t1raw.toUpperCase()] ?? t1raw.toUpperCase();
+    const t2 = TEAM_NAMES[t2raw.toUpperCase()] ?? t2raw.toUpperCase();
+    const months = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return { event: `${t1} vs ${t2}`, outcome: outcomeRaw.toUpperCase(), date: `${months[parseInt(mo)]} ${day}` };
+  }
+
+  // Fallback: show raw but truncated
+  return { event: raw.length > 30 ? raw.slice(0, 28) + "..." : raw, outcome: "", date: "" };
+}
+
 function venueBadge(venue: string) {
   const isKalshi = venue === "kalshi";
   const label = venue === "polymarket_us" ? "POLY US" : venue.toUpperCase();
@@ -93,7 +134,7 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="text-xs uppercase tracking-wider text-text-secondary">
-              <th className="px-5 py-3 font-medium">Ticker</th>
+              <th className="px-5 py-3 font-medium">Event</th>
               <th className="px-5 py-3 font-medium">Venue</th>
               <th className="px-5 py-3 font-medium">Side</th>
               <th className="px-5 py-3 font-medium text-right">Entry</th>
@@ -138,7 +179,22 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
                 const pnl = isOpen ? p.unrealized_pnl : p.realized_pnl;
                 return (
                   <tr key={p.id} className="border-t border-border transition-colors hover:bg-white/[0.02]">
-                    <td className="px-5 py-3 font-mono text-xs">{p.ticker}</td>
+                    <td className="px-5 py-3">
+                      {(() => {
+                        const parsed = parseTicker(p.ticker);
+                        return (
+                          <div className="flex flex-col">
+                            <span className="text-xs text-text-primary">{parsed.event}</span>
+                            <span className="flex items-center gap-1.5 text-[10px] text-text-secondary">
+                              {parsed.outcome && (
+                                <span className="font-mono font-medium text-neon-amber">{parsed.outcome}</span>
+                              )}
+                              {parsed.date && <span>{parsed.date}</span>}
+                            </span>
+                          </div>
+                        );
+                      })()}
+                    </td>
                     <td className="px-5 py-3">{venueBadge(p.venue)}</td>
                     <td className="px-5 py-3">
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
