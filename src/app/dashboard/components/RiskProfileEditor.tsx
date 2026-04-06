@@ -232,7 +232,7 @@ export default function RiskProfileEditor() {
   if (!active) {
     return (
       <div className="mx-auto max-w-5xl px-6">
-        <div className="card-panel rounded-xl p-8 text-center text-[#9ca3af]">
+        <div className="hud-panel rounded-xl p-8 text-center text-text-secondary">
           Loading strategy configuration...
         </div>
       </div>
@@ -244,7 +244,7 @@ export default function RiskProfileEditor() {
       <h2 className="font-[family-name:var(--font-italiana)] text-2xl font-normal tracking-[0.06em]">
         Strategy Configuration
       </h2>
-      <p className="mt-2 text-sm text-[#9ca3af]">
+      <p className="mt-2 text-sm text-text-secondary">
         Configure pipeline thresholds, position limits, and signal filters.
         Changes take effect on the next pipeline cycle.
       </p>
@@ -252,15 +252,15 @@ export default function RiskProfileEditor() {
       {/* ── Parameter Groups ──────────────────────────────────── */}
       <div className="mt-8 space-y-4">
         {PARAM_GROUPS.map((group) => (
-          <div key={group.title} className="card-panel rounded-xl">
+          <div key={group.title} className="hud-panel rounded-xl">
             <div className="px-6 py-4">
-              <h3 className="font-[family-name:var(--font-cormorant)] text-base font-medium">{group.title}</h3>
-              <p className="mt-0.5 text-xs text-[#9ca3af]">
+              <h3 className="font-mono text-xs font-medium uppercase tracking-[0.15em] text-text-secondary">{group.title}</h3>
+              <p className="mt-0.5 text-xs text-text-secondary">
                 {group.description}
               </p>
             </div>
 
-            <div className="border-t border-[#1a1d21] px-6 pb-6 pt-4">
+            <div className="border-t border-border px-6 pb-6 pt-4">
               <div className="grid gap-5 sm:grid-cols-2">
                 {group.params.map((param) => {
                   const val = form[param.key] ?? "";
@@ -269,12 +269,12 @@ export default function RiskProfileEditor() {
                       <label className="flex items-baseline gap-2 text-sm font-medium">
                         {param.label}
                         {param.unit && (
-                          <span className="text-xs text-[#9ca3af]">
+                          <span className="text-xs text-text-secondary">
                             ({param.unit})
                           </span>
                         )}
                       </label>
-                      <p className="mt-0.5 text-[11px] leading-tight text-[#9ca3af]">
+                      <p className="mt-0.5 text-[11px] leading-tight text-text-secondary">
                         {param.description}
                       </p>
                       <input
@@ -292,7 +292,7 @@ export default function RiskProfileEditor() {
                           const clamped = Math.min(Math.max(n, param.min), param.max);
                           setForm((prev) => ({ ...prev, [param.key]: String(clamped) }));
                         }}
-                        className="mt-2 w-full rounded-lg border border-[#1a1d21] bg-[#050608] px-3 py-2 text-sm text-[#e8e9ea] outline-none transition-colors focus:border-[#c0c5cb]"
+                        className="mt-2 w-full rounded-lg bg-[#060810] border border-border px-3 py-2 text-sm text-text-primary font-mono outline-none transition-all focus:border-neon-blue/50 focus:shadow-[0_0_8px_rgba(0,212,255,0.1)]"
                       />
                     </div>
                   );
@@ -308,10 +308,10 @@ export default function RiskProfileEditor() {
         <button
           onClick={handleSave}
           disabled={saving || !hasChanges()}
-          className={`rounded-lg px-5 py-2.5 text-sm font-medium transition-colors ${
+          className={`rounded-lg px-5 py-2.5 text-sm font-mono font-medium transition-all ${
             hasChanges() && !saving
-              ? "bg-[#e8e9ea] text-[#050608] hover:bg-[#c0c5cb]"
-              : "cursor-not-allowed bg-[#1a1d21] text-[#9ca3af]"
+              ? "border border-neon-green/30 bg-neon-green/10 text-neon-green hover:bg-neon-green/20 hover:shadow-[0_0_12px_rgba(0,255,170,0.1)]"
+              : "cursor-not-allowed bg-bg-elevated text-text-secondary"
           }`}
         >
           {saving ? "Saving..." : "Save Changes"}
@@ -319,12 +319,12 @@ export default function RiskProfileEditor() {
         <button
           onClick={handleReset}
           disabled={!hasChanges()}
-          className="rounded-lg border border-[#1a1d21] px-5 py-2.5 text-sm font-medium text-[#9ca3af] transition-colors hover:border-[#c0c5cb] hover:text-[#e8e9ea] disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-lg border border-border px-5 py-2.5 text-sm font-mono font-medium text-text-secondary transition-all hover:border-border-glow hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
         >
           Reset
         </button>
         {message && (
-          <span className="text-sm text-[#9ca3af]">{message}</span>
+          <span className="text-sm text-text-secondary">{message}</span>
         )}
       </div>
     </div>

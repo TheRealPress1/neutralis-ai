@@ -56,33 +56,33 @@ export default function AccessCodeGenerator() {
   }
 
   return (
-    <div className="rounded-xl border border-[#22262d] bg-[#0e1117] p-6">
+    <div className="hud-panel p-6">
       <div className="flex items-center justify-between mb-1">
-        <h3 className="text-sm font-medium text-[#eceef0]">Access Codes</h3>
-        <span className="text-xs text-[#6b7280]">
+        <h3 className="text-sm font-medium text-text-primary">Access Codes</h3>
+        <span className="text-xs text-text-secondary">
           {codes.filter((c) => !c.redeemed_at).length} available
           {" / "}
           {codes.filter((c) => c.redeemed_at).length} claimed
         </span>
       </div>
-      <p className="text-xs text-[#9ca3af] mb-4">
+      <p className="text-xs text-text-secondary mb-4">
         Generate single-use codes to grant Pro access without a subscription.
       </p>
 
       <button
         onClick={handleGenerate}
         disabled={isPending}
-        className="rounded-lg bg-[#e8e9ea] px-4 py-2 text-sm font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb] disabled:opacity-50"
+        className="rounded-lg border border-neon-green/30 bg-neon-green/10 px-4 py-2 font-mono text-sm font-medium text-neon-green transition-all hover:bg-neon-green/20 hover:shadow-[0_0_12px_rgba(0,255,170,0.1)] disabled:opacity-50"
       >
         {isPending ? "Generating..." : "Generate Code"}
       </button>
 
-      {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+      {error && <p className="mt-3 text-sm text-neon-red">{error}</p>}
 
       {loading ? (
         <div className="mt-4 space-y-2">
           {[1, 2].map((i) => (
-            <div key={i} className="h-12 rounded-lg bg-[#1a1d21] animate-pulse" />
+            <div key={i} className="h-12 rounded-lg bg-bg-elevated skeleton" />
           ))}
         </div>
       ) : codes.length > 0 ? (
@@ -92,25 +92,25 @@ export default function AccessCodeGenerator() {
               key={c.id}
               className={`flex items-center gap-3 rounded-lg border px-4 py-2.5 ${
                 c.redeemed_at
-                  ? "border-[#22262d]/60 bg-[#1a1d21]/60"
-                  : "border-[#22262d] bg-[#1a1d21]"
+                  ? "border-border/40 bg-bg-elevated/40"
+                  : "border-border bg-bg-elevated"
               }`}
             >
-              <code className="text-sm font-mono text-[#e8e9ea] tracking-wider shrink-0">
+              <code className="text-sm font-mono text-neon-green tracking-wider shrink-0">
                 {c.code}
               </code>
 
               <div className="flex-1 min-w-0 text-right">
                 {c.redeemed_at ? (
-                  <span className="text-xs text-emerald-400">
+                  <span className="text-xs text-neon-green">
                     Claimed by{" "}
-                    <span className="text-emerald-300">{c.redeemed_by_email}</span>
-                    <span className="text-[#6b7280] ml-1.5">
+                    <span className="text-neon-green/80">{c.redeemed_by_email}</span>
+                    <span className="text-text-secondary ml-1.5">
                       {timeAgo(c.redeemed_at)}
                     </span>
                   </span>
                 ) : (
-                  <span className="text-xs text-[#6b7280]">
+                  <span className="text-xs text-text-secondary">
                     Unclaimed &middot; {timeAgo(c.created_at)}
                   </span>
                 )}
@@ -119,14 +119,14 @@ export default function AccessCodeGenerator() {
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={() => navigator.clipboard.writeText(c.code)}
-                  className="text-xs text-[#9ca3af] hover:text-[#e8e9ea] transition-colors"
+                  className="text-xs text-text-secondary hover:text-text-primary transition-colors"
                 >
                   Copy
                 </button>
                 <button
                   onClick={() => handleDelete(c.id)}
                   disabled={isPending}
-                  className="text-xs text-red-400/70 hover:text-red-400 transition-colors disabled:opacity-50"
+                  className="text-xs text-neon-red/70 hover:text-neon-red transition-colors disabled:opacity-50"
                 >
                   Delete
                 </button>
@@ -135,7 +135,7 @@ export default function AccessCodeGenerator() {
           ))}
         </div>
       ) : (
-        <p className="mt-4 text-xs text-[#6b7280]">
+        <p className="mt-4 text-xs text-text-secondary">
           No codes generated yet.
         </p>
       )}

@@ -12,7 +12,7 @@ import {
 } from "@/app/actions/api-keys";
 
 const INPUT_CLASS =
-  "w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors text-sm";
+  "w-full rounded-lg bg-[#060810] border border-border px-4 py-3 text-text-primary font-mono placeholder:text-text-secondary focus:outline-none focus:border-neon-blue/50 focus:shadow-[0_0_8px_rgba(0,212,255,0.1)] transition-all text-sm";
 
 interface StoredKey {
   id: number;
@@ -190,8 +190,8 @@ export default function ApiKeyManager() {
 
   if (loading) {
     return (
-      <div className="card-panel rounded-xl p-6">
-        <p className="text-sm text-[#9ca3af]">Loading API keys...</p>
+      <div className="hud-panel rounded-xl p-6">
+        <p className="text-sm text-text-secondary">Loading API keys...</p>
       </div>
     );
   }
@@ -202,39 +202,39 @@ export default function ApiKeyManager() {
         <h2 className="font-[family-name:var(--font-italiana)] text-xl font-normal tracking-[0.04em]">
           Exchange Connections
         </h2>
-        <p className="text-sm text-[#a1a8b3] mt-1">
+        <p className="text-sm text-text-secondary mt-1">
           Connect your Kalshi and Polymarket US accounts to enable live trading.
         </p>
       </div>
 
       {error && (
-        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-neon-red">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400">
+        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-neon-green">
           {success}
         </div>
       )}
 
       {/* Kalshi */}
-      <div className="card-panel rounded-xl p-5">
+      <div className="hud-panel rounded-xl p-5">
         <div className="flex items-center justify-between mb-1">
-          <h3 className="font-medium text-[#eceef0]">Kalshi</h3>
+          <h3 className="font-medium text-text-primary">Kalshi</h3>
           {kalshiKey ? (
             <span
               className={`text-xs font-medium rounded-full px-2.5 py-0.5 border ${
                 kalshiKey.is_valid
-                  ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                  ? "text-neon-green bg-emerald-500/10 border-emerald-500/20"
                   : "text-amber-400 bg-amber-500/10 border-amber-500/20"
               }`}
             >
               {kalshiKey.is_valid ? "Verified" : "Unverified"}
             </span>
           ) : (
-            <span className="text-xs font-medium text-[#a1a8b3] bg-[#1a1d21] border border-[#22262d] rounded-full px-2.5 py-0.5">
+            <span className="text-xs font-medium text-text-secondary bg-bg-elevated border border-border rounded-full px-2.5 py-0.5">
               Not configured
             </span>
           )}
@@ -242,17 +242,17 @@ export default function ApiKeyManager() {
 
         {kalshiKey && editing !== "kalshi" ? (
           <div className="mt-3 space-y-2">
-            <p className="text-xs text-[#a1a8b3]">
+            <p className="text-xs text-text-secondary">
               Key ID:{" "}
-              <span className="font-mono text-[#e8e9ea]">
+              <span className="font-mono text-text-primary">
                 {mask(kalshiKey.api_key_id)}
               </span>
             </p>
-            <p className="text-xs text-[#a1a8b3]">
-              Private key: <span className="text-[#e8e9ea]">configured</span>
+            <p className="text-xs text-text-secondary">
+              Private key: <span className="text-text-primary">configured</span>
             </p>
             {kalshiKey.updated_at && (
-              <p className="text-xs text-[#6b7280]">
+              <p className="text-xs text-text-secondary">
                 Updated {timeAgo(kalshiKey.updated_at)}
               </p>
             )}
@@ -260,20 +260,20 @@ export default function ApiKeyManager() {
               <button
                 onClick={() => handleTestConnection("kalshi")}
                 disabled={testing === "kalshi"}
-                className="rounded-lg border border-[#2a2d31] bg-[#1a1d21] px-3 py-1.5 text-xs font-medium text-[#e8e9ea] hover:border-[#e8e9ea]/30 hover:bg-[#22262d] disabled:opacity-50 transition-colors"
+                className="rounded-lg border border-neon-blue/30 bg-neon-blue/10 px-4 py-2 text-sm font-mono text-neon-blue transition-all hover:bg-neon-blue/20"
               >
                 {testing === "kalshi" ? "Testing..." : "Test Connection"}
               </button>
               <button
                 onClick={() => setEditing("kalshi")}
-                className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors px-2"
+                className="text-xs text-text-secondary hover:text-text-primary transition-colors px-2"
               >
                 Update
               </button>
               <button
                 onClick={() => handleRemove("kalshi")}
                 disabled={isPending}
-                className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                className="rounded-lg border border-neon-red/30 px-4 py-2 text-sm font-mono text-neon-red transition-all hover:bg-neon-red/10"
               >
                 Remove
               </button>
@@ -282,19 +282,19 @@ export default function ApiKeyManager() {
         ) : (
           (editing === "kalshi" || !kalshiKey) && (
             <div className="mt-4 space-y-3">
-              <p className="text-xs text-[#9ca3af]">
+              <p className="text-xs text-text-secondary">
                 Generate an API key at{" "}
                 <a
                   href="https://kalshi.com/account/profile"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[#e8e9ea] underline underline-offset-2 hover:text-white"
+                  className="text-text-primary underline underline-offset-2 hover:text-white"
                 >
                   kalshi.com/account/profile
                 </a>
               </p>
               <div>
-                <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+                <label className="block text-xs font-medium mb-1.5 text-text-secondary">
                   API Key ID
                 </label>
                 <input
@@ -306,7 +306,7 @@ export default function ApiKeyManager() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+                <label className="block text-xs font-medium mb-1.5 text-text-secondary">
                   RSA Private Key (PEM)
                 </label>
                 <textarea
@@ -326,7 +326,7 @@ export default function ApiKeyManager() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="mt-1.5 text-xs text-[#a1a8b3] hover:text-[#e8e9ea] transition-colors underline underline-offset-2"
+                  className="mt-1.5 text-xs text-text-secondary hover:text-text-primary transition-colors underline underline-offset-2"
                 >
                   or upload a .pem file
                 </button>
@@ -335,14 +335,14 @@ export default function ApiKeyManager() {
                 <button
                   onClick={() => handleSave("kalshi")}
                   disabled={isPending}
-                  className="rounded-lg bg-[#e8e9ea] px-4 py-2 text-xs font-medium text-[#050608] hover:bg-[#c0c5cb] disabled:opacity-50 transition-colors"
+                  className="rounded-lg border border-neon-green/30 bg-neon-green/10 px-4 py-2.5 text-sm font-mono font-medium text-neon-green transition-all hover:bg-neon-green/20 hover:shadow-[0_0_12px_rgba(0,255,170,0.1)] disabled:opacity-50"
                 >
                   {isPending ? "Validating & Saving..." : "Save & Validate"}
                 </button>
                 {editing === "kalshi" && (
                   <button
                     onClick={() => setEditing(null)}
-                    className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors px-3"
+                    className="text-xs text-text-secondary hover:text-text-primary transition-colors px-3"
                   >
                     Cancel
                   </button>
@@ -354,24 +354,24 @@ export default function ApiKeyManager() {
       </div>
 
       {/* Polymarket US */}
-      <div className="card-panel rounded-xl p-5">
+      <div className="hud-panel rounded-xl p-5">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-1.5">
-            <h3 className="font-medium text-[#eceef0]">Polymarket US</h3>
-            <span className="text-[10px] font-normal text-[#9ca3af]">CFTC</span>
+            <h3 className="font-medium text-text-primary">Polymarket US</h3>
+            <span className="text-[10px] font-normal text-text-secondary">CFTC</span>
           </div>
           {polyUSKey ? (
             <span
               className={`text-xs font-medium rounded-full px-2.5 py-0.5 border ${
                 polyUSKey.is_valid
-                  ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                  ? "text-neon-green bg-emerald-500/10 border-emerald-500/20"
                   : "text-amber-400 bg-amber-500/10 border-amber-500/20"
               }`}
             >
               {polyUSKey.is_valid ? "Verified" : "Unverified"}
             </span>
           ) : (
-            <span className="text-xs font-medium text-[#a1a8b3] bg-[#1a1d21] border border-[#22262d] rounded-full px-2.5 py-0.5">
+            <span className="text-xs font-medium text-text-secondary bg-bg-elevated border border-border rounded-full px-2.5 py-0.5">
               Not configured
             </span>
           )}
@@ -379,17 +379,17 @@ export default function ApiKeyManager() {
 
         {polyUSKey && editing !== "polymarket_us" ? (
           <div className="mt-3 space-y-2">
-            <p className="text-xs text-[#a1a8b3]">
+            <p className="text-xs text-text-secondary">
               Key ID:{" "}
-              <span className="font-mono text-[#e8e9ea]">
+              <span className="font-mono text-text-primary">
                 {mask(polyUSKey.api_key_id)}
               </span>
             </p>
-            <p className="text-xs text-[#a1a8b3]">
-              Secret Key: <span className="text-[#e8e9ea]">configured</span>
+            <p className="text-xs text-text-secondary">
+              Secret Key: <span className="text-text-primary">configured</span>
             </p>
             {polyUSKey.updated_at && (
-              <p className="text-xs text-[#6b7280]">
+              <p className="text-xs text-text-secondary">
                 Updated {timeAgo(polyUSKey.updated_at)}
               </p>
             )}
@@ -397,20 +397,20 @@ export default function ApiKeyManager() {
               <button
                 onClick={() => handleTestConnection("polymarket_us")}
                 disabled={testing === "polymarket_us"}
-                className="rounded-lg border border-[#2a2d31] bg-[#1a1d21] px-3 py-1.5 text-xs font-medium text-[#e8e9ea] hover:border-[#e8e9ea]/30 hover:bg-[#22262d] disabled:opacity-50 transition-colors"
+                className="rounded-lg border border-neon-blue/30 bg-neon-blue/10 px-4 py-2 text-sm font-mono text-neon-blue transition-all hover:bg-neon-blue/20"
               >
                 {testing === "polymarket_us" ? "Testing..." : "Test Connection"}
               </button>
               <button
                 onClick={() => setEditing("polymarket_us")}
-                className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors px-2"
+                className="text-xs text-text-secondary hover:text-text-primary transition-colors px-2"
               >
                 Update
               </button>
               <button
                 onClick={() => handleRemove("polymarket_us")}
                 disabled={isPending}
-                className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                className="rounded-lg border border-neon-red/30 px-4 py-2 text-sm font-mono text-neon-red transition-all hover:bg-neon-red/10"
               >
                 Remove
               </button>
@@ -419,19 +419,19 @@ export default function ApiKeyManager() {
         ) : (
           (editing === "polymarket_us" || !polyUSKey) && (
             <div className="mt-4 space-y-3">
-              <p className="text-xs text-[#9ca3af]">
+              <p className="text-xs text-text-secondary">
                 Get your API credentials at{" "}
                 <a
                   href="https://polymarket.us/developer"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[#e8e9ea] underline underline-offset-2 hover:text-white"
+                  className="text-text-primary underline underline-offset-2 hover:text-white"
                 >
                   polymarket.us/developer
                 </a>
               </p>
               <div>
-                <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+                <label className="block text-xs font-medium mb-1.5 text-text-secondary">
                   Key ID
                 </label>
                 <input
@@ -443,7 +443,7 @@ export default function ApiKeyManager() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+                <label className="block text-xs font-medium mb-1.5 text-text-secondary">
                   Secret Key
                 </label>
                 <input
@@ -458,14 +458,14 @@ export default function ApiKeyManager() {
                 <button
                   onClick={() => handleSave("polymarket_us")}
                   disabled={isPending}
-                  className="rounded-lg bg-[#e8e9ea] px-4 py-2 text-xs font-medium text-[#050608] hover:bg-[#c0c5cb] disabled:opacity-50 transition-colors"
+                  className="rounded-lg border border-neon-green/30 bg-neon-green/10 px-4 py-2.5 text-sm font-mono font-medium text-neon-green transition-all hover:bg-neon-green/20 hover:shadow-[0_0_12px_rgba(0,255,170,0.1)] disabled:opacity-50"
                 >
                   {isPending ? "Validating & Saving..." : "Save & Validate"}
                 </button>
                 {editing === "polymarket_us" && (
                   <button
                     onClick={() => setEditing(null)}
-                    className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors px-3"
+                    className="text-xs text-text-secondary hover:text-text-primary transition-colors px-3"
                   >
                     Cancel
                   </button>
