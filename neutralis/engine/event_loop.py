@@ -208,6 +208,8 @@ class EventEngine:
         self._poly_us_ws: PolymarketUSWebSocket | None = None
         self._state: _LiveState | None = None
         self._executor_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="exec")
+        # Pre-build a helper so execution methods can get a KalshiExecutor from DB creds
+        self._has_kalshi_db_creds = bool(kalshi_key_id and kalshi_pem)
         self._log_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="log")
         self._market_cache = MarketCache()
         self._running = False
@@ -225,6 +227,16 @@ class EventEngine:
         self._poly_us_ws_connected: bool = False
         # Pipeline log storage (dedicated connection for non-blocking logging)
         self._log_storage: PostgresStorage | None = None
+
+    def _make_kalshi_executor(self, settings: Settings) -> "KalshiExecutor":
+        """Create a KalshiExecutor, preferring DB credentials over env vars."""
+        from neutralis.execution.kalshi import KalshiExecutor
+
+        if self._has_kalshi_db_creds:
+            return KalshiExecutor.from_credentials(
+                self._kalshi_key_id, self._kalshi_pem, settings.kalshi,
+            )
+        return KalshiExecutor(settings.kalshi, settings.execution)
 
     def _init_log_storage(self) -> None:
         """Create a dedicated storage connection for pipeline logging."""
@@ -1994,7 +2006,7 @@ class EventEngine:
             )
 
         # Single-venue Kalshi only (complement arb or Kalshi-only cross-platform)
-        if kalshi_legs and settings.execution.kalshi_api_key_id:
+        if kalshi_legs and (settings.execution.kalshi_api_key_id or self._has_kalshi_db_creds):
             return self._execute_kalshi_live(
                 signal, decision, decision_id, settings, storage, portfolio,
                 kalshi_legs,
@@ -2008,10 +2020,8 @@ class EventEngine:
         kalshi_legs: list[TradeLeg],
     ) -> bool:
         """Execute Kalshi-only legs. Returns True if all legs fill."""
-        from neutralis.execution.kalshi import KalshiExecutor
-
         try:
-            with KalshiExecutor(settings.kalshi, settings.execution) as executor:
+            with self._make_kalshi_executor(settings) as executor:
                 results = []
                 for leg in kalshi_legs:
                     price_cents = max(1, min(99, round(leg.price_dollars * 100)))
@@ -2048,7 +2058,6 @@ class EventEngine:
         kalshi_legs: list[TradeLeg], poly_us_legs: list[TradeLeg],
     ) -> bool:
         """Execute cross-platform arb: Polymarket US FOK first, then Kalshi."""
-        from neutralis.execution.kalshi import KalshiExecutor
         from neutralis.execution.polymarket_us import PolymarketUSExecutor
 
         if settings.execution.suppress_poly_maintenance and _is_poly_maintenance_window():
@@ -2099,7 +2108,7 @@ class EventEngine:
 
         # Step 2: Kalshi FOK
         try:
-            with KalshiExecutor(settings.kalshi, settings.execution) as k_exec:
+            with self._make_kalshi_executor(settings) as k_exec:
                 for leg in kalshi_legs:
                     price_cents = max(1, min(99, round(leg.price_dollars * 100)))
                     if signal.combined_cost > 0:
@@ -2252,7 +2261,6 @@ class EventEngine:
         kalshi_legs: list[TradeLeg], poly_legs: list[TradeLeg],
     ) -> bool:
         """Taker flow: Polymarket FOK first, then Kalshi FOK."""
-        from neutralis.execution.kalshi import KalshiExecutor
         from neutralis.execution.polymarket import PolymarketExecutor
 
         poly_results = []
@@ -2310,7 +2318,7 @@ class EventEngine:
                 return False
 
         try:
-            with KalshiExecutor(settings.kalshi, settings.execution) as k_exec:
+            with self._make_kalshi_executor(settings) as k_exec:
                 for leg in kalshi_legs:
                     price_cents = max(1, min(99, round(leg.price_dollars * 100)))
                     if signal.combined_cost > 0:
@@ -2369,7 +2377,6 @@ class EventEngine:
         - If Kalshi fills, immediately lock in the Poly side (FOK, zero fee)
         - If Kalshi doesn't fill within timeout → cancel, no capital at risk
         """
-        from neutralis.execution.kalshi import KalshiExecutor
         from neutralis.execution.polymarket import PolymarketExecutor
 
         kalshi_results = []
@@ -2394,7 +2401,7 @@ class EventEngine:
 
         # ── Step 1: Kalshi GTC limit order (maker) ──
         try:
-            with KalshiExecutor(settings.kalshi, settings.execution) as k_exec:
+            with self._make_kalshi_executor(settings) as k_exec:
                 for leg in kalshi_legs:
                     maker_price = self._compute_maker_price(k_market, leg, offset)
                     if signal.combined_cost > 0:
