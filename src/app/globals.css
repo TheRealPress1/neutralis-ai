@@ -5,27 +5,41 @@ html {
 }
 
 :root {
-  --titanium-black: #08090c;
-  --titanium-darker: #0e1117;
-  --titanium-border: #22262d;
-  --text-primary: #eceef0;
-  --text-secondary: #a1a8b3;
-  --silver: #c0c5cb;
+  --bg-primary: #030306;
+  --bg-secondary: #0a0c12;
+  --bg-elevated: #0d1018;
+  --border: #1a1e2a;
+  --border-glow: rgba(0, 255, 170, 0.15);
+  --neon-green: #00ffaa;
+  --neon-blue: #00d4ff;
+  --neon-purple: #a855f7;
+  --neon-red: #ff3366;
+  --neon-amber: #ffaa00;
+  --text-primary: #e0e4ea;
+  --text-secondary: #5a6578;
+  --text-mono: #8892a0;
 }
 
 @theme inline {
-  --color-titanium-black: var(--titanium-black);
-  --color-titanium-darker: var(--titanium-darker);
-  --color-titanium-border: var(--titanium-border);
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-secondary: var(--bg-secondary);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-border: var(--border);
+  --color-border-glow: var(--border-glow);
+  --color-neon-green: var(--neon-green);
+  --color-neon-blue: var(--neon-blue);
+  --color-neon-purple: var(--neon-purple);
+  --color-neon-red: var(--neon-red);
+  --color-neon-amber: var(--neon-amber);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
-  --color-silver: var(--silver);
+  --color-text-mono: var(--text-mono);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
-  background: var(--titanium-black);
+  background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-geist-sans), sans-serif;
   position: relative;
@@ -38,7 +52,7 @@ body::before {
   inset: 0;
   z-index: 100;
   pointer-events: none;
-  opacity: 0.03;
+  opacity: 0.02;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
   background-repeat: repeat;
   background-size: 256px 256px;
@@ -51,7 +65,7 @@ body::after {
   inset: 0;
   z-index: 99;
   pointer-events: none;
-  background: radial-gradient(ellipse at center, transparent 60%, rgba(8,9,12,0.15) 100%);
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(3,3,6,0.25) 100%);
 }
 
 /* ── Hero center glow ─────────────────────────────── */
@@ -80,9 +94,9 @@ body::after {
   transform: translate(-50%, -50%);
   background: radial-gradient(
     ellipse at center,
-    rgba(150, 165, 195, 0.35) 0%,
-    rgba(150, 165, 195, 0.12) 35%,
-    rgba(150, 165, 195, 0.04) 60%,
+    rgba(0, 255, 170, 0.15) 0%,
+    rgba(0, 212, 255, 0.06) 35%,
+    rgba(0, 255, 170, 0.02) 60%,
     transparent 80%
   );
   animation: glow-breathe 12s ease-in-out infinite;
@@ -100,7 +114,7 @@ body::after {
   transform: translate(-50%, -50%);
   background: radial-gradient(
     ellipse at center,
-    rgba(100, 120, 160, 0.1) 0%,
+    rgba(0, 212, 255, 0.05) 0%,
     transparent 70%
   );
   animation: glow-breathe-slow 16s ease-in-out infinite;
@@ -121,7 +135,7 @@ body::after {
   background: linear-gradient(
     120deg,
     transparent 30%,
-    rgba(255, 255, 255, 0.3) 50%,
+    rgba(0, 255, 170, 0.2) 50%,
     transparent 70%
   );
   transform: translateX(-100%);
@@ -140,16 +154,40 @@ body::after {
   padding-right: 1.75rem;
 }
 
-/* ── Card panel (solid, no blur) ──────────────────── */
-.card-panel {
-  background: var(--titanium-darker);
-  border: 1px solid var(--titanium-border);
-  transition: transform 0.3s ease, border-color 0.3s ease;
+/* ── HUD Panel ────────────────────────────────────── */
+.hud-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  position: relative;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
-
-.card-panel:hover {
-  transform: translateY(-2px);
-  border-color: rgba(192, 197, 203, 0.25);
+.hud-panel:hover {
+  border-color: var(--border-glow);
+  box-shadow: 0 0 20px rgba(0,255,170,0.04), inset 0 0 20px rgba(0,255,170,0.02);
+}
+.hud-panel::before,
+.hud-panel::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-color: rgba(0,255,170,0.25);
+  border-style: solid;
+  pointer-events: none;
+  z-index: 1;
+}
+.hud-panel::before {
+  top: -1px;
+  left: -1px;
+  border-width: 1px 0 0 1px;
+  border-radius: 0.75rem 0 0 0;
+}
+.hud-panel::after {
+  bottom: -1px;
+  right: -1px;
+  border-width: 0 1px 1px 0;
+  border-radius: 0 0 0.75rem 0;
 }
 
 /* ── Metallic banding ──────────────────────────────── */
@@ -175,6 +213,52 @@ body::after {
   animation: metallic-shift 10s ease infinite;
 }
 
+/* ── Dashboard grid overlay ───────────────────────── */
+.dashboard-grid {
+  background-image:
+    linear-gradient(rgba(0,255,170,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,255,170,0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ── Scan line ────────────────────────────────────── */
+@keyframes scanline {
+  0% { transform: translateY(-100vh); }
+  100% { transform: translateY(100vh); }
+}
+.scan-line::before {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,255,170,0.06), transparent);
+  animation: scanline 8s linear infinite;
+  pointer-events: none;
+  z-index: 97;
+}
+
+/* ── Neon pulse ───────────────────────────────────── */
+@keyframes neon-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.neon-pulse {
+  animation: neon-pulse 2s ease-in-out infinite;
+}
+
+/* ── Skeleton sweep loader ────────────────────────── */
+@keyframes skeleton-sweep {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-elevated) 50%, var(--bg-secondary) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.5s ease infinite;
+  border-radius: 0.375rem;
+}
+
 /* ── Reduced motion ────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -195,7 +279,7 @@ body::after {
   transition: color 0.25s ease, filter 0.25s ease, text-shadow 0.25s ease;
 }
 .nav-link-glow:hover {
-  text-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+  text-shadow: 0 0 8px rgba(0, 255, 170, 0.3);
 }
 
 /* ── Headline italic accent ──────────────────────── */
@@ -209,12 +293,7 @@ body::after {
   right: 10%;
   bottom: -0.1em;
   height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.25),
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, rgba(0, 255, 170, 0.3), transparent);
   pointer-events: none;
 }
 
@@ -223,14 +302,14 @@ body::after {
   background:
     radial-gradient(
       180px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
-      rgba(255, 255, 255, 0.85) 0%,
-      rgba(255, 255, 255, 0.35) 35%,
-      rgba(255, 255, 255, 0.12) 55%,
+      rgba(0, 255, 170, 0.6) 0%,
+      rgba(0, 255, 170, 0.2) 35%,
+      rgba(0, 255, 170, 0.06) 55%,
       transparent 70%
     ),
     radial-gradient(
       380px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
-      rgba(255, 255, 255, 0.18) 0%,
+      rgba(0, 212, 255, 0.1) 0%,
       transparent 60%
     );
   filter: blur(2px);
@@ -251,6 +330,6 @@ input[type="number"] {
 a:focus-visible,
 button:focus-visible,
 input:focus-visible {
-  outline: 2px solid var(--silver);
+  outline: 2px solid var(--neon-blue);
   outline-offset: 2px;
 }
