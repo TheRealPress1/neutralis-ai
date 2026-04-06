@@ -7,9 +7,9 @@ import { fetchArbSignals } from "@/lib/api";
 const EDGE_THRESHOLD = 0.02; // 2%
 
 function edgeColor(edge: number): string {
-  if (edge >= EDGE_THRESHOLD) return "text-emerald-400";
+  if (edge >= EDGE_THRESHOLD) return "text-neon-green";
   if (edge > 0.005) return "text-amber-400";
-  return "text-[#9ca3af]";
+  return "text-text-secondary";
 }
 
 function fmtPct(v: number): string {
@@ -82,10 +82,10 @@ export default function ArbDashboard({
         ].map((stat) => (
           <div
             key={stat.label}
-            className="card-panel rounded-xl px-4 py-3"
+            className="hud-panel rounded-xl px-4 py-3"
           >
-            <p className="text-xs text-[#9ca3af]">{stat.label}</p>
-            <p className="mt-1 text-lg font-semibold text-[#e8e9ea]">
+            <p className="text-xs text-text-secondary">{stat.label}</p>
+            <p className="mt-1 text-lg font-semibold text-text-primary">
               {stat.value}
             </p>
           </div>
@@ -93,9 +93,9 @@ export default function ArbDashboard({
       </div>
 
       {/* Signals table */}
-      <div className="card-panel rounded-xl overflow-hidden">
-        <div className="px-5 py-3 border-b border-[#1a1d21]">
-          <h3 className="text-sm font-medium text-[#e8e9ea]">
+      <div className="hud-panel rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-border">
+          <h3 className="text-sm font-medium text-text-primary">
             Cross-Platform Arb Signals
           </h3>
         </div>
@@ -105,12 +105,12 @@ export default function ArbDashboard({
             {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={i}
-                className="h-8 animate-pulse rounded bg-[#1a1d21]"
+                className="h-8 animate-pulse rounded bg-bg-elevated"
               />
             ))}
           </div>
         ) : signals.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-[#9ca3af]">
+          <div className="flex flex-col items-center justify-center py-16 text-text-secondary">
             <p className="text-sm">No arb signals yet</p>
             <p className="mt-1 text-xs">
               Signals will appear when the arb detector scans matched markets
@@ -120,7 +120,7 @@ export default function ArbDashboard({
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-[#1a1d21] text-left text-[#9ca3af]">
+                <tr className="border-b border-border text-left text-text-secondary">
                   <th className="px-5 py-3 font-medium">Market</th>
                   <th className="px-3 py-3 font-medium text-right">
                     Kalshi Bid/Ask
@@ -151,21 +151,21 @@ export default function ArbDashboard({
                   return (
                     <tr
                       key={s.id}
-                      className="border-b border-[#1a1d21] hover:bg-[#0d0f12] transition-colors"
+                      className="border-b border-border hover:bg-bg-elevated transition-colors"
                     >
-                      <td className="px-5 py-3 font-medium text-[#e8e9ea] max-w-[200px] truncate">
+                      <td className="px-5 py-3 font-medium text-text-primary max-w-[200px] truncate">
                         {s.title || s.kalshi_ticker}
                       </td>
-                      <td className="px-3 py-3 text-right text-[#9ca3af]">
+                      <td className="px-3 py-3 text-right text-text-secondary">
                         {fmtPrice(s.kalshi_bid)} / {fmtPrice(s.kalshi_ask)}
                       </td>
-                      <td className="px-3 py-3 text-right text-[#9ca3af]">
+                      <td className="px-3 py-3 text-right text-text-secondary">
                         {fmtPrice(s.poly_bid)} / {fmtPrice(s.poly_ask)}
                       </td>
-                      <td className="px-3 py-3 text-right text-[#e8e9ea]">
+                      <td className="px-3 py-3 text-right text-text-primary">
                         {fmtPrice(kalshiMid)}
                       </td>
-                      <td className="px-3 py-3 text-right text-[#e8e9ea]">
+                      <td className="px-3 py-3 text-right text-text-primary">
                         {fmtPrice(polyMid)}
                       </td>
                       <td
@@ -178,7 +178,7 @@ export default function ArbDashboard({
                       >
                         {fmtPct(s.edge_poly_to_kalshi)}
                       </td>
-                      <td className="px-3 py-3 text-right text-[#9ca3af]">
+                      <td className="px-3 py-3 text-right text-text-secondary">
                         {fmtTime(s.ts)}
                       </td>
                     </tr>

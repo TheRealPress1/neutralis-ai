@@ -38,7 +38,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   entertainment: "#ec4899",
   science_tech: "#06b6d4",
   weather: "#f97316",
-  other: "#6b7280",
+  other: "var(--text-secondary)",
 };
 
 const VENUE_COLORS = ["#3b82f6", "#a855f7", "#22c55e", "#f59e0b"];
@@ -64,9 +64,9 @@ function StatCard({
   color?: string;
 }) {
   return (
-    <div className="rounded-lg border border-[#1a1d21] bg-[#0d0f11] p-4">
-      <p className="text-xs font-medium text-[#9ca3af]">{label}</p>
-      <p className={`mt-1 text-xl font-semibold ${color ?? "text-[#e8e9ea]"}`}>
+    <div className="rounded-lg border border-border bg-bg-secondary p-4">
+      <p className="text-xs font-medium text-text-secondary">{label}</p>
+      <p className={`mt-1 text-xl font-semibold ${color ?? "text-text-primary"}`}>
         {value}
       </p>
     </div>
@@ -128,11 +128,11 @@ export default function PerformanceAnalytics({
   }, []);
 
   const totalPnl = summary?.total_pnl ?? 0;
-  const pnlColor = totalPnl >= 0 ? "text-emerald-400" : "text-red-400";
+  const pnlColor = totalPnl >= 0 ? "text-neon-green" : "text-red-400";
 
   if (loading) {
     return (
-      <div className="flex min-h-[400px] items-center justify-center text-[#9ca3af]">
+      <div className="flex min-h-[400px] items-center justify-center text-text-secondary">
         Loading analytics...
       </div>
     );
@@ -140,7 +140,7 @@ export default function PerformanceAnalytics({
 
   if (!summary || summary.total_closed === 0) {
     return (
-      <div className="flex min-h-[400px] flex-col items-center justify-center gap-2 text-[#9ca3af]">
+      <div className="flex min-h-[400px] flex-col items-center justify-center gap-2 text-text-secondary">
         <p className="text-lg font-medium">No closed positions yet</p>
         <p className="text-sm">
           Analytics will appear once positions are closed.
@@ -165,7 +165,7 @@ export default function PerformanceAnalytics({
           value={fmt(summary.avg_trade_pnl)}
           color={
             summary.avg_trade_pnl >= 0
-              ? "text-emerald-400"
+              ? "text-neon-green"
               : "text-red-400"
           }
         />
@@ -177,8 +177,8 @@ export default function PerformanceAnalytics({
       </div>
 
       {/* Cumulative P&L chart */}
-      <div className="rounded-lg border border-[#1a1d21] bg-[#0d0f11] p-4">
-        <h3 className="mb-4 text-sm font-medium text-[#9ca3af]">
+      <div className="rounded-lg border border-border bg-bg-secondary p-4">
+        <h3 className="mb-4 text-sm font-medium text-text-secondary">
           Cumulative P&L
         </h3>
         {cumulativeData.length > 0 ? (
@@ -198,25 +198,25 @@ export default function PerformanceAnalytics({
                   />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1a1d21" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis
                 dataKey="date"
-                tick={{ fill: "#6b7280", fontSize: 11 }}
+                tick={{ fill: "var(--text-secondary)", fontSize: 11 }}
                 tickLine={false}
-                axisLine={{ stroke: "#1a1d21" }}
+                axisLine={{ stroke: "var(--border)" }}
               />
               <YAxis
-                tick={{ fill: "#6b7280", fontSize: 11 }}
+                tick={{ fill: "var(--text-secondary)", fontSize: 11 }}
                 tickLine={false}
-                axisLine={{ stroke: "#1a1d21" }}
+                axisLine={{ stroke: "var(--border)" }}
                 tickFormatter={(v: number) => `$${v}`}
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "#0d0f11",
-                  border: "1px solid #1a1d21",
+                  backgroundColor: "var(--bg-secondary)",
+                  border: "1px solid var(--border)",
                   borderRadius: 8,
-                  color: "#e8e9ea",
+                  color: "var(--text-primary)",
                   fontSize: 12,
                 }}
                 formatter={(value, name) => [
@@ -234,7 +234,7 @@ export default function PerformanceAnalytics({
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <p className="py-8 text-center text-sm text-[#6b7280]">
+          <p className="py-8 text-center text-sm text-text-secondary">
             No timeline data yet
           </p>
         )}
@@ -243,35 +243,35 @@ export default function PerformanceAnalytics({
       {/* Category breakdown + Distribution */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Category P&L */}
-        <div className="rounded-lg border border-[#1a1d21] bg-[#0d0f11] p-4">
-          <h3 className="mb-4 text-sm font-medium text-[#9ca3af]">
+        <div className="rounded-lg border border-border bg-bg-secondary p-4">
+          <h3 className="mb-4 text-sm font-medium text-text-secondary">
             P&L by Category
           </h3>
           {categories.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={categories} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#1a1d21" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis
                   type="number"
-                  tick={{ fill: "#6b7280", fontSize: 11 }}
+                  tick={{ fill: "var(--text-secondary)", fontSize: 11 }}
                   tickLine={false}
-                  axisLine={{ stroke: "#1a1d21" }}
+                  axisLine={{ stroke: "var(--border)" }}
                   tickFormatter={(v: number) => `$${v}`}
                 />
                 <YAxis
                   type="category"
                   dataKey="category"
                   width={90}
-                  tick={{ fill: "#9ca3af", fontSize: 11 }}
+                  tick={{ fill: "var(--text-secondary)", fontSize: 11 }}
                   tickLine={false}
-                  axisLine={{ stroke: "#1a1d21" }}
+                  axisLine={{ stroke: "var(--border)" }}
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "#0d0f11",
-                    border: "1px solid #1a1d21",
+                    backgroundColor: "var(--bg-secondary)",
+                    border: "1px solid var(--border)",
                     borderRadius: 8,
-                    color: "#e8e9ea",
+                    color: "var(--text-primary)",
                     fontSize: 12,
                   }}
                   formatter={(value) => [fmt(Number(value ?? 0)), "P&L"]}
@@ -280,46 +280,46 @@ export default function PerformanceAnalytics({
                   {categories.map((c) => (
                     <Cell
                       key={c.category}
-                      fill={CATEGORY_COLORS[c.category] ?? "#6b7280"}
+                      fill={CATEGORY_COLORS[c.category] ?? "var(--text-secondary)"}
                     />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <p className="py-8 text-center text-sm text-[#6b7280]">
+            <p className="py-8 text-center text-sm text-text-secondary">
               No category data
             </p>
           )}
         </div>
 
         {/* P&L Distribution */}
-        <div className="rounded-lg border border-[#1a1d21] bg-[#0d0f11] p-4">
-          <h3 className="mb-4 text-sm font-medium text-[#9ca3af]">
+        <div className="rounded-lg border border-border bg-bg-secondary p-4">
+          <h3 className="mb-4 text-sm font-medium text-text-secondary">
             P&L Distribution
           </h3>
           {distribution.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={distribution}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1a1d21" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis
                   dataKey="bucket_start"
-                  tick={{ fill: "#6b7280", fontSize: 11 }}
+                  tick={{ fill: "var(--text-secondary)", fontSize: 11 }}
                   tickLine={false}
-                  axisLine={{ stroke: "#1a1d21" }}
+                  axisLine={{ stroke: "var(--border)" }}
                   tickFormatter={(v: number) => `$${v}`}
                 />
                 <YAxis
-                  tick={{ fill: "#6b7280", fontSize: 11 }}
+                  tick={{ fill: "var(--text-secondary)", fontSize: 11 }}
                   tickLine={false}
-                  axisLine={{ stroke: "#1a1d21" }}
+                  axisLine={{ stroke: "var(--border)" }}
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "#0d0f11",
-                    border: "1px solid #1a1d21",
+                    backgroundColor: "var(--bg-secondary)",
+                    border: "1px solid var(--border)",
                     borderRadius: 8,
-                    color: "#e8e9ea",
+                    color: "var(--text-primary)",
                     fontSize: 12,
                   }}
                   formatter={(value) => [Number(value ?? 0), "Trades"]}
@@ -335,7 +335,7 @@ export default function PerformanceAnalytics({
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <p className="py-8 text-center text-sm text-[#6b7280]">
+            <p className="py-8 text-center text-sm text-text-secondary">
               No distribution data
             </p>
           )}
@@ -345,8 +345,8 @@ export default function PerformanceAnalytics({
       {/* Venue breakdown + Guard effectiveness */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Venue breakdown */}
-        <div className="rounded-lg border border-[#1a1d21] bg-[#0d0f11] p-4">
-          <h3 className="mb-4 text-sm font-medium text-[#9ca3af]">
+        <div className="rounded-lg border border-border bg-bg-secondary p-4">
+          <h3 className="mb-4 text-sm font-medium text-text-secondary">
             P&L by Venue
           </h3>
           {venues.length > 0 ? (
@@ -371,10 +371,10 @@ export default function PerformanceAnalytics({
                   </Pie>
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "#0d0f11",
-                      border: "1px solid #1a1d21",
+                      backgroundColor: "var(--bg-secondary)",
+                      border: "1px solid var(--border)",
                       borderRadius: 8,
-                      color: "#e8e9ea",
+                      color: "var(--text-primary)",
                       fontSize: 12,
                     }}
                   />
@@ -390,7 +390,7 @@ export default function PerformanceAnalytics({
                           VENUE_COLORS[i % VENUE_COLORS.length],
                       }}
                     />
-                    <span className="text-[#9ca3af] capitalize">
+                    <span className="text-text-secondary capitalize">
                       {v.venue}
                     </span>
                     <span className="ml-auto font-medium">
@@ -398,7 +398,7 @@ export default function PerformanceAnalytics({
                     </span>
                     <span
                       className={
-                        v.total_pnl >= 0 ? "text-emerald-400" : "text-red-400"
+                        v.total_pnl >= 0 ? "text-neon-green" : "text-red-400"
                       }
                     >
                       {fmt(v.total_pnl)}
@@ -408,15 +408,15 @@ export default function PerformanceAnalytics({
               </div>
             </div>
           ) : (
-            <p className="py-8 text-center text-sm text-[#6b7280]">
+            <p className="py-8 text-center text-sm text-text-secondary">
               No venue data
             </p>
           )}
         </div>
 
         {/* Guard effectiveness */}
-        <div className="rounded-lg border border-[#1a1d21] bg-[#0d0f11] p-4">
-          <h3 className="mb-4 text-sm font-medium text-[#9ca3af]">
+        <div className="rounded-lg border border-border bg-bg-secondary p-4">
+          <h3 className="mb-4 text-sm font-medium text-text-secondary">
             Guard Effectiveness
           </h3>
           {guards.length > 0 ? (
@@ -424,15 +424,15 @@ export default function PerformanceAnalytics({
               {guards.map((g) => (
                 <div key={g.guard_name} className="space-y-1">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-[#c0c5cb] font-mono text-xs">
+                    <span className="text-text-mono font-mono text-xs">
                       {g.guard_name}
                     </span>
-                    <span className="text-[#9ca3af]">
+                    <span className="text-text-secondary">
                       {g.rejections}/{g.total_evaluations} rejected (
                       {fmtPct(g.rejection_rate)})
                     </span>
                   </div>
-                  <div className="h-2 rounded-full bg-[#1a1d21]">
+                  <div className="h-2 rounded-full bg-bg-elevated">
                     <div
                       className="h-2 rounded-full bg-red-500/70"
                       style={{
@@ -444,7 +444,7 @@ export default function PerformanceAnalytics({
               ))}
             </div>
           ) : (
-            <p className="py-8 text-center text-sm text-[#6b7280]">
+            <p className="py-8 text-center text-sm text-text-secondary">
               No guard data
             </p>
           )}
@@ -453,7 +453,7 @@ export default function PerformanceAnalytics({
 
       {/* Performance detail stats */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <StatCard label="Best Day" value={fmt(summary.best_day)} color="text-emerald-400" />
+        <StatCard label="Best Day" value={fmt(summary.best_day)} color="text-neon-green" />
         <StatCard label="Worst Day" value={fmt(summary.worst_day)} color="text-red-400" />
         <StatCard
           label="Win Rate"
@@ -468,7 +468,7 @@ export default function PerformanceAnalytics({
         <StatCard
           label="Avg Win"
           value={fmt(summary.avg_win)}
-          color="text-emerald-400"
+          color="text-neon-green"
         />
         <StatCard
           label="Avg Loss"

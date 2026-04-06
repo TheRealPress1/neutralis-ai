@@ -12,7 +12,7 @@ import type { SubscriptionTier } from "@/lib/subscription";
 import Link from "next/link";
 
 const INPUT_CLASS =
-  "w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors text-sm";
+  "w-full rounded-lg bg-bg-elevated border border-border px-4 py-3 text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-text-primary/20 focus:border-text-primary/40 transition-colors text-sm";
 
 interface Profile {
   id: string;
@@ -133,8 +133,8 @@ export default function ProfileSettings() {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-[#22262d] bg-[#0e1117] p-6">
-        <p className="text-sm text-[#a1a8b3]">Loading profile...</p>
+      <div className="rounded-xl border border-border bg-bg-secondary p-6">
+        <p className="text-sm text-text-secondary">Loading profile...</p>
       </div>
     );
   }
@@ -147,18 +147,18 @@ export default function ProfileSettings() {
         </div>
       )}
       {saved && (
-        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400">
+        <div className="rounded-lg bg-neon-green/10 border border-neon-green/20 px-4 py-3 text-sm text-neon-green">
           Profile updated.
         </div>
       )}
 
       {/* Account Details */}
-      <div className="rounded-xl border border-[#22262d] bg-[#0e1117] p-5">
-        <h2 className="font-medium text-[#eceef0] mb-4">Account Details</h2>
+      <div className="rounded-xl border border-border bg-bg-secondary p-5">
+        <h2 className="font-medium text-text-primary mb-4">Account Details</h2>
         <div className="space-y-4">
           {/* Email */}
           <div>
-            <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+            <label className="block text-xs font-medium mb-1.5 text-text-secondary">
               Email
             </label>
             {editingEmail ? (
@@ -174,13 +174,13 @@ export default function ProfileSettings() {
                   <p className="text-xs text-red-400">{emailError}</p>
                 )}
                 {emailMessage && (
-                  <p className="text-xs text-emerald-400">{emailMessage}</p>
+                  <p className="text-xs text-neon-green">{emailMessage}</p>
                 )}
                 <div className="flex gap-2">
                   <button
                     onClick={handleSaveEmail}
                     disabled={isPending}
-                    className="rounded-lg bg-[#e8e9ea] px-4 py-2 text-xs font-medium text-[#050608] hover:bg-[#c0c5cb] disabled:opacity-50 transition-colors"
+                    className="rounded-lg bg-text-primary px-4 py-2 text-xs font-medium text-bg-primary hover:bg-text-mono disabled:opacity-50 transition-colors"
                   >
                     {isPending ? "Saving..." : "Update email"}
                   </button>
@@ -191,7 +191,7 @@ export default function ProfileSettings() {
                       setEmailError(null);
                       setEmailMessage(null);
                     }}
-                    className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors px-3"
+                    className="text-xs text-text-secondary hover:text-text-primary transition-colors px-3"
                   >
                     Cancel
                   </button>
@@ -207,21 +207,21 @@ export default function ProfileSettings() {
                 />
                 <button
                   onClick={() => setEditingEmail(true)}
-                  className="shrink-0 text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors"
+                  className="shrink-0 text-xs text-text-secondary hover:text-text-primary transition-colors"
                 >
                   Change
                 </button>
               </div>
             )}
             {!editingEmail && emailMessage && (
-              <p className="text-xs text-emerald-400 mt-1.5">{emailMessage}</p>
+              <p className="text-xs text-neon-green mt-1.5">{emailMessage}</p>
             )}
           </div>
 
           {/* First Name + Last Name */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+              <label className="block text-xs font-medium mb-1.5 text-text-secondary">
                 First Name
               </label>
               <input
@@ -234,7 +234,7 @@ export default function ProfileSettings() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+              <label className="block text-xs font-medium mb-1.5 text-text-secondary">
                 Last Name
               </label>
               <input
@@ -250,9 +250,9 @@ export default function ProfileSettings() {
 
           {/* Date of Birth */}
           <div>
-            <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+            <label className="block text-xs font-medium mb-1.5 text-text-secondary">
               Date of Birth
-              <span className="ml-1 text-[#6b7280] font-normal">(optional)</span>
+              <span className="ml-1 text-text-secondary font-normal">(optional)</span>
             </label>
             <input
               type="date"
@@ -264,10 +264,10 @@ export default function ProfileSettings() {
 
           {/* Member Since */}
           <div>
-            <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+            <label className="block text-xs font-medium mb-1.5 text-text-secondary">
               Member Since
             </label>
-            <p className="text-sm text-[#eceef0]">
+            <p className="text-sm text-text-primary">
               {profile?.created_at
                 ? new Date(profile.created_at).toLocaleDateString("en-US", {
                     year: "numeric",
@@ -282,7 +282,7 @@ export default function ProfileSettings() {
             <button
               onClick={handleSaveProfile}
               disabled={isPending}
-              className="rounded-lg bg-[#e8e9ea] px-5 py-2.5 text-sm font-medium text-[#050608] hover:bg-[#c0c5cb] disabled:opacity-50 transition-colors"
+              className="rounded-lg bg-text-primary px-5 py-2.5 text-sm font-medium text-bg-primary hover:bg-text-mono disabled:opacity-50 transition-colors"
             >
               {isPending ? "Saving..." : "Save changes"}
             </button>
@@ -301,13 +301,13 @@ export default function ProfileSettings() {
       />
 
       {/* Change password */}
-      <div className="rounded-xl border border-[#22262d] bg-[#0e1117] p-5">
+      <div className="rounded-xl border border-border bg-bg-secondary p-5">
         <div className="flex items-center justify-between">
-          <h2 className="font-medium text-[#eceef0]">Change Password</h2>
+          <h2 className="font-medium text-text-primary">Change Password</h2>
           {!showPasswordForm && (
             <button
               onClick={() => setShowPasswordForm(true)}
-              className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors"
+              className="text-xs text-text-secondary hover:text-text-primary transition-colors"
             >
               Update
             </button>
@@ -315,7 +315,7 @@ export default function ProfileSettings() {
         </div>
 
         {passwordMessage && !showPasswordForm && (
-          <p className="text-xs text-emerald-400 mt-2">{passwordMessage}</p>
+          <p className="text-xs text-neon-green mt-2">{passwordMessage}</p>
         )}
 
         {showPasswordForm && (
@@ -326,7 +326,7 @@ export default function ProfileSettings() {
               </div>
             )}
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+              <label className="block text-xs font-medium mb-1.5 text-text-secondary">
                 Current Password
               </label>
               <input
@@ -338,7 +338,7 @@ export default function ProfileSettings() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+              <label className="block text-xs font-medium mb-1.5 text-text-secondary">
                 New Password
               </label>
               <input
@@ -351,7 +351,7 @@ export default function ProfileSettings() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-[#a1a8b3]">
+              <label className="block text-xs font-medium mb-1.5 text-text-secondary">
                 Confirm New Password
               </label>
               <input
@@ -367,7 +367,7 @@ export default function ProfileSettings() {
               <button
                 onClick={handleChangePassword}
                 disabled={isPending}
-                className="rounded-lg bg-[#e8e9ea] px-4 py-2 text-xs font-medium text-[#050608] hover:bg-[#c0c5cb] disabled:opacity-50 transition-colors"
+                className="rounded-lg bg-text-primary px-4 py-2 text-xs font-medium text-bg-primary hover:bg-text-mono disabled:opacity-50 transition-colors"
               >
                 {isPending ? "Updating..." : "Update password"}
               </button>
@@ -379,7 +379,7 @@ export default function ProfileSettings() {
                   setConfirmPassword("");
                   setPasswordError(null);
                 }}
-                className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors px-3"
+                className="text-xs text-text-secondary hover:text-text-primary transition-colors px-3"
               >
                 Cancel
               </button>
@@ -493,12 +493,12 @@ function SubscriptionCard({
   }, []);
 
   return (
-    <div className="rounded-xl border border-[#22262d] bg-[#0e1117] p-5">
+    <div className="rounded-xl border border-border bg-bg-secondary p-5">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="font-medium text-[#eceef0]">Subscription</h2>
+        <h2 className="font-medium text-text-primary">Subscription</h2>
         <Link
           href="/pricing"
-          className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors"
+          className="text-xs text-text-secondary hover:text-text-primary transition-colors"
         >
           View full pricing
         </Link>
@@ -506,15 +506,15 @@ function SubscriptionCard({
 
       {/* Current plan summary */}
       <div className="flex items-center gap-3 mb-5">
-        <span className="rounded-full bg-[#1a1d21] border border-[#22262d] px-3 py-1 text-sm font-medium text-[#eceef0]">
+        <span className="rounded-full bg-bg-elevated border border-border px-3 py-1 text-sm font-medium text-text-primary">
           {currentPlan.name}
         </span>
-        <span className="text-sm text-[#9ca3af]">
+        <span className="text-sm text-text-secondary">
           {currentPlan.price}
           {currentPlan.period}
         </span>
         {currentTier !== "free" && (
-          <span className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">
+          <span className="text-xs text-neon-green bg-neon-green/10 border border-neon-green/20 rounded-full px-2 py-0.5">
             Active
           </span>
         )}
@@ -526,7 +526,7 @@ function SubscriptionCard({
         </div>
       )}
       {message && (
-        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400 mb-4">
+        <div className="rounded-lg bg-neon-green/10 border border-neon-green/20 px-4 py-3 text-sm text-neon-green mb-4">
           {message}
         </div>
       )}
@@ -540,36 +540,36 @@ function SubscriptionCard({
               key={plan.id}
               className={`rounded-lg border p-4 transition-colors ${
                 isCurrent
-                  ? "border-[#e8e9ea]/30 bg-[#1a1d21]"
-                  : "border-[#22262d] bg-[#0e1117] hover:border-[#22262d]/80"
+                  ? "border-text-primary/30 bg-bg-elevated"
+                  : "border-border bg-bg-secondary hover:border-border/80"
               }`}
             >
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-[#eceef0]">
+                <h3 className="text-sm font-medium text-text-primary">
                   {plan.name}
                 </h3>
                 {isCurrent && (
-                  <span className="text-[10px] font-medium text-[#9ca3af] bg-[#22262d] rounded px-1.5 py-0.5">
+                  <span className="text-[10px] font-medium text-text-secondary bg-border rounded px-1.5 py-0.5">
                     Current
                   </span>
                 )}
               </div>
               <div className="flex items-baseline gap-0.5 mb-3">
-                <span className="text-lg font-semibold text-[#eceef0]">
+                <span className="text-lg font-semibold text-text-primary">
                   {plan.price}
                 </span>
                 {plan.period && (
-                  <span className="text-xs text-[#9ca3af]">{plan.period}</span>
+                  <span className="text-xs text-text-secondary">{plan.period}</span>
                 )}
               </div>
               <ul className="space-y-1.5 mb-4">
                 {plan.features.map((f) => (
                   <li
                     key={f}
-                    className="flex items-start gap-1.5 text-xs text-[#9ca3af]"
+                    className="flex items-start gap-1.5 text-xs text-text-secondary"
                   >
                     <svg
-                      className="mt-0.5 h-3 w-3 shrink-0 text-emerald-400"
+                      className="mt-0.5 h-3 w-3 shrink-0 text-neon-green"
                       fill="none"
                       viewBox="0 0 24 24"
                       strokeWidth={2.5}
@@ -586,7 +586,7 @@ function SubscriptionCard({
                 ))}
               </ul>
               {isCurrent ? (
-                <div className="rounded-md border border-[#22262d] bg-[#0e1117] px-3 py-1.5 text-center text-xs text-[#9ca3af]">
+                <div className="rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-center text-xs text-text-secondary">
                   Current plan
                 </div>
               ) : (
@@ -595,8 +595,8 @@ function SubscriptionCard({
                   disabled={isPending}
                   className={`w-full rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
                     plan.highlight
-                      ? "bg-[#e8e9ea] text-[#050608] hover:bg-[#c0c5cb]"
-                      : "border border-[#22262d] text-[#e8e9ea] hover:border-[#e8e9ea]/30 hover:bg-[#1a1d21]"
+                      ? "bg-text-primary text-bg-primary hover:bg-text-mono"
+                      : "border border-border text-text-primary hover:border-text-primary/30 hover:bg-bg-elevated"
                   }`}
                 >
                   {isPending
@@ -613,13 +613,13 @@ function SubscriptionCard({
 
       {currentTier !== "free" && (
         <div className="mt-4 flex items-center justify-between">
-          <p className="text-xs text-[#6b7280]">
+          <p className="text-xs text-text-secondary">
             Plan changes take effect immediately.
           </p>
           <button
             onClick={handleManageBilling}
             disabled={isPending}
-            className="text-xs text-[#a1a8b3] hover:text-[#eceef0] transition-colors disabled:opacity-50"
+            className="text-xs text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50"
           >
             Manage billing
           </button>

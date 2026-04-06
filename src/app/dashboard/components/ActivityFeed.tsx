@@ -83,11 +83,11 @@ export default function ActivityFeed({ refreshKey }: { refreshKey: number }) {
           </div>
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mb-3 h-10 w-10 text-[#2a2d31]">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mb-3 h-10 w-10 text-border">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
             </svg>
             <p className="text-sm text-text-secondary">No activity yet</p>
-            <p className="mt-1 text-xs text-[#3b3f46]">
+            <p className="mt-1 text-xs text-border">
               Signals and decisions will stream here in real time.
             </p>
           </div>

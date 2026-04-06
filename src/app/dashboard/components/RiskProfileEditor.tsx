@@ -292,7 +292,7 @@ export default function RiskProfileEditor() {
                           const clamped = Math.min(Math.max(n, param.min), param.max);
                           setForm((prev) => ({ ...prev, [param.key]: String(clamped) }));
                         }}
-                        className="mt-2 w-full rounded-lg bg-[#060810] border border-border px-3 py-2 text-sm text-text-primary font-mono outline-none transition-all focus:border-neon-blue/50 focus:shadow-[0_0_8px_rgba(0,212,255,0.1)]"
+                        className="mt-2 w-full rounded-lg bg-bg-primary border border-border px-3 py-2 text-sm text-text-primary font-mono outline-none transition-all focus:border-neon-blue/50 focus:shadow-[0_0_8px_rgba(0,212,255,0.1)]"
                       />
                     </div>
                   );

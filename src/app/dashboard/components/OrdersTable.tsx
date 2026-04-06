@@ -21,10 +21,10 @@ function timeAgo(iso: string) {
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    filled: "bg-emerald-400/10 text-emerald-400",
+    filled: "bg-neon-green/10 text-neon-green",
     partial: "bg-amber-400/10 text-amber-400",
     cancelled: "bg-red-400/10 text-red-400",
-    pending: "bg-[#1a1d21] text-[#9ca3af]",
+    pending: "bg-bg-elevated text-text-secondary",
   };
   return (
     <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase ${styles[status] ?? styles.pending}`}>
@@ -73,10 +73,10 @@ export default function OrdersTable({ refreshKey }: { refreshKey: number }) {
 
   return (
     <>
-      <div className="card-panel rounded-xl">
+      <div className="hud-panel rounded-xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#1a1d21] px-5 py-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-text-secondary">
             Orders
           </h2>
           <div className="flex gap-1">
@@ -86,8 +86,8 @@ export default function OrdersTable({ refreshKey }: { refreshKey: number }) {
                 onClick={() => setTab(t)}
                 className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
                   tab === t
-                    ? "bg-[#1a1d21] text-[#e8e9ea]"
-                    : "text-[#9ca3af] hover:text-[#e8e9ea]"
+                    ? "bg-bg-elevated text-text-primary"
+                    : "text-text-secondary hover:text-text-primary"
                 }`}
               >
                 {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -100,7 +100,7 @@ export default function OrdersTable({ refreshKey }: { refreshKey: number }) {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="text-xs uppercase tracking-wider text-[#9ca3af]">
+              <tr className="text-xs uppercase tracking-wider text-text-secondary">
                 <th className="px-5 py-3 font-medium">Ticker</th>
                 <th className="px-5 py-3 font-medium">Venue</th>
                 <th className="px-5 py-3 font-medium">Side</th>
@@ -116,17 +116,17 @@ export default function OrdersTable({ refreshKey }: { refreshKey: number }) {
             <tbody>
               {loading ? (
                 Array.from({ length: 3 }).map((_, i) => (
-                  <tr key={i} className="border-t border-[#1a1d21]">
+                  <tr key={i} className="border-t border-border">
                     {Array.from({ length: 10 }).map((_, j) => (
                       <td key={j} className="px-5 py-3">
-                        <div className="h-4 w-16 animate-pulse rounded bg-[#0a0d10]" />
+                        <div className="h-4 w-16 animate-pulse rounded bg-bg-primary" />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : orders.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-5 py-10 text-center text-[#9ca3af]">
+                  <td colSpan={10} className="px-5 py-10 text-center text-text-secondary">
                     No orders
                   </td>
                 </tr>
@@ -138,7 +138,7 @@ export default function OrdersTable({ refreshKey }: { refreshKey: number }) {
                   return (
                     <tr
                       key={o.id}
-                      className="cursor-pointer border-t border-[#1a1d21] transition-colors hover:bg-[#0d1014]"
+                      className="cursor-pointer border-t border-border transition-colors hover:bg-bg-elevated"
                       onClick={() => toggleExpand(o.id)}
                     >
                       <td className="px-5 py-3">
@@ -151,12 +151,12 @@ export default function OrdersTable({ refreshKey }: { refreshKey: number }) {
                         </button>
                       </td>
                       <td className="px-5 py-3">
-                        <span className="rounded border border-[#1a1d21] bg-[#0a0d10] px-2 py-0.5 text-xs uppercase">
+                        <span className="rounded border border-border bg-bg-primary px-2 py-0.5 text-xs uppercase">
                           {o.venue}
                         </span>
                       </td>
                       <td className="px-5 py-3">
-                        <span className={o.side === "buy_yes" ? "text-emerald-400" : "text-red-400"}>
+                        <span className={o.side === "buy_yes" ? "text-neon-green" : "text-red-400"}>
                           {o.side === "buy_yes" ? "YES" : "NO"}
                         </span>
                       </td>
@@ -168,7 +168,7 @@ export default function OrdersTable({ refreshKey }: { refreshKey: number }) {
                       <td className="px-5 py-3 text-right font-mono">
                         {o.slippage_bps !== null ? (
                           <span className={
-                            o.slippage_bps < 10 ? "text-emerald-400"
+                            o.slippage_bps < 10 ? "text-neon-green"
                             : o.slippage_bps <= 50 ? "text-amber-400"
                             : "text-red-400"
                           }>
@@ -178,7 +178,7 @@ export default function OrdersTable({ refreshKey }: { refreshKey: number }) {
                       </td>
                       <td className="px-5 py-3 text-right font-mono">${fmt(o.fees_dollars, 4)}</td>
                       <td className="px-5 py-3"><StatusBadge status={o.status} /></td>
-                      <td className="px-5 py-3 text-right text-xs text-[#9ca3af]">
+                      <td className="px-5 py-3 text-right text-xs text-text-secondary">
                         {timeAgo(o.created_at)}
                       </td>
                     </tr>
@@ -188,14 +188,14 @@ export default function OrdersTable({ refreshKey }: { refreshKey: number }) {
 
               {/* Expanded fills row */}
               {expandedId && fills.length > 0 && (
-                <tr className="border-t border-[#1a1d21] bg-[#050608]">
+                <tr className="border-t border-border bg-bg-primary">
                   <td colSpan={10} className="px-5 py-3">
-                    <div className="text-xs text-[#9ca3af] mb-2 uppercase tracking-wider font-medium">
+                    <div className="text-xs text-text-secondary mb-2 uppercase tracking-wider font-medium">
                       Fills for {expandedId}
                     </div>
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="text-[#9ca3af]">
+                        <tr className="text-text-secondary">
                           <th className="py-1 text-left font-medium">#</th>
                           <th className="py-1 text-right font-medium">Price</th>
                           <th className="py-1 text-right font-medium">Qty</th>
@@ -206,7 +206,7 @@ export default function OrdersTable({ refreshKey }: { refreshKey: number }) {
                       </thead>
                       <tbody>
                         {fills.map((f) => (
-                          <tr key={f.id} className="border-t border-[#1a1d21]/50">
+                          <tr key={f.id} className="border-t border-border/50">
                             <td className="py-1 font-mono">{f.fill_number}</td>
                             <td className="py-1 text-right font-mono">${fmt(f.price, 4)}</td>
                             <td className="py-1 text-right font-mono">{fmt(f.quantity, 2)}</td>
@@ -214,7 +214,7 @@ export default function OrdersTable({ refreshKey }: { refreshKey: number }) {
                             <td className="py-1 text-right font-mono">${fmt(f.fee_dollars, 4)}</td>
                             <td className="py-1 text-right font-mono">
                               <span className={
-                                f.slippage_bps < 10 ? "text-emerald-400"
+                                f.slippage_bps < 10 ? "text-neon-green"
                                 : f.slippage_bps <= 50 ? "text-amber-400"
                                 : "text-red-400"
                               }>

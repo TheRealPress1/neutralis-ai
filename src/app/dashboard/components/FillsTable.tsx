@@ -19,7 +19,7 @@ function timeAgo(iso: string) {
 }
 
 function slippageColor(bps: number) {
-  if (bps < 10) return "text-emerald-400";
+  if (bps < 10) return "text-neon-green";
   if (bps <= 50) return "text-amber-400";
   return "text-red-400";
 }
@@ -42,9 +42,9 @@ export default function FillsTable({ refreshKey }: { refreshKey: number }) {
   }, [refreshKey]);
 
   return (
-    <div className="card-panel rounded-xl">
-      <div className="border-b border-[#1a1d21] px-5 py-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
+    <div className="hud-panel rounded-xl">
+      <div className="border-b border-border px-5 py-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-text-secondary">
           Recent Fills
         </h2>
       </div>
@@ -52,7 +52,7 @@ export default function FillsTable({ refreshKey }: { refreshKey: number }) {
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="text-xs uppercase tracking-wider text-[#9ca3af]">
+            <tr className="text-xs uppercase tracking-wider text-text-secondary">
               <th className="px-5 py-3 font-medium">Ticker</th>
               <th className="px-5 py-3 font-medium">Side</th>
               <th className="px-5 py-3 font-medium text-right">Fill Price</th>
@@ -67,27 +67,27 @@ export default function FillsTable({ refreshKey }: { refreshKey: number }) {
           <tbody>
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <tr key={i} className="border-t border-[#1a1d21]">
+                <tr key={i} className="border-t border-border">
                   {Array.from({ length: 9 }).map((_, j) => (
                     <td key={j} className="px-5 py-3">
-                      <div className="h-4 w-16 animate-pulse rounded bg-[#0a0d10]" />
+                      <div className="h-4 w-16 animate-pulse rounded bg-bg-primary" />
                     </td>
                   ))}
                 </tr>
               ))
             ) : fills.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-5 py-10 text-center text-[#9ca3af]">
+                <td colSpan={9} className="px-5 py-10 text-center text-text-secondary">
                   No fills yet
                 </td>
               </tr>
             ) : (
               fills.map((f) => (
-                <tr key={f.id} className="border-t border-[#1a1d21]">
+                <tr key={f.id} className="border-t border-border">
                   <td className="px-5 py-3 font-mono text-xs">{f.ticker ?? "-"}</td>
                   <td className="px-5 py-3">
                     {f.side ? (
-                      <span className={f.side === "buy_yes" ? "text-emerald-400" : "text-red-400"}>
+                      <span className={f.side === "buy_yes" ? "text-neon-green" : "text-red-400"}>
                         {f.side === "buy_yes" ? "YES" : "NO"}
                       </span>
                     ) : "-"}
@@ -104,7 +104,7 @@ export default function FillsTable({ refreshKey }: { refreshKey: number }) {
                   <td className="px-5 py-3 text-right font-mono">{fmt(f.quantity, 2)}</td>
                   <td className="px-5 py-3 text-right font-mono">${fmt(f.size_dollars)}</td>
                   <td className="px-5 py-3 text-right font-mono">${fmt(f.fee_dollars, 4)}</td>
-                  <td className="px-5 py-3 text-right text-xs text-[#9ca3af]">
+                  <td className="px-5 py-3 text-right text-xs text-text-secondary">
                     {timeAgo(f.created_at)}
                   </td>
                 </tr>

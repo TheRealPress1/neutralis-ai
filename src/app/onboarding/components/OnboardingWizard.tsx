@@ -6,7 +6,7 @@ import { saveApiKeys } from "@/app/actions/api-keys";
 import { completeOnboarding } from "@/app/actions/auth";
 
 const INPUT_CLASS =
-  "w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors";
+  "w-full rounded-lg bg-bg-elevated border border-border px-4 py-3 text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-text-primary/20 focus:border-text-primary/40 transition-colors";
 
 const FEATURES = [
   {
@@ -111,12 +111,12 @@ export default function OnboardingWizard({
     <div className="flex items-center justify-center gap-2 mb-10">
       <span
         className={`h-2 w-2 rounded-full transition-colors ${
-          step >= 1 ? "bg-[#e8e9ea]" : "bg-[#2a2d31]"
+          step >= 1 ? "bg-text-primary" : "bg-border"
         }`}
       />
       <span
         className={`h-2 w-2 rounded-full transition-colors ${
-          step >= 2 ? "bg-[#e8e9ea]" : "bg-[#2a2d31]"
+          step >= 2 ? "bg-text-primary" : "bg-border"
         }`}
       />
     </div>
@@ -132,7 +132,7 @@ export default function OnboardingWizard({
           <h1 className="font-[family-name:var(--font-italiana)] text-3xl font-normal tracking-[0.06em]">
             {firstName ? `Welcome, ${firstName}` : "Welcome to Neutralis"}
           </h1>
-          <p className="mt-3 text-[#9ca3af]">
+          <p className="mt-3 text-text-secondary">
             Here&apos;s what the platform does for you.
           </p>
         </div>
@@ -141,16 +141,16 @@ export default function OnboardingWizard({
           {FEATURES.map((f, i) => (
             <div
               key={i}
-              className="card-panel rounded-xl px-5 py-4 flex items-start gap-4"
+              className="hud-panel rounded-xl px-5 py-4 flex items-start gap-4"
             >
-              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#1a1d21] text-xs font-medium text-[#9ca3af]">
+              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-bg-elevated text-xs font-medium text-text-secondary">
                 {i + 1}
               </span>
               <div>
-                <p className="text-sm font-medium text-[#eceef0]">
+                <p className="text-sm font-medium text-text-primary">
                   {f.title}
                 </p>
-                <p className="mt-0.5 text-xs text-[#9ca3af]">
+                <p className="mt-0.5 text-xs text-text-secondary">
                   {f.description}
                 </p>
               </div>
@@ -158,7 +158,7 @@ export default function OnboardingWizard({
           ))}
         </div>
 
-        <p className="text-center text-sm text-[#9ca3af] mb-8">
+        <p className="text-center text-sm text-text-secondary mb-8">
           To get started, connect your exchange API keys.
           <br />
           You can always do this later from the Connections tab.
@@ -169,14 +169,14 @@ export default function OnboardingWizard({
             type="button"
             onClick={handleSkip}
             disabled={isPending}
-            className="rounded-full border border-[#2a2d31] px-6 py-3 text-sm text-[#9ca3af] hover:text-[#e8e9ea] hover:border-[#e8e9ea]/40 transition-colors disabled:opacity-50"
+            className="rounded-full border border-border px-6 py-3 text-sm text-text-secondary hover:text-text-primary hover:border-text-primary/40 transition-colors disabled:opacity-50"
           >
             {isPending ? "Redirecting..." : "Skip for now"}
           </button>
           <button
             type="button"
             onClick={() => setStep(2)}
-            className="btn-sheen btn-pill bg-[#e8e9ea] px-6 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb]"
+            className="btn-sheen btn-pill bg-text-primary px-6 py-3 font-medium text-bg-primary transition-colors hover:bg-text-mono"
           >
             Get started
           </button>
@@ -194,7 +194,7 @@ export default function OnboardingWizard({
         <h1 className="font-[family-name:var(--font-italiana)] text-3xl font-normal tracking-[0.06em]">
           Connect your accounts
         </h1>
-        <p className="mt-3 text-[#9ca3af]">
+        <p className="mt-3 text-text-secondary">
           Link your exchange API keys so Neutralis can monitor and execute
           trades.
         </p>
@@ -208,15 +208,15 @@ export default function OnboardingWizard({
         )}
 
         {/* Kalshi */}
-        <div className="card-panel card-accent rounded-xl p-6">
+        <div className="hud-panel rounded-xl p-6">
           <h2 className="text-lg font-semibold mb-1">Kalshi</h2>
-          <p className="text-sm text-[#9ca3af] mb-5">
+          <p className="text-sm text-text-secondary mb-5">
             Generate an API key at{" "}
             <a
               href="https://kalshi.com/account/api"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#e8e9ea] underline underline-offset-2 hover:text-white"
+              className="text-text-primary underline underline-offset-2 hover:text-white"
             >
               kalshi.com/account/api
             </a>
@@ -226,7 +226,7 @@ export default function OnboardingWizard({
             <div>
               <label
                 htmlFor="kalshi-key-id"
-                className="block text-sm font-medium mb-2 text-[#e8e9ea]"
+                className="block text-sm font-medium mb-2 text-text-primary"
               >
                 API Key ID
               </label>
@@ -243,7 +243,7 @@ export default function OnboardingWizard({
             <div>
               <label
                 htmlFor="kalshi-pem"
-                className="block text-sm font-medium mb-2 text-[#e8e9ea]"
+                className="block text-sm font-medium mb-2 text-text-primary"
               >
                 RSA Private Key (PEM)
               </label>
@@ -265,7 +265,7 @@ export default function OnboardingWizard({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="mt-2 text-xs text-[#9ca3af] hover:text-[#e8e9ea] transition-colors underline underline-offset-2"
+                className="mt-2 text-xs text-text-secondary hover:text-text-primary transition-colors underline underline-offset-2"
               >
                 or upload a .pem file
               </button>
@@ -274,18 +274,18 @@ export default function OnboardingWizard({
         </div>
 
         {/* Polymarket US */}
-        <div className="card-panel card-accent rounded-xl p-6">
+        <div className="hud-panel rounded-xl p-6">
           <div className="flex items-center gap-2 mb-1">
             <h2 className="text-lg font-semibold">Polymarket US</h2>
-            <span className="text-[10px] font-normal text-[#9ca3af]">CFTC</span>
+            <span className="text-[10px] font-normal text-text-secondary">CFTC</span>
           </div>
-          <p className="text-sm text-[#9ca3af] mb-5">
+          <p className="text-sm text-text-secondary mb-5">
             Get your API credentials at{" "}
             <a
               href="https://polymarket.us/developer"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#e8e9ea] underline underline-offset-2 hover:text-white"
+              className="text-text-primary underline underline-offset-2 hover:text-white"
             >
               polymarket.us/developer
             </a>
@@ -295,7 +295,7 @@ export default function OnboardingWizard({
             <div>
               <label
                 htmlFor="poly-us-key-id"
-                className="block text-sm font-medium mb-2 text-[#e8e9ea]"
+                className="block text-sm font-medium mb-2 text-text-primary"
               >
                 Key ID
               </label>
@@ -312,7 +312,7 @@ export default function OnboardingWizard({
             <div>
               <label
                 htmlFor="poly-us-secret"
-                className="block text-sm font-medium mb-2 text-[#e8e9ea]"
+                className="block text-sm font-medium mb-2 text-text-primary"
               >
                 Secret Key
               </label>
@@ -334,7 +334,7 @@ export default function OnboardingWizard({
             <button
               type="button"
               onClick={() => setStep(1)}
-              className="text-sm text-[#9ca3af] hover:text-[#e8e9ea] transition-colors"
+              className="text-sm text-text-secondary hover:text-text-primary transition-colors"
             >
               Back
             </button>
@@ -342,7 +342,7 @@ export default function OnboardingWizard({
               type="button"
               onClick={handleSkip}
               disabled={isPending}
-              className="rounded-full border border-[#2a2d31] px-6 py-3 text-sm text-[#9ca3af] hover:text-[#e8e9ea] hover:border-[#e8e9ea]/40 transition-colors disabled:opacity-50"
+              className="rounded-full border border-border px-6 py-3 text-sm text-text-secondary hover:text-text-primary hover:border-text-primary/40 transition-colors disabled:opacity-50"
             >
               {isPending ? "Redirecting..." : "Skip for now"}
             </button>
@@ -351,7 +351,7 @@ export default function OnboardingWizard({
             type="button"
             onClick={handleSave}
             disabled={isPending}
-            className="btn-sheen btn-pill bg-[#e8e9ea] px-6 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-sheen btn-pill bg-text-primary px-6 py-3 font-medium text-bg-primary transition-colors hover:bg-text-mono disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isPending ? "Saving..." : "Save & continue"}
           </button>

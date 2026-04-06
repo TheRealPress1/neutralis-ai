@@ -64,7 +64,7 @@ export default function StatsBar({ refreshKey }: { refreshKey: number }) {
           {stats ? (
             <p
               className={`mt-2 font-mono text-3xl font-bold tabular-nums ${
-                c.color ? c.color(stats) : "text-[#e8e9ea]"
+                c.color ? c.color(stats) : "text-text-primary"
               }`}
             >
               {c.value(stats)}

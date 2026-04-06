@@ -237,7 +237,7 @@ export default function LivePanel({
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-neon-green opacity-40" />
               )}
               <span className={`relative inline-flex h-3 w-3 rounded-full ${
-                autoLoading ? "bg-[#3b3f46] animate-pulse"
+                autoLoading ? "bg-border animate-pulse"
                   : isKilled ? "bg-neon-red" : isRunning ? "bg-neon-green" : "bg-neon-amber"
               }`} />
             </div>
@@ -245,7 +245,7 @@ export default function LivePanel({
               <h2 className="font-mono text-xs font-medium uppercase tracking-[0.15em] text-text-secondary">
                 Automation{" "}
                 {autoLoading ? (
-                  <span className="text-[#3b3f46]">Loading...</span>
+                  <span className="text-border">Loading...</span>
                 ) : (
                   <span className={isKilled ? "text-neon-red" : isRunning ? "text-neon-green" : "text-neon-amber"}>
                     {isKilled ? "Killed" : isRunning ? "Running" : "Paused"}
@@ -378,7 +378,7 @@ export default function LivePanel({
             <p className="mt-1 max-w-md text-sm text-text-secondary">
               The trading engine is not responding.
             </p>
-            <div className="mt-3 text-left text-xs text-[#3b3f46]">
+            <div className="mt-3 text-left text-xs text-border">
               <ul className="list-inside list-disc space-y-1">
                 <li>Check that the daemon service is running on Railway</li>
                 <li>Verify <code className="rounded bg-bg-elevated px-1 text-text-secondary">WEBSOCKET_ENABLED=true</code> is set</li>
@@ -544,15 +544,15 @@ export default function LivePanel({
                 Scroll to bottom
               </button>
             )}
-            <span className="text-[10px] text-[#3b3f46]">{logs.length} entries</span>
+            <span className="text-[10px] text-border">{logs.length} entries</span>
           </div>
         </div>
 
-        <div ref={logContainerRef} onScroll={handleScroll} className="h-[400px] overflow-y-auto bg-[#040508] border border-border rounded-lg font-mono text-xs">
+        <div ref={logContainerRef} onScroll={handleScroll} className="h-[400px] overflow-y-auto bg-bg-primary border border-border rounded-lg font-mono text-xs">
           {logs.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-center">
               <p className="text-sm text-text-secondary">No log entries yet</p>
-              <p className="mt-1 text-xs text-[#3b3f46]">Pipeline events will stream here when the engine is running.</p>
+              <p className="mt-1 text-xs text-border">Pipeline events will stream here when the engine is running.</p>
             </div>
           ) : (
             <div className="space-y-px p-3">
@@ -561,11 +561,11 @@ export default function LivePanel({
                 return (
                   <div key={log.id} className="group flex items-start gap-2 rounded px-2 py-1 transition-colors hover:bg-bg-primary">
                     <span className="mt-1.5 shrink-0"><span className={`inline-block h-1.5 w-1.5 rounded-full ${style.dot}`} /></span>
-                    <span className="shrink-0 text-[#3b3f46]">{fmtTime(log.created_at)}</span>
+                    <span className="shrink-0 text-border">{fmtTime(log.created_at)}</span>
                     <span className={`shrink-0 rounded px-1 text-[10px] font-medium uppercase ${style.text}`}>{log.category}</span>
                     <span className="text-text-primary">{log.message}</span>
                     {log.details && Object.keys(log.details).length > 0 && (
-                      <span className="hidden text-[#3b3f46] group-hover:inline">{JSON.stringify(log.details)}</span>
+                      <span className="hidden text-border group-hover:inline">{JSON.stringify(log.details)}</span>
                     )}
                   </div>
                 );

@@ -19,7 +19,7 @@ export default async function ProfilePage() {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return (
-      <div className="min-h-screen bg-[#050608] text-[#e8e9ea] flex items-center justify-center">
+      <div className="min-h-screen bg-bg-primary text-text-primary flex items-center justify-center">
         <p className="text-red-400 text-sm">Profile error: {msg}</p>
       </div>
     );
@@ -30,15 +30,15 @@ export default async function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#050608] text-[#e8e9ea]">
-      <nav className="fixed top-0 z-50 w-full border-b border-[#22262d] bg-[#08090c]/80 backdrop-blur-lg">
+    <div className="min-h-screen bg-bg-primary text-text-primary">
+      <nav className="fixed top-0 z-50 w-full border-b border-border bg-bg-primary/80 backdrop-blur-lg">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-6">
             <Link href="/" className="text-lg font-semibold tracking-tight">
               Neutralis.ai
             </Link>
-            <span className="text-xs text-[#a1a8b3]">/</span>
-            <span className="text-sm font-medium text-[#eceef0]">
+            <span className="text-xs text-text-secondary">/</span>
+            <span className="text-sm font-medium text-text-primary">
               My Profile
             </span>
           </div>
@@ -51,7 +51,7 @@ export default async function ProfilePage() {
       <main className="mx-auto max-w-3xl px-6 pt-24 pb-16">
         <div className="mb-8">
           <h1 className="text-2xl font-semibold">My Profile</h1>
-          <p className="text-sm text-[#a1a8b3] mt-1">
+          <p className="text-sm text-text-secondary mt-1">
             Manage your account details.
           </p>
         </div>

@@ -27,10 +27,10 @@ function timeAgo(iso: string) {
 const STATUS_CONFIG = {
   running: {
     label: "Running",
-    dot: "bg-emerald-400",
-    ring: "ring-emerald-400/20",
-    text: "text-emerald-400",
-    bg: "bg-emerald-400/10",
+    dot: "bg-neon-green",
+    ring: "ring-neon-green/20",
+    text: "text-neon-green",
+    bg: "bg-neon-green/10",
   },
   paused: {
     label: "Paused",
@@ -145,31 +145,31 @@ export default function AutomationPanel({
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="card-panel rounded-xl p-6">
-          <div className="h-8 w-48 animate-pulse rounded bg-[#12151a]" />
+        <div className="hud-panel rounded-xl p-6">
+          <div className="h-8 w-48 animate-pulse rounded bg-bg-elevated" />
           <div className="mt-4 flex gap-4">
-            <div className="h-12 w-48 animate-pulse rounded-lg bg-[#12151a]" />
-            <div className="h-12 w-40 animate-pulse rounded-lg bg-[#12151a]" />
+            <div className="h-12 w-48 animate-pulse rounded-lg bg-bg-elevated" />
+            <div className="h-12 w-40 animate-pulse rounded-lg bg-bg-elevated" />
           </div>
         </div>
-        <div className="card-panel rounded-xl p-6">
-          <div className="h-6 w-32 animate-pulse rounded bg-[#12151a]" />
+        <div className="hud-panel rounded-xl p-6">
+          <div className="h-6 w-32 animate-pulse rounded bg-bg-elevated" />
           <div className="mt-4 grid grid-cols-3 gap-4">
             {Array.from({ length: 3 }).map((_, i) => (
               <div
                 key={i}
-                className="h-20 animate-pulse rounded-lg bg-[#12151a]"
+                className="h-20 animate-pulse rounded-lg bg-bg-elevated"
               />
             ))}
           </div>
         </div>
-        <div className="card-panel rounded-xl p-6">
-          <div className="h-6 w-40 animate-pulse rounded bg-[#12151a]" />
+        <div className="hud-panel rounded-xl p-6">
+          <div className="h-6 w-40 animate-pulse rounded bg-bg-elevated" />
           <div className="mt-4 space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={i}
-                className="h-10 animate-pulse rounded bg-[#12151a]"
+                className="h-10 animate-pulse rounded bg-bg-elevated"
               />
             ))}
           </div>
@@ -180,13 +180,13 @@ export default function AutomationPanel({
 
   if (!state) {
     return (
-      <div className="card-panel rounded-xl">
+      <div className="hud-panel rounded-xl">
         <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mb-3 h-10 w-10 text-[#2a2d31]">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mb-3 h-10 w-10 text-border">
             <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />
           </svg>
-          <p className="text-sm text-[#9ca3af]">Automation engine offline</p>
-          <p className="mt-1 max-w-xs text-xs text-[#3b3f46]">
+          <p className="text-sm text-text-secondary">Automation engine offline</p>
+          <p className="mt-1 max-w-xs text-xs text-border">
             The trading engine is not currently running. Start the backend pipeline to enable automation controls.
           </p>
         </div>
@@ -205,8 +205,8 @@ export default function AutomationPanel({
   return (
     <div className="space-y-6">
       {/* ── Status + Controls ──────────────────────────────────── */}
-      <div className="card-panel rounded-xl">
-        <div className="border-b border-[#1a1d21] px-6 py-5">
+      <div className="hud-panel rounded-xl">
+        <div className="border-b border-border px-6 py-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               {/* Pulsing status dot */}
@@ -228,17 +228,17 @@ export default function AutomationPanel({
                   <span className={cfg.text}>{cfg.label}</span>
                 </h2>
                 {state.started_at && state.status === "running" && (
-                  <p className="mt-0.5 text-xs text-[#9ca3af]">
+                  <p className="mt-0.5 text-xs text-text-secondary">
                     Running since {new Date(state.started_at).toLocaleString()}
                   </p>
                 )}
                 {state.paused_at && state.status === "paused" && (
-                  <p className="mt-0.5 text-xs text-[#9ca3af]">
+                  <p className="mt-0.5 text-xs text-text-secondary">
                     Paused since {new Date(state.paused_at).toLocaleString()}
                   </p>
                 )}
                 {state.killed_at && state.status === "killed" && (
-                  <p className="mt-0.5 text-xs text-[#9ca3af]">
+                  <p className="mt-0.5 text-xs text-text-secondary">
                     Killed at {new Date(state.killed_at).toLocaleString()}
                   </p>
                 )}
@@ -267,25 +267,25 @@ export default function AutomationPanel({
               <p className="text-sm font-medium text-amber-400">
                 Exchange credentials required
               </p>
-              <p className="mt-1 text-xs text-[#9ca3af]">
+              <p className="mt-1 text-xs text-text-secondary">
                 Both Kalshi and Polymarket must be configured before starting automation.
               </p>
               <ul className="mt-2 space-y-1 text-xs">
                 {!hasKalshi && (
-                  <li className="flex items-center gap-2 text-[#9ca3af]">
+                  <li className="flex items-center gap-2 text-text-secondary">
                     <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
                     Kalshi API keys not configured
                   </li>
                 )}
                 {!hasPoly && (
-                  <li className="flex items-center gap-2 text-[#9ca3af]">
+                  <li className="flex items-center gap-2 text-text-secondary">
                     <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
                     Polymarket credentials not configured
                   </li>
                 )}
                 {hasKalshi && hasPoly && (
-                  <li className="flex items-center gap-2 text-emerald-400">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  <li className="flex items-center gap-2 text-neon-green">
+                    <span className="h-1.5 w-1.5 rounded-full bg-neon-green" />
                     All credentials configured
                   </li>
                 )}
@@ -310,10 +310,10 @@ export default function AutomationPanel({
             disabled={toggling || isKilled || (!isRunning && !canStart)}
             className={`rounded-lg px-6 py-3 text-sm font-semibold transition-colors ${
               isKilled || (!isRunning && !canStart)
-                ? "cursor-not-allowed bg-[#1a1d21] text-[#9ca3af]"
+                ? "cursor-not-allowed bg-bg-elevated text-text-secondary"
                 : isRunning
                   ? "bg-amber-400/10 text-amber-400 hover:bg-amber-400/20"
-                  : "bg-emerald-400/10 text-emerald-400 hover:bg-emerald-400/20"
+                  : "bg-neon-green/10 text-neon-green hover:bg-neon-green/20"
             }`}
           >
             {toggling
@@ -333,9 +333,9 @@ export default function AutomationPanel({
             disabled={isKilled}
             className={`rounded-lg px-6 py-3 text-sm font-bold uppercase tracking-wider transition-all ${
               isKilled
-                ? "cursor-not-allowed bg-[#1a1d21] text-[#9ca3af]"
+                ? "cursor-not-allowed bg-bg-elevated text-text-secondary"
                 : killArmed
-                  ? "animate-pulse bg-red-500 text-white ring-2 ring-red-400 ring-offset-2 ring-offset-[#050608]"
+                  ? "animate-pulse bg-red-500 text-white ring-2 ring-red-400 ring-offset-2 ring-offset-bg-primary"
                   : "bg-red-400/10 text-red-400 hover:bg-red-400/20"
             }`}
           >
@@ -351,37 +351,37 @@ export default function AutomationPanel({
       </div>
 
       {/* ── Risk Metrics ───────────────────────────────────────── */}
-      <div className="card-panel rounded-xl">
-        <div className="border-b border-[#1a1d21] px-6 py-4">
-          <h2 className="font-[family-name:var(--font-cormorant)] text-base font-medium tracking-wide text-[#9ca3af]">
+      <div className="hud-panel rounded-xl">
+        <div className="border-b border-border px-6 py-4">
+          <h2 className="font-[family-name:var(--font-cormorant)] text-base font-medium tracking-wide text-text-secondary">
             Risk Metrics
           </h2>
         </div>
         <div className="grid gap-4 p-6 sm:grid-cols-3">
           {/* Daily Loss */}
-          <div className="rounded-lg border border-[#1a1d21] bg-[#050608] p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-[#9ca3af]">
+          <div className="rounded-lg border border-border bg-bg-primary p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-text-secondary">
               Daily Loss
             </p>
-            <p className="mt-2 font-mono text-xl font-bold text-[#e8e9ea]">
+            <p className="mt-2 font-mono text-xl font-bold text-text-primary">
               <span
                 className={
-                  state.daily_loss_dollars > 0 ? "text-red-400" : "text-[#e8e9ea]"
+                  state.daily_loss_dollars > 0 ? "text-red-400" : "text-text-primary"
                 }
               >
                 ${fmt(state.daily_loss_dollars)}
               </span>
             </p>
             {state.daily_loss_reset_at && (
-              <p className="mt-1 text-[11px] text-[#9ca3af]">
+              <p className="mt-1 text-[11px] text-text-secondary">
                 Resets {timeAgo(state.daily_loss_reset_at)}
               </p>
             )}
           </div>
 
           {/* Max Drawdown */}
-          <div className="rounded-lg border border-[#1a1d21] bg-[#050608] p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-[#9ca3af]">
+          <div className="rounded-lg border border-border bg-bg-primary p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-text-secondary">
               Max Drawdown
             </p>
             <p className="mt-2 font-mono text-xl font-bold">
@@ -389,7 +389,7 @@ export default function AutomationPanel({
                 className={
                   state.max_drawdown_dollars > 0
                     ? "text-red-400"
-                    : "text-[#e8e9ea]"
+                    : "text-text-primary"
                 }
               >
                 ${fmt(state.max_drawdown_dollars)}
@@ -398,11 +398,11 @@ export default function AutomationPanel({
           </div>
 
           {/* Peak Portfolio Value */}
-          <div className="rounded-lg border border-[#1a1d21] bg-[#050608] p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-[#9ca3af]">
+          <div className="rounded-lg border border-border bg-bg-primary p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-text-secondary">
               Peak Portfolio Value
             </p>
-            <p className="mt-2 font-mono text-xl font-bold text-[#e8e9ea]">
+            <p className="mt-2 font-mono text-xl font-bold text-text-primary">
               ${fmt(state.peak_portfolio_value)}
             </p>
           </div>
@@ -410,9 +410,9 @@ export default function AutomationPanel({
       </div>
 
       {/* ── Recent Candidates ──────────────────────────────────── */}
-      <div className="card-panel rounded-xl">
-        <div className="border-b border-[#1a1d21] px-6 py-4">
-          <h2 className="font-[family-name:var(--font-cormorant)] text-base font-medium tracking-wide text-[#9ca3af]">
+      <div className="hud-panel rounded-xl">
+        <div className="border-b border-border px-6 py-4">
+          <h2 className="font-[family-name:var(--font-cormorant)] text-base font-medium tracking-wide text-text-secondary">
             Recent Candidates
           </h2>
         </div>
@@ -420,18 +420,18 @@ export default function AutomationPanel({
         <div className="max-h-[480px] overflow-y-auto">
           {decisions.length === 0 ? (
             <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mb-3 h-10 w-10 text-[#2a2d31]">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mb-3 h-10 w-10 text-border">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
               </svg>
-              <p className="text-sm text-[#9ca3af]">No candidates yet</p>
-              <p className="mt-1 text-xs text-[#3b3f46]">
+              <p className="text-sm text-text-secondary">No candidates yet</p>
+              <p className="mt-1 text-xs text-border">
                 Trade candidates will appear here as the system evaluates signals.
               </p>
             </div>
           ) : (
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="text-xs uppercase tracking-wider text-[#9ca3af]">
+                <tr className="text-xs uppercase tracking-wider text-text-secondary">
                   <th className="px-6 py-3 font-medium">Ticker</th>
                   <th className="px-6 py-3 font-medium">Verdict</th>
                   <th className="px-6 py-3 font-medium text-right">Edge</th>
@@ -446,7 +446,7 @@ export default function AutomationPanel({
                   return (
                     <tr
                       key={d.id}
-                      className="border-t border-[#1a1d21] transition-colors hover:bg-[#0a0d10]"
+                      className="border-t border-border transition-colors hover:bg-bg-primary"
                     >
                       <td className="px-6 py-3 font-mono text-xs">
                         {d.ticker}
@@ -455,7 +455,7 @@ export default function AutomationPanel({
                         <span
                           className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                             isPass
-                              ? "bg-emerald-400/10 text-emerald-400"
+                              ? "bg-neon-green/10 text-neon-green"
                               : "bg-red-400/10 text-red-400"
                           }`}
                         >
@@ -472,14 +472,14 @@ export default function AutomationPanel({
                         <span
                           className={`font-mono text-xs ${
                             guardPassCount(d) === guardTotalCount(d)
-                              ? "text-emerald-400"
+                              ? "text-neon-green"
                               : "text-amber-400"
                           }`}
                         >
                           {guardPassCount(d)}/{guardTotalCount(d)}
                         </span>
                       </td>
-                      <td className="px-6 py-3 text-right text-xs text-[#9ca3af]">
+                      <td className="px-6 py-3 text-right text-xs text-text-secondary">
                         {timeAgo(d.created_at)}
                       </td>
                     </tr>

@@ -93,7 +93,7 @@ const exitStrategies = [
 
 export default function DocsPage() {
   return (
-    <div className="min-h-screen bg-[#050608] text-[#e8e9ea]">
+    <div className="min-h-screen bg-bg-primary text-text-primary">
       {/* ── Nav ────────────────────────────────────────────── */}
       <nav className="fixed top-0 z-50 w-full border-b border-white/10 bg-black/30 backdrop-blur-xl">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
@@ -105,7 +105,7 @@ export default function DocsPage() {
           </Link>
           <Link
             href="/"
-            className="text-sm text-[#9ca3af] transition-colors hover:text-[#e8e9ea]"
+            className="text-sm text-text-secondary transition-colors hover:text-text-primary"
           >
             &larr; Back to home
           </Link>
@@ -117,7 +117,7 @@ export default function DocsPage() {
         <h1 className="font-[family-name:var(--font-italiana)] text-4xl font-normal uppercase tracking-[0.08em] sm:text-5xl">
           How Neutralis Works
         </h1>
-        <p className="mt-4 max-w-2xl text-lg text-[#9ca3af]">
+        <p className="mt-4 max-w-2xl text-lg text-text-secondary">
           A technical overview of the automated prediction market arbitrage
           system — from signal detection to trade execution.
         </p>
@@ -127,7 +127,7 @@ export default function DocsPage() {
           <h2 className="font-[family-name:var(--font-italiana)] text-2xl font-normal uppercase tracking-[0.08em]">
             Overview
           </h2>
-          <div className="mt-6 space-y-4 text-[#c8ccd2] leading-relaxed">
+          <div className="mt-6 space-y-4 text-text-mono leading-relaxed">
             <p>
               Prediction markets let participants trade on the probability of
               real-world events. When two exchanges price the same event
@@ -154,27 +154,27 @@ export default function DocsPage() {
             {venues.map((v) => (
               <div
                 key={v.name}
-                className="card-panel rounded-xl p-6"
+                className="hud-panel rounded-xl p-6"
               >
                 <div className="flex items-center gap-3">
                   <h3 className="font-[family-name:var(--font-cormorant)] text-xl font-medium">
                     {v.name}
                   </h3>
-                  <span className="rounded-full bg-[#1a1d21] border border-[#22262d] px-2.5 py-0.5 text-xs font-medium text-[#a1a8b3]">
+                  <span className="rounded-full bg-bg-elevated border border-border px-2.5 py-0.5 text-xs font-medium text-text-secondary">
                     {v.badge}
                   </span>
                 </div>
-                <p className="mt-3 text-sm leading-relaxed text-[#9ca3af]">
+                <p className="mt-3 text-sm leading-relaxed text-text-secondary">
                   {v.description}
                 </p>
               </div>
             ))}
           </div>
-          <div className="mt-6 card-panel rounded-xl p-6">
+          <div className="mt-6 hud-panel rounded-xl p-6">
             <h3 className="font-[family-name:var(--font-cormorant)] text-lg font-medium">
               Cross-platform matching
             </h3>
-            <p className="mt-2 text-sm leading-relaxed text-[#9ca3af]">
+            <p className="mt-2 text-sm leading-relaxed text-text-secondary">
               Markets are paired across venues using TF-IDF text similarity,
               entity extraction, and temporal alignment. Abbreviations are
               expanded automatically (&ldquo;Man City&rdquo; &rarr;
@@ -191,24 +191,24 @@ export default function DocsPage() {
           <h2 className="font-[family-name:var(--font-italiana)] text-2xl font-normal uppercase tracking-[0.08em]">
             Signal Detection
           </h2>
-          <p className="mt-4 text-[#9ca3af]">
+          <p className="mt-4 text-text-secondary">
             Three types of arbitrage signals are detected in real time:
           </p>
           <div className="mt-6 space-y-6">
             {signalTypes.map((s) => (
               <div
                 key={s.title}
-                className="card-panel rounded-xl p-6"
+                className="hud-panel rounded-xl p-6"
               >
                 <h3 className="font-[family-name:var(--font-cormorant)] text-xl font-medium">
                   {s.title}
                 </h3>
-                <p className="mt-2 text-sm leading-relaxed text-[#9ca3af]">
+                <p className="mt-2 text-sm leading-relaxed text-text-secondary">
                   {s.description}
                 </p>
-                <div className="mt-4 rounded-lg bg-[#050608] border border-[#1a1d21] px-4 py-3">
-                  <p className="text-xs font-medium text-[#a1a8b3] mb-1">Example</p>
-                  <p className="text-sm text-[#c8ccd2]">{s.example}</p>
+                <div className="mt-4 rounded-lg bg-bg-primary border border-border px-4 py-3">
+                  <p className="text-xs font-medium text-text-secondary mb-1">Example</p>
+                  <p className="text-sm text-text-mono">{s.example}</p>
                 </div>
               </div>
             ))}
@@ -220,7 +220,7 @@ export default function DocsPage() {
           <h2 className="font-[family-name:var(--font-italiana)] text-2xl font-normal uppercase tracking-[0.08em]">
             Risk Management
           </h2>
-          <p className="mt-4 text-[#9ca3af]">
+          <p className="mt-4 text-text-secondary">
             Every signal passes through a guard pipeline before execution.
             All guards must pass for a trade to be placed.
           </p>
@@ -232,12 +232,12 @@ export default function DocsPage() {
             {guards.map((g) => (
               <div
                 key={g.name}
-                className="flex gap-4 rounded-lg bg-[#0e1117] border border-[#22262d] px-5 py-4"
+                className="flex gap-4 rounded-lg bg-bg-secondary border border-border px-5 py-4"
               >
-                <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
+                <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-neon-green" />
                 <div>
-                  <p className="text-sm font-medium text-[#e8e9ea]">{g.name}</p>
-                  <p className="mt-1 text-xs text-[#9ca3af]">{g.description}</p>
+                  <p className="text-sm font-medium text-text-primary">{g.name}</p>
+                  <p className="mt-1 text-xs text-text-secondary">{g.description}</p>
                 </div>
               </div>
             ))}
@@ -250,13 +250,13 @@ export default function DocsPage() {
             {exitStrategies.map((e) => (
               <div
                 key={e.name}
-                className="card-panel rounded-xl p-5"
+                className="hud-panel rounded-xl p-5"
               >
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-[#e8e9ea]">{e.name}</p>
-                  <span className="font-mono text-xs text-[#a1a8b3]">{e.threshold}</span>
+                  <p className="text-sm font-medium text-text-primary">{e.name}</p>
+                  <span className="font-mono text-xs text-text-secondary">{e.threshold}</span>
                 </div>
-                <p className="mt-2 text-xs text-[#9ca3af]">{e.description}</p>
+                <p className="mt-2 text-xs text-text-secondary">{e.description}</p>
               </div>
             ))}
           </div>
@@ -267,7 +267,7 @@ export default function DocsPage() {
           <h2 className="font-[family-name:var(--font-italiana)] text-2xl font-normal uppercase tracking-[0.08em]">
             Execution
           </h2>
-          <div className="mt-6 space-y-4 text-[#c8ccd2] leading-relaxed">
+          <div className="mt-6 space-y-4 text-text-mono leading-relaxed">
             <p>
               The system connects to both venues via WebSocket for real-time
               price updates. When a qualified signal is detected, execution
@@ -276,36 +276,36 @@ export default function DocsPage() {
           </div>
           <div className="mt-6 space-y-4">
             <div className="flex gap-4 items-start">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#050608] border border-[#22262d] text-sm font-bold text-[#c0c5cb]">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg-primary border border-border text-sm font-bold text-text-mono">
                 1
               </div>
               <div>
-                <p className="text-sm font-medium text-[#e8e9ea]">Polymarket first</p>
-                <p className="mt-1 text-xs text-[#9ca3af]">
+                <p className="text-sm font-medium text-text-primary">Polymarket first</p>
+                <p className="mt-1 text-xs text-text-secondary">
                   The riskier leg executes first as a fill-or-kill (FOK) market
                   order. If it fails, no trade is placed.
                 </p>
               </div>
             </div>
             <div className="flex gap-4 items-start">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#050608] border border-[#22262d] text-sm font-bold text-[#c0c5cb]">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg-primary border border-border text-sm font-bold text-text-mono">
                 2
               </div>
               <div>
-                <p className="text-sm font-medium text-[#e8e9ea]">Kalshi second</p>
-                <p className="mt-1 text-xs text-[#9ca3af]">
+                <p className="text-sm font-medium text-text-primary">Kalshi second</p>
+                <p className="mt-1 text-xs text-text-secondary">
                   After Polymarket fills, the hedging leg is placed on Kalshi
                   as a GTC limit order at maker pricing (4x cheaper fees).
                 </p>
               </div>
             </div>
             <div className="flex gap-4 items-start">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#050608] border border-[#22262d] text-sm font-bold text-[#c0c5cb]">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg-primary border border-border text-sm font-bold text-text-mono">
                 3
               </div>
               <div>
-                <p className="text-sm font-medium text-[#e8e9ea]">Fallback management</p>
-                <p className="mt-1 text-xs text-[#9ca3af]">
+                <p className="text-sm font-medium text-text-primary">Fallback management</p>
+                <p className="mt-1 text-xs text-text-secondary">
                   If the Kalshi leg fails after Polymarket fills, the system
                   manages the one-legged position using exit strategies
                   (stop-loss, take-profit, time-decay).
@@ -321,22 +321,22 @@ export default function DocsPage() {
             Fee Model
           </h2>
           <div className="mt-6 grid gap-6 md:grid-cols-2">
-            <div className="card-panel rounded-xl p-6">
+            <div className="hud-panel rounded-xl p-6">
               <h3 className="font-[family-name:var(--font-cormorant)] text-lg font-medium">
                 Kalshi fees
               </h3>
-              <p className="mt-2 text-sm text-[#9ca3af]">
+              <p className="mt-2 text-sm text-text-secondary">
                 Parabolic fee curve:{" "}
-                <span className="font-mono text-[#e8e9ea]">0.07 &times; P &times; (1&minus;P)</span>{" "}
+                <span className="font-mono text-text-primary">0.07 &times; P &times; (1&minus;P)</span>{" "}
                 per contract (taker). Maximum fee of $0.0175 at P = 0.50.
                 Maker orders are 4x cheaper.
               </p>
             </div>
-            <div className="card-panel rounded-xl p-6">
+            <div className="hud-panel rounded-xl p-6">
               <h3 className="font-[family-name:var(--font-cormorant)] text-lg font-medium">
                 Polymarket fees
               </h3>
-              <p className="mt-2 text-sm text-[#9ca3af]">
+              <p className="mt-2 text-sm text-text-secondary">
                 Near-zero fees for standard markets (political, sports).
                 Taker fee of 0.01% applies to some market categories. All fee
                 calculations are included in edge computation before trade
@@ -351,7 +351,7 @@ export default function DocsPage() {
           <h2 className="font-[family-name:var(--font-italiana)] text-2xl font-normal uppercase tracking-[0.08em]">
             Dashboard
           </h2>
-          <p className="mt-4 text-[#9ca3af]">
+          <p className="mt-4 text-text-secondary">
             The web dashboard provides full visibility into system activity:
           </p>
           <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -364,10 +364,10 @@ export default function DocsPage() {
             ].map((item) => (
               <div
                 key={item.tab}
-                className="rounded-lg bg-[#0e1117] border border-[#22262d] px-5 py-4"
+                className="rounded-lg bg-bg-secondary border border-border px-5 py-4"
               >
-                <p className="text-sm font-medium text-[#e8e9ea]">{item.tab}</p>
-                <p className="mt-1 text-xs text-[#9ca3af]">{item.desc}</p>
+                <p className="text-sm font-medium text-text-primary">{item.tab}</p>
+                <p className="mt-1 text-xs text-text-secondary">{item.desc}</p>
               </div>
             ))}
           </div>
@@ -378,13 +378,13 @@ export default function DocsPage() {
           <h2 className="font-[family-name:var(--font-italiana)] text-2xl font-normal uppercase tracking-[0.08em]">
             Ready to get started?
           </h2>
-          <p className="mt-3 text-[#9ca3af]">
+          <p className="mt-3 text-text-secondary">
             Create an account to start trading.
           </p>
           <div className="mt-6">
             <Link
               href="/signup"
-              className="btn-sheen btn-pill inline-flex bg-[#e8e9ea] px-7 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb]"
+              className="btn-sheen btn-pill inline-flex bg-text-primary px-7 py-3 font-medium text-bg-primary transition-colors hover:bg-text-mono"
             >
               Sign up
             </Link>
@@ -393,14 +393,14 @@ export default function DocsPage() {
       </main>
 
       {/* ── Footer ──────────────────────────────────────────── */}
-      <footer className="border-t border-[#1a1d21] py-10">
-        <div className="mx-auto flex max-w-4xl flex-col items-center gap-4 px-6 text-sm text-[#9ca3af] sm:flex-row sm:justify-between">
+      <footer className="border-t border-border py-10">
+        <div className="mx-auto flex max-w-4xl flex-col items-center gap-4 px-6 text-sm text-text-secondary sm:flex-row sm:justify-between">
           <span>&copy; {new Date().getFullYear()} Neutralis.ai</span>
           <ul className="flex gap-6">
             <li>
               <Link
                 href="/"
-                className="transition-colors hover:text-[#e8e9ea]"
+                className="transition-colors hover:text-text-primary"
               >
                 Home
               </Link>
@@ -408,7 +408,7 @@ export default function DocsPage() {
             <li>
               <a
                 href="#"
-                className="transition-colors hover:text-[#e8e9ea]"
+                className="transition-colors hover:text-text-primary"
               >
                 Privacy
               </a>
@@ -416,7 +416,7 @@ export default function DocsPage() {
             <li>
               <a
                 href="#"
-                className="transition-colors hover:text-[#e8e9ea]"
+                className="transition-colors hover:text-text-primary"
               >
                 Contact
               </a>

@@ -26,7 +26,7 @@ export default function RedeemCode() {
 
   return (
     <div className="mt-14 text-center">
-      <p className="text-sm text-[#9ca3af] mb-4">Have an access code?</p>
+      <p className="text-sm text-text-secondary mb-4">Have an access code?</p>
       <div className="mx-auto flex max-w-sm items-center gap-2">
         <input
           type="text"
@@ -34,19 +34,19 @@ export default function RedeemCode() {
           onChange={(e) => setCode(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleRedeem()}
           placeholder="Enter code"
-          className="flex-1 rounded-lg border border-[#22262d] bg-[#0e1117] px-3 py-2.5 text-sm text-[#e8e9ea] placeholder:text-[#555a63] outline-none transition-colors focus:border-[#c0c5cb]"
+          className="flex-1 rounded-lg border border-border bg-bg-secondary px-3 py-2.5 text-sm text-text-primary placeholder:text-text-secondary outline-none transition-colors focus:border-text-mono"
         />
         <button
           onClick={handleRedeem}
           disabled={isPending || !code.trim()}
-          className="rounded-lg border border-[#22262d] bg-[#1a1d21] px-5 py-2.5 text-sm font-medium text-[#e8e9ea] transition-colors hover:border-[#e8e9ea]/30 hover:bg-[#22262d] disabled:opacity-50"
+          className="rounded-lg border border-border bg-bg-elevated px-5 py-2.5 text-sm font-medium text-text-primary transition-colors hover:border-text-primary/30 hover:bg-border disabled:opacity-50"
         >
           {isPending ? "Redeeming..." : "Redeem"}
         </button>
       </div>
       {message && (
         <p
-          className={`mt-3 text-sm ${message.ok ? "text-emerald-400" : "text-red-400"}`}
+          className={`mt-3 text-sm ${message.ok ? "text-neon-green" : "text-red-400"}`}
         >
           {message.text}
         </p>

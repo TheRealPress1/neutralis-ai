@@ -25,15 +25,15 @@ export default function ForgotPasswordForm() {
 
   if (success) {
     return (
-      <div className="card-panel card-accent rounded-xl p-8">
+      <div className="hud-panel rounded-xl p-8">
         <div className="rounded-lg bg-green-500/10 border border-green-500/20 px-4 py-3 text-sm text-green-400 mb-6">
           Check your email for a password reset link. It may take a minute to
           arrive.
         </div>
-        <div className="text-center text-sm text-[#9ca3af]">
+        <div className="text-center text-sm text-text-secondary">
           <Link
             href="/login"
-            className="text-[#e8e9ea] hover:text-white transition-colors font-medium"
+            className="text-text-primary hover:text-white transition-colors font-medium"
           >
             Back to login
           </Link>
@@ -43,7 +43,7 @@ export default function ForgotPasswordForm() {
   }
 
   return (
-    <div className="card-panel card-accent rounded-xl p-8">
+    <div className="hud-panel rounded-xl p-8">
       <form action={handleSubmit} className="space-y-6">
         {error && (
           <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
@@ -54,7 +54,7 @@ export default function ForgotPasswordForm() {
         <div>
           <label
             htmlFor="email"
-            className="block text-sm font-medium mb-2 text-[#e8e9ea]"
+            className="block text-sm font-medium mb-2 text-text-primary"
           >
             Email
           </label>
@@ -64,7 +64,7 @@ export default function ForgotPasswordForm() {
             type="email"
             autoComplete="email"
             required
-            className="w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors"
+            className="w-full rounded-lg bg-bg-elevated border border-border px-4 py-3 text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-text-primary/20 focus:border-text-primary/40 transition-colors"
             placeholder="you@example.com"
           />
         </div>
@@ -72,16 +72,16 @@ export default function ForgotPasswordForm() {
         <button
           type="submit"
           disabled={isPending}
-          className="w-full btn-sheen btn-pill bg-[#e8e9ea] px-6 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb] disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full btn-sheen btn-pill bg-text-primary px-6 py-3 font-medium text-bg-primary transition-colors hover:bg-text-mono disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isPending ? "Sending..." : "Send reset link"}
         </button>
 
-        <div className="text-center text-sm text-[#9ca3af]">
+        <div className="text-center text-sm text-text-secondary">
           Remember your password?{" "}
           <Link
             href="/login"
-            className="text-[#e8e9ea] hover:text-white transition-colors font-medium"
+            className="text-text-primary hover:text-white transition-colors font-medium"
           >
             Sign in
           </Link>

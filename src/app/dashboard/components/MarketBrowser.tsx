@@ -73,7 +73,7 @@ export default function MarketBrowser({ refreshKey }: { refreshKey: number }) {
                 placeholder="Search markets..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="w-full rounded-lg bg-[#060810] border border-border px-4 py-2.5 text-sm text-text-primary font-mono placeholder:text-text-secondary focus:outline-none focus:border-neon-blue/50 focus:shadow-[0_0_8px_rgba(0,212,255,0.1)] transition-all"
+                className="w-full rounded-lg bg-bg-primary border border-border px-4 py-2.5 text-sm text-text-primary font-mono placeholder:text-text-secondary focus:outline-none focus:border-neon-blue/50 focus:shadow-[0_0_8px_rgba(0,212,255,0.1)] transition-all"
               />
               <div className="flex items-center gap-1">
                 {VENUES.map((v) => (
@@ -112,13 +112,13 @@ export default function MarketBrowser({ refreshKey }: { refreshKey: number }) {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-[#3b3f46]">
+                  <td colSpan={6} className="px-6 py-12 text-center text-border">
                     Loading...
                   </td>
                 </tr>
               ) : markets.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-[#3b3f46]">
+                  <td colSpan={6} className="px-6 py-12 text-center text-border">
                     No markets found
                   </td>
                 </tr>
@@ -130,11 +130,11 @@ export default function MarketBrowser({ refreshKey }: { refreshKey: number }) {
                   return (
                     <tr
                       key={`${m.venue}-${m.ticker}`}
-                      className="border-b border-[#0a0d10] transition-colors hover:bg-[#0a0d10]"
+                      className="border-b border-bg-primary transition-colors hover:bg-bg-primary"
                     >
                       <td className="max-w-xs truncate px-6 py-2.5 text-text-primary">
                         <span className="font-medium">{m.title}</span>
-                        <span className="ml-2 text-[10px] text-[#3b3f46]">{m.ticker}</span>
+                        <span className="ml-2 text-[10px] text-border">{m.ticker}</span>
                       </td>
                       <td className="px-3 py-2.5">
                         <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
@@ -154,7 +154,7 @@ export default function MarketBrowser({ refreshKey }: { refreshKey: number }) {
                       <td className="px-3 py-2.5 text-right font-mono text-text-secondary">
                         {spread !== "-" ? `${spread}c` : "-"}
                       </td>
-                      <td className="px-3 py-2.5 text-right text-[#3b3f46]">
+                      <td className="px-3 py-2.5 text-right text-border">
                         {new Date(m.snapshot_ts).toLocaleTimeString("en-US", {
                           hour12: false,
                           hour: "2-digit",

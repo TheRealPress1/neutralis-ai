@@ -36,8 +36,8 @@ const ENTITY_TYPES = [
 const EVENT_COLOR_MAP: Record<string, { bg: string; text: string }> = {
   signal_generated:     { bg: "bg-blue-400/10",    text: "text-blue-400" },
   risk_decision:        { bg: "bg-amber-400/10",   text: "text-amber-400" },
-  fill_recorded:        { bg: "bg-emerald-400/10", text: "text-emerald-400" },
-  position_opened:      { bg: "bg-emerald-400/10", text: "text-emerald-400" },
+  fill_recorded:        { bg: "bg-neon-green/10", text: "text-neon-green" },
+  position_opened:      { bg: "bg-neon-green/10", text: "text-neon-green" },
   position_closed:      { bg: "bg-purple-400/10",  text: "text-purple-400" },
   settlement:           { bg: "bg-purple-400/10",  text: "text-purple-400" },
   kill_switch_triggered:{ bg: "bg-red-400/10",     text: "text-red-400" },
@@ -137,10 +137,10 @@ export default function ActivityLog({ refreshKey }: { refreshKey: number }) {
   /* ---------------------------------------------------------------- */
 
   return (
-    <div className="card-panel rounded-xl">
+    <div className="hud-panel rounded-xl">
       {/* ---------- Filter bar ---------- */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-[#1a1d21] px-5 py-4">
-        <h2 className="font-[family-name:var(--font-cormorant)] text-base font-medium tracking-wide text-[#9ca3af]">
+      <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
+        <h2 className="font-[family-name:var(--font-cormorant)] text-base font-medium tracking-wide text-text-secondary">
           Activity Log
         </h2>
 
@@ -149,7 +149,7 @@ export default function ActivityLog({ refreshKey }: { refreshKey: number }) {
           <select
             value={eventFilter}
             onChange={(e) => setEventFilter(e.target.value)}
-            className="rounded border border-[#1a1d21] bg-[#050608] px-2.5 py-1.5 text-xs text-[#e8e9ea] outline-none focus:border-[#3b3f46]"
+            className="rounded border border-border bg-bg-primary px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-border"
           >
             {EVENT_TYPES.map((t) => (
               <option key={t} value={t}>
@@ -162,7 +162,7 @@ export default function ActivityLog({ refreshKey }: { refreshKey: number }) {
           <select
             value={entityFilter}
             onChange={(e) => setEntityFilter(e.target.value)}
-            className="rounded border border-[#1a1d21] bg-[#050608] px-2.5 py-1.5 text-xs text-[#e8e9ea] outline-none focus:border-[#3b3f46]"
+            className="rounded border border-border bg-bg-primary px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-border"
           >
             {ENTITY_TYPES.map((t) => (
               <option key={t} value={t}>
@@ -181,7 +181,7 @@ export default function ActivityLog({ refreshKey }: { refreshKey: number }) {
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
-                className="h-12 animate-pulse rounded bg-[#12151a]"
+                className="h-12 animate-pulse rounded bg-bg-elevated"
               />
             ))}
           </div>
@@ -194,7 +194,7 @@ export default function ActivityLog({ refreshKey }: { refreshKey: number }) {
               fill="none"
               stroke="currentColor"
               strokeWidth={1.5}
-              className="mb-3 h-10 w-10 text-[#3b3f46]"
+              className="mb-3 h-10 w-10 text-border"
             >
               <path
                 strokeLinecap="round"
@@ -202,8 +202,8 @@ export default function ActivityLog({ refreshKey }: { refreshKey: number }) {
                 d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
               />
             </svg>
-            <p className="text-sm text-[#9ca3af]">No audit log entries found</p>
-            <p className="mt-1 text-xs text-[#3b3f46]">
+            <p className="text-sm text-text-secondary">No audit log entries found</p>
+            <p className="mt-1 text-xs text-border">
               Activity will appear here as the system processes events.
             </p>
           </div>
@@ -216,13 +216,13 @@ export default function ActivityLog({ refreshKey }: { refreshKey: number }) {
               return (
                 <li
                   key={entry.id}
-                  className="border-t border-[#1a1d21]"
+                  className="border-t border-border"
                 >
                   <button
                     onClick={() =>
                       setExpandedId(expanded ? null : entry.id)
                     }
-                    className="flex w-full items-start gap-3 px-5 py-3 text-left transition-colors hover:bg-[#0a0d10]/60"
+                    className="flex w-full items-start gap-3 px-5 py-3 text-left transition-colors hover:bg-bg-primary/60"
                   >
                     {/* Dot indicator */}
                     <span
@@ -239,28 +239,28 @@ export default function ActivityLog({ refreshKey }: { refreshKey: number }) {
                         </span>
 
                         {entry.entity_type && (
-                          <span className="rounded border border-[#1a1d21] bg-[#0a0d10] px-1.5 py-0.5 text-[10px] uppercase text-[#9ca3af]">
+                          <span className="rounded border border-border bg-bg-primary px-1.5 py-0.5 text-[10px] uppercase text-text-secondary">
                             {entry.entity_type}
                           </span>
                         )}
 
                         {entry.entity_id && (
-                          <span className="truncate font-mono text-xs text-[#9ca3af]">
+                          <span className="truncate font-mono text-xs text-text-secondary">
                             {entry.entity_id}
                           </span>
                         )}
 
-                        <span className="ml-auto shrink-0 text-xs text-[#3b3f46]">
+                        <span className="ml-auto shrink-0 text-xs text-border">
                           {timeAgo(entry.created_at)}
                         </span>
 
-                        <span className="shrink-0 text-[10px] text-[#3b3f46]">
+                        <span className="shrink-0 text-[10px] text-border">
                           {expanded ? "\u25B2" : "\u25BC"}
                         </span>
                       </div>
 
                       {/* Summary line */}
-                      <p className="mt-1 truncate text-xs text-[#9ca3af]">
+                      <p className="mt-1 truncate text-xs text-text-secondary">
                         {summarize(entry.details)}
                       </p>
                     </div>
@@ -268,8 +268,8 @@ export default function ActivityLog({ refreshKey }: { refreshKey: number }) {
 
                   {/* Expanded details (full JSON) */}
                   {expanded && (
-                    <div className="mx-5 mb-3 rounded border border-[#1a1d21] bg-[#050608] p-3">
-                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-[#9ca3af]">
+                    <div className="mx-5 mb-3 rounded border border-border bg-bg-primary p-3">
+                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-text-secondary">
                         {JSON.stringify(entry.details, null, 2)}
                       </pre>
                     </div>

@@ -18,19 +18,19 @@ export default function ConnectionsPanel() {
   }, []);
 
   return (
-    <div className="card-panel rounded-xl p-6">
-      <h2 className="text-lg font-semibold text-[#e8e9ea] mb-4">
+    <div className="hud-panel rounded-xl p-6">
+      <h2 className="text-lg font-semibold text-text-primary mb-4">
         Exchange Connections
       </h2>
 
       {/* Kalshi - always connected (public API) */}
-      <div className="flex items-center justify-between py-3 border-b border-[#1a1d21]">
+      <div className="flex items-center justify-between py-3 border-b border-border">
         <div>
-          <p className="font-medium text-[#e8e9ea]">Kalshi</p>
-          <p className="text-xs text-[#9ca3af] mt-0.5">Public API — no auth required</p>
+          <p className="font-medium text-text-primary">Kalshi</p>
+          <p className="text-xs text-text-secondary mt-0.5">Public API — no auth required</p>
         </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-neon-green/10 px-2.5 py-1 text-xs font-medium text-neon-green">
+          <span className="h-1.5 w-1.5 rounded-full bg-neon-green" />
           Connected
         </span>
       </div>
@@ -39,11 +39,11 @@ export default function ConnectionsPanel() {
       <div className="py-3">
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-medium text-[#e8e9ea]">
+            <p className="font-medium text-text-primary">
               Polymarket US
-              <span className="ml-1.5 text-[10px] font-normal text-[#9ca3af]">CFTC</span>
+              <span className="ml-1.5 text-[10px] font-normal text-text-secondary">CFTC</span>
             </p>
-            <p className="text-xs text-[#9ca3af] mt-0.5">
+            <p className="text-xs text-text-secondary mt-0.5">
               {polyUSConnected
                 ? "Ed25519 credentials configured"
                 : (<>
@@ -52,7 +52,7 @@ export default function ConnectionsPanel() {
                       href="https://polymarket.us/developer"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[#e8e9ea] underline underline-offset-2 hover:text-white"
+                      className="text-text-primary underline underline-offset-2 hover:text-white"
                     >
                       polymarket.us/developer
                     </a>
@@ -60,14 +60,14 @@ export default function ConnectionsPanel() {
             </p>
           </div>
           {loading ? (
-            <div className="h-6 w-20 animate-pulse rounded-full bg-[#1a1d21]" />
+            <div className="h-6 w-20 animate-pulse rounded-full bg-bg-elevated" />
           ) : polyUSConnected ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-neon-green/10 px-2.5 py-1 text-xs font-medium text-neon-green">
+              <span className="h-1.5 w-1.5 rounded-full bg-neon-green" />
               Connected
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1a1d21] px-2.5 py-1 text-xs font-medium text-[#9ca3af]">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-bg-elevated px-2.5 py-1 text-xs font-medium text-text-secondary">
               Not configured
             </span>
           )}

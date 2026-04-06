@@ -28,7 +28,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   entertainment: "#ec4899",
   science_tech: "#06b6d4",
   weather: "#f97316",
-  other: "#6b7280",
+  other: "var(--text-secondary)",
 };
 
 function StatCard({
@@ -41,11 +41,11 @@ function StatCard({
   color?: string;
 }) {
   return (
-    <div className="rounded-lg border border-[#1a1d21] bg-[#0d0f11] p-4">
-      <p className="text-xs text-[#9ca3af]">{label}</p>
+    <div className="rounded-lg border border-border bg-bg-secondary p-4">
+      <p className="text-xs text-text-secondary">{label}</p>
       <p
         className="mt-1 text-xl font-semibold"
-        style={{ color: color ?? "#e8e9ea" }}
+        style={{ color: color ?? "var(--text-primary)" }}
       >
         {value}
       </p>
@@ -196,12 +196,12 @@ export default function BacktestPanel() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Backtesting Engine</h2>
-          <p className="text-xs text-[#9ca3af]">
+          <p className="text-xs text-text-secondary">
             Replay historical data through the pipeline to evaluate strategy performance
           </p>
         </div>
         {dataRange && dataRange.earliest && (
-          <div className="text-right text-xs text-[#9ca3af]">
+          <div className="text-right text-xs text-text-secondary">
             <p>
               Data: {dataRange.earliest} to {dataRange.latest}
             </p>
@@ -213,54 +213,54 @@ export default function BacktestPanel() {
       </div>
 
       {/* Config Panel */}
-      <div className="rounded-lg border border-[#1a1d21] bg-[#0d0f11] p-4">
+      <div className="rounded-lg border border-border bg-bg-secondary p-4">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
           <div>
-            <label className="mb-1 block text-xs text-[#9ca3af]">Start Date</label>
+            <label className="mb-1 block text-xs text-text-secondary">Start Date</label>
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full rounded border border-[#1a1d21] bg-[#050608] px-2 py-1.5 text-xs text-[#e8e9ea]"
+              className="w-full rounded border border-border bg-bg-primary px-2 py-1.5 text-xs text-text-primary"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-[#9ca3af]">End Date</label>
+            <label className="mb-1 block text-xs text-text-secondary">End Date</label>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="w-full rounded border border-[#1a1d21] bg-[#050608] px-2 py-1.5 text-xs text-[#e8e9ea]"
+              className="w-full rounded border border-border bg-bg-primary px-2 py-1.5 text-xs text-text-primary"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-[#9ca3af]">Min Edge %</label>
+            <label className="mb-1 block text-xs text-text-secondary">Min Edge %</label>
             <input
               type="number"
               step="0.1"
               value={minEdge}
               onChange={(e) => setMinEdge(e.target.value)}
-              className="w-full rounded border border-[#1a1d21] bg-[#050608] px-2 py-1.5 text-xs text-[#e8e9ea]"
+              className="w-full rounded border border-border bg-bg-primary px-2 py-1.5 text-xs text-text-primary"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-[#9ca3af]">Max Position $</label>
+            <label className="mb-1 block text-xs text-text-secondary">Max Position $</label>
             <input
               type="number"
               step="5"
               value={maxPosition}
               onChange={(e) => setMaxPosition(e.target.value)}
-              className="w-full rounded border border-[#1a1d21] bg-[#050608] px-2 py-1.5 text-xs text-[#e8e9ea]"
+              className="w-full rounded border border-border bg-bg-primary px-2 py-1.5 text-xs text-text-primary"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-[#9ca3af]">Max Exposure $</label>
+            <label className="mb-1 block text-xs text-text-secondary">Max Exposure $</label>
             <input
               type="number"
               step="50"
               value={maxExposure}
               onChange={(e) => setMaxExposure(e.target.value)}
-              className="w-full rounded border border-[#1a1d21] bg-[#050608] px-2 py-1.5 text-xs text-[#e8e9ea]"
+              className="w-full rounded border border-border bg-bg-primary px-2 py-1.5 text-xs text-text-primary"
             />
           </div>
           <div className="flex items-end">
@@ -276,20 +276,20 @@ export default function BacktestPanel() {
       </div>
 
       {/* Optimizer Panel */}
-      <div className="rounded-lg border border-[#1a1d21] bg-[#0d0f11] p-4">
-        <h3 className="mb-3 text-sm font-medium text-[#e8e9ea]">
+      <div className="rounded-lg border border-border bg-bg-secondary p-4">
+        <h3 className="mb-3 text-sm font-medium text-text-primary">
           Weight Optimizer
         </h3>
-        <p className="mb-3 text-xs text-[#6b7280]">
+        <p className="mb-3 text-xs text-text-secondary">
           Grid search over scoring weight space to find optimal configurations
         </p>
         <div className="flex flex-wrap items-end gap-4">
           <div>
-            <label className="mb-1 block text-xs text-[#9ca3af]">Objective</label>
+            <label className="mb-1 block text-xs text-text-secondary">Objective</label>
             <select
               value={optObjective}
               onChange={(e) => setOptObjective(e.target.value)}
-              className="rounded border border-[#1a1d21] bg-[#050608] px-2 py-1.5 text-xs text-[#e8e9ea]"
+              className="rounded border border-border bg-bg-primary px-2 py-1.5 text-xs text-text-primary"
             >
               <option value="total_pnl">Total P&L</option>
               <option value="sharpe_ratio">Sharpe Ratio</option>
@@ -298,22 +298,22 @@ export default function BacktestPanel() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs text-[#9ca3af]">Max Combos</label>
+            <label className="mb-1 block text-xs text-text-secondary">Max Combos</label>
             <input
               type="number"
               value={optMaxCombos}
               onChange={(e) => setOptMaxCombos(e.target.value)}
-              className="w-20 rounded border border-[#1a1d21] bg-[#050608] px-2 py-1.5 text-xs text-[#e8e9ea]"
+              className="w-20 rounded border border-border bg-bg-primary px-2 py-1.5 text-xs text-text-primary"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-[#9ca3af]">Step Size</label>
+            <label className="mb-1 block text-xs text-text-secondary">Step Size</label>
             <input
               type="number"
               step="0.05"
               value={optStepSize}
               onChange={(e) => setOptStepSize(e.target.value)}
-              className="w-20 rounded border border-[#1a1d21] bg-[#050608] px-2 py-1.5 text-xs text-[#e8e9ea]"
+              className="w-20 rounded border border-border bg-bg-primary px-2 py-1.5 text-xs text-text-primary"
             />
           </div>
           <button
@@ -327,7 +327,7 @@ export default function BacktestPanel() {
 
         {/* Optimizer progress / error */}
         {optRunning && (
-          <p className="mt-3 text-xs text-[#9ca3af]">{optProgress}</p>
+          <p className="mt-3 text-xs text-text-secondary">{optProgress}</p>
         )}
         {optError && (
           <p className="mt-3 text-xs text-red-400">{optError}</p>
@@ -337,7 +337,7 @@ export default function BacktestPanel() {
         {optResults && optResults.length > 0 && (
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="text-[#9ca3af]">
+              <thead className="text-text-secondary">
                 <tr>
                   <th className="pb-2 text-left font-medium">#</th>
                   <th className="pb-2 text-right font-medium">Objective</th>
@@ -354,9 +354,9 @@ export default function BacktestPanel() {
                   <th className="pb-2 text-left font-medium"></th>
                 </tr>
               </thead>
-              <tbody className="text-[#c0c5cb]">
+              <tbody className="text-text-mono">
                 {optResults.map((r) => (
-                  <tr key={r.rank} className="border-t border-[#1a1d21]/50">
+                  <tr key={r.rank} className="border-t border-border/50">
                     <td className="py-1.5 font-medium">{r.rank}</td>
                     <td className="py-1.5 text-right font-mono">{r.objective_value.toFixed(2)}</td>
                     <td
@@ -412,12 +412,12 @@ export default function BacktestPanel() {
 
       {/* Loading */}
       {loading && (
-        <div className="rounded-lg border border-[#1a1d21] bg-[#0d0f11] p-12 text-center">
+        <div className="rounded-lg border border-border bg-bg-secondary p-12 text-center">
           <div className="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-[#3b82f6] border-t-transparent" />
-          <p className="text-sm text-[#9ca3af]">
+          <p className="text-sm text-text-secondary">
             Replaying historical data through the pipeline...
           </p>
-          <p className="mt-1 text-xs text-[#6b7280]">
+          <p className="mt-1 text-xs text-text-secondary">
             This may take a minute depending on date range
           </p>
         </div>
@@ -467,8 +467,8 @@ export default function BacktestPanel() {
 
           {/* Equity Curve */}
           {equityCurve.length > 1 && (
-            <div className="rounded-lg border border-[#1a1d21] bg-[#0d0f11] p-4">
-              <h3 className="mb-4 text-sm font-medium text-[#e8e9ea]">
+            <div className="rounded-lg border border-border bg-bg-secondary p-4">
+              <h3 className="mb-4 text-sm font-medium text-text-primary">
                 Cumulative P&L
               </h3>
               <ResponsiveContainer width="100%" height={280}>
@@ -487,21 +487,21 @@ export default function BacktestPanel() {
                       />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1a1d21" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis
                     dataKey="date"
-                    tick={{ fill: "#6b7280", fontSize: 10 }}
+                    tick={{ fill: "var(--text-secondary)", fontSize: 10 }}
                     tickLine={false}
                   />
                   <YAxis
-                    tick={{ fill: "#6b7280", fontSize: 10 }}
+                    tick={{ fill: "var(--text-secondary)", fontSize: 10 }}
                     tickLine={false}
                     tickFormatter={(v) => `$${v}`}
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "#0d0f11",
-                      border: "1px solid #1a1d21",
+                      backgroundColor: "var(--bg-secondary)",
+                      border: "1px solid var(--border)",
                       borderRadius: 6,
                       fontSize: 11,
                     }}
@@ -524,28 +524,28 @@ export default function BacktestPanel() {
 
           {/* Category Breakdown */}
           {categoryData.length > 0 && (
-            <div className="rounded-lg border border-[#1a1d21] bg-[#0d0f11] p-4">
-              <h3 className="mb-4 text-sm font-medium text-[#e8e9ea]">
+            <div className="rounded-lg border border-border bg-bg-secondary p-4">
+              <h3 className="mb-4 text-sm font-medium text-text-primary">
                 P&L by Category
               </h3>
               <ResponsiveContainer width="100%" height={Math.max(160, categoryData.length * 36)}>
                 <BarChart data={categoryData} layout="vertical" margin={{ left: 80 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1a1d21" horizontal={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
                   <XAxis
                     type="number"
-                    tick={{ fill: "#6b7280", fontSize: 10 }}
+                    tick={{ fill: "var(--text-secondary)", fontSize: 10 }}
                     tickFormatter={(v) => `$${v}`}
                   />
                   <YAxis
                     type="category"
                     dataKey="category"
-                    tick={{ fill: "#9ca3af", fontSize: 11 }}
+                    tick={{ fill: "var(--text-secondary)", fontSize: 11 }}
                     width={75}
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "#0d0f11",
-                      border: "1px solid #1a1d21",
+                      backgroundColor: "var(--bg-secondary)",
+                      border: "1px solid var(--border)",
                       borderRadius: 6,
                       fontSize: 11,
                     }}
@@ -558,7 +558,7 @@ export default function BacktestPanel() {
                     {categoryData.map((entry) => (
                       <Cell
                         key={entry.category}
-                        fill={CATEGORY_COLORS[entry.category] ?? "#6b7280"}
+                        fill={CATEGORY_COLORS[entry.category] ?? "var(--text-secondary)"}
                       />
                     ))}
                   </Bar>
@@ -569,13 +569,13 @@ export default function BacktestPanel() {
 
           {/* Trade Log */}
           {result.trades.length > 0 && (
-            <div className="rounded-lg border border-[#1a1d21] bg-[#0d0f11] p-4">
-              <h3 className="mb-3 text-sm font-medium text-[#e8e9ea]">
+            <div className="rounded-lg border border-border bg-bg-secondary p-4">
+              <h3 className="mb-3 text-sm font-medium text-text-primary">
                 Trade Log ({result.trades.length} trades)
               </h3>
               <div className="max-h-64 overflow-y-auto">
                 <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-[#0d0f11] text-[#9ca3af]">
+                  <thead className="sticky top-0 bg-bg-secondary text-text-secondary">
                     <tr>
                       <th className="pb-2 text-left font-medium">Date</th>
                       <th className="pb-2 text-left font-medium">Ticker</th>
@@ -586,9 +586,9 @@ export default function BacktestPanel() {
                       <th className="pb-2 text-right font-medium">Edge %</th>
                     </tr>
                   </thead>
-                  <tbody className="text-[#c0c5cb]">
+                  <tbody className="text-text-mono">
                     {result.trades.slice(0, 100).map((t, i) => (
-                      <tr key={i} className="border-t border-[#1a1d21]/50">
+                      <tr key={i} className="border-t border-border/50">
                         <td className="py-1.5">{t.ts.substring(0, 10)}</td>
                         <td className="py-1.5 font-mono">{t.ticker.substring(0, 20)}</td>
                         <td className="py-1.5">{t.venue}</td>
@@ -601,7 +601,7 @@ export default function BacktestPanel() {
                   </tbody>
                 </table>
                 {result.trades.length > 100 && (
-                  <p className="mt-2 text-center text-xs text-[#6b7280]">
+                  <p className="mt-2 text-center text-xs text-text-secondary">
                     Showing first 100 of {result.trades.length} trades
                   </p>
                 )}
@@ -611,13 +611,13 @@ export default function BacktestPanel() {
 
           {/* Closed Positions */}
           {result.closed_positions.length > 0 && (
-            <div className="rounded-lg border border-[#1a1d21] bg-[#0d0f11] p-4">
-              <h3 className="mb-3 text-sm font-medium text-[#e8e9ea]">
+            <div className="rounded-lg border border-border bg-bg-secondary p-4">
+              <h3 className="mb-3 text-sm font-medium text-text-primary">
                 Settled Positions ({result.closed_positions.length})
               </h3>
               <div className="max-h-64 overflow-y-auto">
                 <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-[#0d0f11] text-[#9ca3af]">
+                  <thead className="sticky top-0 bg-bg-secondary text-text-secondary">
                     <tr>
                       <th className="pb-2 text-left font-medium">Ticker</th>
                       <th className="pb-2 text-left font-medium">Venue</th>
@@ -628,9 +628,9 @@ export default function BacktestPanel() {
                       <th className="pb-2 text-left font-medium">Category</th>
                     </tr>
                   </thead>
-                  <tbody className="text-[#c0c5cb]">
+                  <tbody className="text-text-mono">
                     {result.closed_positions.map((c, i) => (
-                      <tr key={i} className="border-t border-[#1a1d21]/50">
+                      <tr key={i} className="border-t border-border/50">
                         <td className="py-1.5 font-mono">{c.ticker.substring(0, 20)}</td>
                         <td className="py-1.5">{c.venue}</td>
                         <td className="py-1.5">{c.side}</td>
@@ -646,8 +646,8 @@ export default function BacktestPanel() {
                           <span
                             className="rounded px-1.5 py-0.5 text-[10px] font-medium"
                             style={{
-                              backgroundColor: `${CATEGORY_COLORS[c.category] ?? "#6b7280"}20`,
-                              color: CATEGORY_COLORS[c.category] ?? "#6b7280",
+                              backgroundColor: `${CATEGORY_COLORS[c.category] ?? "var(--text-secondary)"}20`,
+                              color: CATEGORY_COLORS[c.category] ?? "var(--text-secondary)",
                             }}
                           >
                             {c.category}
@@ -662,11 +662,11 @@ export default function BacktestPanel() {
           )}
 
           {/* Config Used */}
-          <div className="rounded-lg border border-[#1a1d21] bg-[#0d0f11] p-4">
-            <h3 className="mb-2 text-sm font-medium text-[#e8e9ea]">
+          <div className="rounded-lg border border-border bg-bg-secondary p-4">
+            <h3 className="mb-2 text-sm font-medium text-text-primary">
               Configuration Used
             </h3>
-            <pre className="overflow-x-auto text-[10px] text-[#6b7280]">
+            <pre className="overflow-x-auto text-[10px] text-text-secondary">
               {JSON.stringify(result.config_snapshot, null, 2)}
             </pre>
           </div>
@@ -675,8 +675,8 @@ export default function BacktestPanel() {
 
       {/* Empty state */}
       {!result && !loading && !error && (
-        <div className="rounded-lg border border-[#1a1d21] bg-[#0d0f11] p-12 text-center">
-          <p className="text-sm text-[#9ca3af]">
+        <div className="rounded-lg border border-border bg-bg-secondary p-12 text-center">
+          <p className="text-sm text-text-secondary">
             Configure parameters above and click &quot;Run Backtest&quot; to replay
             historical data through the pipeline.
           </p>

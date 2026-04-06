@@ -19,7 +19,7 @@ export default function ResetPasswordForm() {
   }
 
   return (
-    <div className="card-panel card-accent rounded-xl p-8">
+    <div className="hud-panel rounded-xl p-8">
       <form action={handleSubmit} className="space-y-6">
         {error && (
           <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
@@ -30,7 +30,7 @@ export default function ResetPasswordForm() {
         <div>
           <label
             htmlFor="password"
-            className="block text-sm font-medium mb-2 text-[#e8e9ea]"
+            className="block text-sm font-medium mb-2 text-text-primary"
           >
             New password
           </label>
@@ -41,7 +41,7 @@ export default function ResetPasswordForm() {
             autoComplete="new-password"
             required
             minLength={8}
-            className="w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors"
+            className="w-full rounded-lg bg-bg-elevated border border-border px-4 py-3 text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-text-primary/20 focus:border-text-primary/40 transition-colors"
             placeholder="At least 8 characters"
           />
         </div>
@@ -49,7 +49,7 @@ export default function ResetPasswordForm() {
         <div>
           <label
             htmlFor="confirmPassword"
-            className="block text-sm font-medium mb-2 text-[#e8e9ea]"
+            className="block text-sm font-medium mb-2 text-text-primary"
           >
             Confirm new password
           </label>
@@ -60,7 +60,7 @@ export default function ResetPasswordForm() {
             autoComplete="new-password"
             required
             minLength={8}
-            className="w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors"
+            className="w-full rounded-lg bg-bg-elevated border border-border px-4 py-3 text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-text-primary/20 focus:border-text-primary/40 transition-colors"
             placeholder="Confirm your password"
           />
         </div>
@@ -68,7 +68,7 @@ export default function ResetPasswordForm() {
         <button
           type="submit"
           disabled={isPending}
-          className="w-full btn-sheen btn-pill bg-[#e8e9ea] px-6 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb] disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full btn-sheen btn-pill bg-text-primary px-6 py-3 font-medium text-bg-primary transition-colors hover:bg-text-mono disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isPending ? "Updating..." : "Update password"}
         </button>

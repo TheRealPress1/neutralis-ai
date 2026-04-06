@@ -12,7 +12,7 @@ import {
 } from "@/app/actions/api-keys";
 
 const INPUT_CLASS =
-  "w-full rounded-lg bg-[#060810] border border-border px-4 py-3 text-text-primary font-mono placeholder:text-text-secondary focus:outline-none focus:border-neon-blue/50 focus:shadow-[0_0_8px_rgba(0,212,255,0.1)] transition-all text-sm";
+  "w-full rounded-lg bg-bg-primary border border-border px-4 py-3 text-text-primary font-mono placeholder:text-text-secondary focus:outline-none focus:border-neon-blue/50 focus:shadow-[0_0_8px_rgba(0,212,255,0.1)] transition-all text-sm";
 
 interface StoredKey {
   id: number;
@@ -214,7 +214,7 @@ export default function ApiKeyManager() {
       )}
 
       {success && (
-        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-neon-green">
+        <div className="rounded-lg bg-neon-green/10 border border-neon-green/20 px-4 py-3 text-sm text-neon-green">
           {success}
         </div>
       )}
@@ -227,7 +227,7 @@ export default function ApiKeyManager() {
             <span
               className={`text-xs font-medium rounded-full px-2.5 py-0.5 border ${
                 kalshiKey.is_valid
-                  ? "text-neon-green bg-emerald-500/10 border-emerald-500/20"
+                  ? "text-neon-green bg-neon-green/10 border-neon-green/20"
                   : "text-amber-400 bg-amber-500/10 border-amber-500/20"
               }`}
             >
@@ -364,7 +364,7 @@ export default function ApiKeyManager() {
             <span
               className={`text-xs font-medium rounded-full px-2.5 py-0.5 border ${
                 polyUSKey.is_valid
-                  ? "text-neon-green bg-emerald-500/10 border-emerald-500/20"
+                  ? "text-neon-green bg-neon-green/10 border-neon-green/20"
                   : "text-amber-400 bg-amber-500/10 border-amber-500/20"
               }`}
             >

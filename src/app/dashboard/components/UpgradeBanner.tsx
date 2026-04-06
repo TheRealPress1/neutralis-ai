@@ -17,11 +17,11 @@ export default function UpgradeBanner({
   requiredTier,
 }: UpgradeBannerProps) {
   return (
-    <div className="relative rounded-xl border border-[#22262d] bg-[#0e1117] p-8">
+    <div className="relative rounded-xl border border-border bg-bg-secondary p-8">
       <div className="flex flex-col items-center text-center py-6">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1a1d21] border border-[#22262d] mb-4">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bg-elevated border border-border mb-4">
           <svg
-            className="h-6 w-6 text-[#9ca3af]"
+            className="h-6 w-6 text-text-secondary"
             fill="none"
             viewBox="0 0 24 24"
             strokeWidth={1.5}
@@ -34,15 +34,15 @@ export default function UpgradeBanner({
             />
           </svg>
         </div>
-        <h3 className="text-lg font-medium text-[#eceef0]">
+        <h3 className="text-lg font-medium text-text-primary">
           {feature} requires {TIER_LABELS[requiredTier]}
         </h3>
-        <p className="mt-2 max-w-sm text-sm text-[#9ca3af]">
+        <p className="mt-2 max-w-sm text-sm text-text-secondary">
           Upgrade to the {TIER_LABELS[requiredTier]} plan to unlock {feature.toLowerCase()}.
         </p>
         <Link
           href="/pricing"
-          className="mt-5 rounded-lg bg-[#e8e9ea] px-6 py-2.5 text-sm font-medium text-[#050608] hover:bg-[#c0c5cb] transition-colors"
+          className="mt-5 rounded-lg bg-text-primary px-6 py-2.5 text-sm font-medium text-bg-primary hover:bg-text-mono transition-colors"
         >
           View plans
         </Link>

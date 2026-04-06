@@ -12,8 +12,8 @@ function fmt(n: number, d = 2) {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-[#1a1d21] bg-[#0a0d10] px-4 py-3">
-      <span className="text-[10px] uppercase tracking-wider text-[#9ca3af]">{label}</span>
+    <div className="flex flex-col gap-1 rounded-lg border border-border bg-bg-primary px-4 py-3">
+      <span className="text-[10px] uppercase tracking-wider text-text-secondary">{label}</span>
       <span className="text-lg font-semibold tabular-nums">{value}</span>
     </div>
   );

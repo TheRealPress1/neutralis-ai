@@ -16,7 +16,7 @@ function timeAgo(iso: string) {
 
 function ConfidenceBadge({ score }: { score: number }) {
   let color = "text-red-400 bg-red-400/10";
-  if (score >= 60) color = "text-emerald-400 bg-emerald-400/10";
+  if (score >= 60) color = "text-neon-green bg-neon-green/10";
   else if (score >= 35) color = "text-amber-400 bg-amber-400/10";
 
   return (
@@ -45,7 +45,7 @@ function SelectionBadge({ signal }: { signal: EnrichedSignal }) {
   if (signal.verdict === null) return null;
   if (signal.selected) {
     return (
-      <span className="rounded bg-emerald-400/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+      <span className="rounded bg-neon-green/10 px-1.5 py-0.5 text-[10px] font-medium text-neon-green">
         SELECTED
       </span>
     );
@@ -70,11 +70,11 @@ function RegimeBanner({ regime }: { regime: RegimeState }) {
     <div
       className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium ${
         isNormal
-          ? "border-emerald-400/20 bg-emerald-400/5 text-emerald-400"
+          ? "border-neon-green/20 bg-neon-green/5 text-neon-green"
           : "border-amber-400/20 bg-amber-400/5 text-amber-400"
       }`}
     >
-      <span className={`h-2 w-2 rounded-full ${isNormal ? "bg-emerald-400" : "bg-amber-400"}`} />
+      <span className={`h-2 w-2 rounded-full ${isNormal ? "bg-neon-green" : "bg-amber-400"}`} />
       {isNormal ? "NORMAL" : "RISK OFF"}
     </div>
   );
@@ -82,17 +82,17 @@ function RegimeBanner({ regime }: { regime: RegimeState }) {
 
 function GuardDetails({ results }: { results: GuardResult[] }) {
   return (
-    <div className="mt-2 space-y-1 rounded border border-[#1a1d21] bg-[#050608] p-3">
+    <div className="mt-2 space-y-1 rounded border border-border bg-bg-primary p-3">
       {results.map((g, i) => (
         <div key={i} className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-2">
-            <span className={g.passed ? "text-emerald-400" : "text-red-400"}>
+            <span className={g.passed ? "text-neon-green" : "text-red-400"}>
               {g.passed ? "\u2713" : "\u2717"}
             </span>
-            <span className="text-[#9ca3af]">{g.guard_name}</span>
+            <span className="text-text-secondary">{g.guard_name}</span>
           </div>
           {g.value !== null && g.threshold !== null && (
-            <span className="font-mono text-[#9ca3af]">
+            <span className="font-mono text-text-secondary">
               {Number(g.value ?? 0).toFixed(2)} / {Number(g.threshold ?? 0).toFixed(2)}
             </span>
           )}
@@ -151,21 +151,21 @@ export default function SignalFeed({ refreshKey }: { refreshKey: number }) {
   }, [loadData]);
 
   return (
-    <div className="card-panel rounded-xl">
+    <div className="hud-panel rounded-xl">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[#1a1d21] px-5 py-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
+      <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-text-secondary">
           Live Signals
         </h2>
         <RegimeBanner regime={regime} />
       </div>
 
       {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-[#1a1d21] px-5 py-3">
+      <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-3">
         <select
           value={filterType}
           onChange={(e) => setFilterType(e.target.value as FilterType)}
-          className="rounded border border-[#1a1d21] bg-[#0a0d10] px-2 py-1 text-xs text-[#e8e9ea]"
+          className="rounded border border-border bg-bg-primary px-2 py-1 text-xs text-text-primary"
         >
           <option value="all">All Types</option>
           <option value="complement_arb">Complement</option>
@@ -175,7 +175,7 @@ export default function SignalFeed({ refreshKey }: { refreshKey: number }) {
         <select
           value={filterVerdict}
           onChange={(e) => setFilterVerdict(e.target.value as FilterVerdict)}
-          className="rounded border border-[#1a1d21] bg-[#0a0d10] px-2 py-1 text-xs text-[#e8e9ea]"
+          className="rounded border border-border bg-bg-primary px-2 py-1 text-xs text-text-primary"
         >
           <option value="all">All Verdicts</option>
           <option value="pass">Pass</option>
@@ -183,7 +183,7 @@ export default function SignalFeed({ refreshKey }: { refreshKey: number }) {
         </select>
 
         <div className="flex items-center gap-2">
-          <label className="text-xs text-[#9ca3af]">Min conf:</label>
+          <label className="text-xs text-text-secondary">Min conf:</label>
           <input
             type="range"
             min={0}
@@ -193,7 +193,7 @@ export default function SignalFeed({ refreshKey }: { refreshKey: number }) {
             onChange={(e) => setMinConfidence(Number(e.target.value))}
             className="h-1 w-20 accent-blue-400"
           />
-          <span className="min-w-[2rem] text-xs tabular-nums text-[#9ca3af]">
+          <span className="min-w-[2rem] text-xs tabular-nums text-text-secondary">
             {minConfidence}
           </span>
         </div>
@@ -204,11 +204,11 @@ export default function SignalFeed({ refreshKey }: { refreshKey: number }) {
         {loading ? (
           <div className="space-y-3 p-5">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-14 animate-pulse rounded bg-[#0a0d10]" />
+              <div key={i} className="h-14 animate-pulse rounded bg-bg-primary" />
             ))}
           </div>
         ) : signals.length === 0 ? (
-          <p className="px-5 py-10 text-center text-[#9ca3af]">
+          <p className="px-5 py-10 text-center text-text-secondary">
             No signals match filters
           </p>
         ) : (
@@ -216,7 +216,7 @@ export default function SignalFeed({ refreshKey }: { refreshKey: number }) {
             {signals.map((s) => {
               const expanded = expandedId === s.id;
               return (
-                <li key={s.id} className="border-t border-[#1a1d21] px-5 py-3">
+                <li key={s.id} className="border-t border-border px-5 py-3">
                   <button
                     onClick={() => setExpandedId(expanded ? null : s.id)}
                     className="flex w-full items-start gap-3 text-left"
@@ -229,11 +229,11 @@ export default function SignalFeed({ refreshKey }: { refreshKey: number }) {
                         <TypeBadge type={s.signal_type} />
                         <span className="truncate font-mono text-xs">{s.ticker}</span>
                         <SelectionBadge signal={s} />
-                        <span className="ml-auto text-xs text-[#9ca3af]">
+                        <span className="ml-auto text-xs text-text-secondary">
                           {expanded ? "\u25b2" : "\u25bc"}
                         </span>
                       </div>
-                      <div className="mt-1 flex flex-wrap gap-3 text-xs text-[#9ca3af]">
+                      <div className="mt-1 flex flex-wrap gap-3 text-xs text-text-secondary">
                         <span>Edge {s.edge_pct.toFixed(1)}%</span>
                         <span>ROI/d {s.roi_per_day.toFixed(2)}%</span>
                         <span>Conf {s.confidence_score}</span>
@@ -246,12 +246,12 @@ export default function SignalFeed({ refreshKey }: { refreshKey: number }) {
                     <div className="mt-2 space-y-2">
                       {/* Allocation reasons */}
                       {s.allocation_reasons && s.allocation_reasons.length > 0 && (
-                        <div className="rounded border border-[#1a1d21] bg-[#050608] p-3">
-                          <p className="mb-1 text-[10px] font-semibold uppercase text-[#9ca3af]">
+                        <div className="rounded border border-border bg-bg-primary p-3">
+                          <p className="mb-1 text-[10px] font-semibold uppercase text-text-secondary">
                             Allocation
                           </p>
                           {s.allocation_reasons.map((r, i) => (
-                            <p key={i} className="text-xs text-[#9ca3af]">{r}</p>
+                            <p key={i} className="text-xs text-text-secondary">{r}</p>
                           ))}
                         </div>
                       )}

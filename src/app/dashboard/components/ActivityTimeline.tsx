@@ -106,7 +106,7 @@ function OrderSummary({ d }: { d: Order }) {
       <span className="text-[10px] text-text-secondary">{d.side.replace("_", " ")}</span>
       <span className="text-[10px] text-text-secondary">${fmt(d.requested_size_dollars)}</span>
       {d.venue && (
-        <span className="rounded border border-border px-1 py-0.5 text-[10px] text-[#3b3f46]">{d.venue}</span>
+        <span className="rounded border border-border px-1 py-0.5 text-[10px] text-border">{d.venue}</span>
       )}
     </div>
   );
@@ -177,7 +177,7 @@ function ItemDetail({ item }: { item: TimelineItem }) {
             <span className={`h-1.5 w-1.5 rounded-full ${g.passed ? "bg-neon-green" : "bg-neon-red"}`} />
             <span className="text-text-secondary">{g.guard_name}</span>
             {g.value !== null && g.threshold !== null && (
-              <span className="font-mono text-[#3b3f46]">
+              <span className="font-mono text-border">
                 {g.value.toFixed(2)} / {g.threshold.toFixed(2)}
               </span>
             )}
@@ -262,7 +262,7 @@ export default function ActivityTimeline({ refreshKey }: { refreshKey: number })
                 >
                   {k === "all" ? "All" : style?.label ?? k}
                   {count > 0 && (
-                    <span className="ml-1 text-[#3b3f46]">{count}</span>
+                    <span className="ml-1 text-border">{count}</span>
                   )}
                 </button>
               );
@@ -281,11 +281,11 @@ export default function ActivityTimeline({ refreshKey }: { refreshKey: number })
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mb-3 h-10 w-10 text-[#3b3f46]">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mb-3 h-10 w-10 text-border">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
             </svg>
             <p className="text-sm text-text-secondary">No activity yet</p>
-            <p className="mt-1 text-xs text-[#3b3f46]">
+            <p className="mt-1 text-xs text-border">
               Signals, decisions, orders, and positions will appear here as the engine runs.
             </p>
           </div>
@@ -300,7 +300,7 @@ export default function ActivityTimeline({ refreshKey }: { refreshKey: number })
                 <li key={key} className="border-t border-border">
                   <button
                     onClick={() => setExpandedId(expanded ? null : key)}
-                    className="flex w-full items-start gap-3 px-6 py-3 text-left transition-colors hover:bg-[#0a0d10]/60"
+                    className="flex w-full items-start gap-3 px-6 py-3 text-left transition-colors hover:bg-bg-primary/60"
                   >
                     {/* Timeline dot */}
                     <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${style.dot}`} />
@@ -311,10 +311,10 @@ export default function ActivityTimeline({ refreshKey }: { refreshKey: number })
                         <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${style.bg} ${style.text}`}>
                           {style.label}
                         </span>
-                        <span className="ml-auto shrink-0 text-xs text-[#3b3f46]">
+                        <span className="ml-auto shrink-0 text-xs text-border">
                           {timeAgo(item.ts)}
                         </span>
-                        <span className="shrink-0 text-[10px] text-[#3b3f46]">
+                        <span className="shrink-0 text-[10px] text-border">
                           {expanded ? "\u25B2" : "\u25BC"}
                         </span>
                       </div>

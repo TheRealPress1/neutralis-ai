@@ -74,8 +74,8 @@ export default async function PricingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#050608] text-[#e8e9ea]">
-      <nav className="fixed top-0 z-50 w-full border-b border-[#22262d] bg-[#08090c]/80 backdrop-blur-lg">
+    <div className="min-h-screen bg-bg-primary text-text-primary">
+      <nav className="fixed top-0 z-50 w-full border-b border-border bg-bg-primary/80 backdrop-blur-lg">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <Link
             href="/"
@@ -94,7 +94,7 @@ export default async function PricingPage() {
           <h1 className="text-3xl font-[family-name:var(--font-italiana)] font-normal uppercase tracking-[0.08em] sm:text-4xl">
             Choose your plan
           </h1>
-          <p className="mt-4 text-[#9ca3af] max-w-lg mx-auto">
+          <p className="mt-4 text-text-secondary max-w-lg mx-auto">
             Start free with signal monitoring. Upgrade to unlock automated
             execution and lower fees.
           </p>

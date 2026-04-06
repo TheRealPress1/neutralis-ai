@@ -20,7 +20,7 @@ export default function SignupForm() {
   }
 
   return (
-    <div className="card-panel card-accent rounded-xl p-8">
+    <div className="hud-panel rounded-xl p-8">
       <form action={handleSubmit} className="space-y-6">
         {error && (
           <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
@@ -32,7 +32,7 @@ export default function SignupForm() {
           <div>
             <label
               htmlFor="firstName"
-              className="block text-sm font-medium mb-2 text-[#e8e9ea]"
+              className="block text-sm font-medium mb-2 text-text-primary"
             >
               First Name
             </label>
@@ -42,14 +42,14 @@ export default function SignupForm() {
               type="text"
               autoComplete="given-name"
               required
-              className="w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors"
+              className="w-full rounded-lg bg-bg-elevated border border-border px-4 py-3 text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-text-primary/20 focus:border-text-primary/40 transition-colors"
               placeholder="First name"
             />
           </div>
           <div>
             <label
               htmlFor="lastName"
-              className="block text-sm font-medium mb-2 text-[#e8e9ea]"
+              className="block text-sm font-medium mb-2 text-text-primary"
             >
               Last Name
             </label>
@@ -59,7 +59,7 @@ export default function SignupForm() {
               type="text"
               autoComplete="family-name"
               required
-              className="w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors"
+              className="w-full rounded-lg bg-bg-elevated border border-border px-4 py-3 text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-text-primary/20 focus:border-text-primary/40 transition-colors"
               placeholder="Last name"
             />
           </div>
@@ -68,7 +68,7 @@ export default function SignupForm() {
         <div>
           <label
             htmlFor="email"
-            className="block text-sm font-medium mb-2 text-[#e8e9ea]"
+            className="block text-sm font-medium mb-2 text-text-primary"
           >
             Email
           </label>
@@ -78,7 +78,7 @@ export default function SignupForm() {
             type="email"
             autoComplete="email"
             required
-            className="w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors"
+            className="w-full rounded-lg bg-bg-elevated border border-border px-4 py-3 text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-text-primary/20 focus:border-text-primary/40 transition-colors"
             placeholder="you@example.com"
           />
         </div>
@@ -86,7 +86,7 @@ export default function SignupForm() {
         <div>
           <label
             htmlFor="password"
-            className="block text-sm font-medium mb-2 text-[#e8e9ea]"
+            className="block text-sm font-medium mb-2 text-text-primary"
           >
             Password
           </label>
@@ -97,7 +97,7 @@ export default function SignupForm() {
             autoComplete="new-password"
             required
             minLength={8}
-            className="w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors"
+            className="w-full rounded-lg bg-bg-elevated border border-border px-4 py-3 text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-text-primary/20 focus:border-text-primary/40 transition-colors"
             placeholder="At least 8 characters"
           />
         </div>
@@ -105,7 +105,7 @@ export default function SignupForm() {
         <div>
           <label
             htmlFor="confirmPassword"
-            className="block text-sm font-medium mb-2 text-[#e8e9ea]"
+            className="block text-sm font-medium mb-2 text-text-primary"
           >
             Confirm Password
           </label>
@@ -116,7 +116,7 @@ export default function SignupForm() {
             autoComplete="new-password"
             required
             minLength={8}
-            className="w-full rounded-lg bg-[#1a1d21] border border-[#2a2d31] px-4 py-3 text-[#e8e9ea] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#e8e9ea]/20 focus:border-[#e8e9ea]/40 transition-colors"
+            className="w-full rounded-lg bg-bg-elevated border border-border px-4 py-3 text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-text-primary/20 focus:border-text-primary/40 transition-colors"
             placeholder="Confirm your password"
           />
         </div>
@@ -124,16 +124,16 @@ export default function SignupForm() {
         <button
           type="submit"
           disabled={isPending}
-          className="w-full btn-sheen btn-pill bg-[#e8e9ea] px-6 py-3 font-medium text-[#050608] transition-colors hover:bg-[#c0c5cb] disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full btn-sheen btn-pill bg-text-primary px-6 py-3 font-medium text-bg-primary transition-colors hover:bg-text-mono disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isPending ? "Creating account..." : "Create account"}
         </button>
 
-        <div className="text-center text-sm text-[#9ca3af]">
+        <div className="text-center text-sm text-text-secondary">
           Already have an account?{" "}
           <Link
             href="/login"
-            className="text-[#e8e9ea] hover:text-white transition-colors font-medium"
+            className="text-text-primary hover:text-white transition-colors font-medium"
           >
             Sign in
           </Link>

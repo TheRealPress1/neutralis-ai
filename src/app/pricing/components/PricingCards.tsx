@@ -48,7 +48,7 @@ export default function PricingCards({
   return (
     <>
       {isSuccess && (
-        <div className="mb-8 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-5 py-4 text-center text-sm text-emerald-400">
+        <div className="mb-8 rounded-lg border border-neon-green/20 bg-neon-green/10 px-5 py-4 text-center text-sm text-neon-green">
           Subscription activated! Your plan has been upgraded.
         </div>
       )}
@@ -63,36 +63,36 @@ export default function PricingCards({
               key={plan.id}
               className={`relative rounded-xl border p-6 flex flex-col ${
                 isPopular
-                  ? "border-[#e8e9ea]/30 bg-[#0e1117]"
-                  : "border-[#22262d] bg-[#0e1117]"
+                  ? "border-text-primary/30 bg-bg-secondary"
+                  : "border-border bg-bg-secondary"
               }`}
             >
               {isPopular && (
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#e8e9ea] px-3 py-0.5 text-xs font-medium text-[#050608]">
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-text-primary px-3 py-0.5 text-xs font-medium text-bg-primary">
                   Most popular
                 </span>
               )}
 
               <div className="mb-5">
-                <h3 className="text-lg font-medium text-[#eceef0]">
+                <h3 className="text-lg font-medium text-text-primary">
                   {plan.name}
                 </h3>
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className="text-3xl font-semibold text-[#eceef0]">
+                  <span className="text-3xl font-semibold text-text-primary">
                     {plan.price}
                   </span>
                   {plan.period && (
-                    <span className="text-sm text-[#9ca3af]">{plan.period}</span>
+                    <span className="text-sm text-text-secondary">{plan.period}</span>
                   )}
                 </div>
-                <p className="mt-2 text-sm text-[#9ca3af]">{plan.description}</p>
+                <p className="mt-2 text-sm text-text-secondary">{plan.description}</p>
               </div>
 
               <ul className="space-y-2.5 mb-6 flex-1">
                 {plan.features.map((f) => (
                   <li key={f} className="flex items-start gap-2 text-sm">
                     <svg
-                      className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400"
+                      className="mt-0.5 h-4 w-4 shrink-0 text-neon-green"
                       fill="none"
                       viewBox="0 0 24 24"
                       strokeWidth={2}
@@ -104,13 +104,13 @@ export default function PricingCards({
                         d="m4.5 12.75 6 6 9-13.5"
                       />
                     </svg>
-                    <span className="text-[#c8ccd2]">{f}</span>
+                    <span className="text-text-mono">{f}</span>
                   </li>
                 ))}
               </ul>
 
               {isCurrent ? (
-                <div className="rounded-lg border border-[#22262d] bg-[#1a1d21] px-4 py-2.5 text-center text-sm font-medium text-[#9ca3af]">
+                <div className="rounded-lg border border-border bg-bg-elevated px-4 py-2.5 text-center text-sm font-medium text-text-secondary">
                   Current plan
                 </div>
               ) : (
@@ -119,8 +119,8 @@ export default function PricingCards({
                   disabled={isPending}
                   className={`rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
                     isPopular
-                      ? "bg-[#e8e9ea] text-[#050608] hover:bg-[#c0c5cb]"
-                      : "border border-[#22262d] bg-[#1a1d21] text-[#e8e9ea] hover:border-[#e8e9ea]/30 hover:bg-[#22262d]"
+                      ? "bg-text-primary text-bg-primary hover:bg-text-mono"
+                      : "border border-border bg-bg-elevated text-text-primary hover:border-text-primary/30 hover:bg-border"
                   }`}
                 >
                   {isPending ? "Updating..." : plan.cta}
