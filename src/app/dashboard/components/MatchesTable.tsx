@@ -15,9 +15,9 @@ function timeAgo(iso: string) {
 }
 
 function confidenceColor(c: number) {
-  if (c >= 0.8) return "text-emerald-400";
-  if (c >= 0.6) return "text-amber-400";
-  return "text-red-400";
+  if (c >= 0.8) return "text-neon-green";
+  if (c >= 0.6) return "text-neon-amber";
+  return "text-neon-red";
 }
 
 export default function MatchesTable({ refreshKey }: { refreshKey: number }) {
@@ -42,7 +42,7 @@ export default function MatchesTable({ refreshKey }: { refreshKey: number }) {
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="text-xs uppercase tracking-wider text-[#9ca3af]">
+            <tr className="text-xs uppercase tracking-wider text-text-secondary">
               <th className="px-5 py-3 font-medium">Kalshi Market</th>
               <th className="px-5 py-3 font-medium">Polymarket Market</th>
               <th className="px-5 py-3 font-medium text-right">Confidence</th>
@@ -52,10 +52,10 @@ export default function MatchesTable({ refreshKey }: { refreshKey: number }) {
           <tbody>
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <tr key={i} className="border-t border-[#1a1d21]">
+                <tr key={i} className="border-t border-border">
                   {Array.from({ length: 4 }).map((_, j) => (
                     <td key={j} className="px-5 py-3">
-                      <div className="h-4 w-24 animate-pulse rounded bg-[#12151a]" />
+                      <div className="h-4 w-24 skeleton" />
                     </td>
                   ))}
                 </tr>
@@ -67,7 +67,7 @@ export default function MatchesTable({ refreshKey }: { refreshKey: number }) {
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mb-3 h-10 w-10 text-[#2a2d31]">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
                     </svg>
-                    <p className="text-sm text-[#9ca3af]">No cross-platform matches found</p>
+                    <p className="text-sm text-text-secondary">No cross-platform matches found</p>
                     <p className="mt-1 text-xs text-[#3b3f46]">
                       Matched market pairs across Kalshi and Polymarket will appear here.
                     </p>
@@ -76,12 +76,12 @@ export default function MatchesTable({ refreshKey }: { refreshKey: number }) {
               </tr>
             ) : (
               matches.map((m) => (
-                <tr key={m.id} className="border-t border-[#1a1d21] transition-colors hover:bg-white/[0.02]">
+                <tr key={m.id} className="border-t border-border transition-colors hover:bg-white/[0.02]">
                   <td className="max-w-[260px] px-5 py-3">
                     <p className="truncate text-sm" title={m.kalshi_title}>
                       {m.kalshi_title}
                     </p>
-                    <p className="mt-0.5 truncate font-mono text-[10px] text-[#9ca3af]">
+                    <p className="mt-0.5 truncate font-mono text-[10px] text-text-secondary">
                       {m.kalshi_ticker}
                     </p>
                   </td>
@@ -89,7 +89,7 @@ export default function MatchesTable({ refreshKey }: { refreshKey: number }) {
                     <p className="truncate text-sm" title={m.polymarket_question}>
                       {m.polymarket_question}
                     </p>
-                    <p className="mt-0.5 truncate font-mono text-[10px] text-[#9ca3af]">
+                    <p className="mt-0.5 truncate font-mono text-[10px] text-text-secondary">
                       {m.polymarket_id.slice(0, 16)}...
                     </p>
                   </td>
@@ -100,7 +100,7 @@ export default function MatchesTable({ refreshKey }: { refreshKey: number }) {
                   >
                     {(m.match_confidence * 100).toFixed(1)}%
                   </td>
-                  <td className="px-5 py-3 text-right text-xs text-[#9ca3af]">
+                  <td className="px-5 py-3 text-right text-xs text-text-secondary">
                     {timeAgo(m.created_at)}
                   </td>
                 </tr>
@@ -112,4 +112,3 @@ export default function MatchesTable({ refreshKey }: { refreshKey: number }) {
     </div>
   );
 }
-

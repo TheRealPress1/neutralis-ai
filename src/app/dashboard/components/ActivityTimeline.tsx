@@ -16,11 +16,11 @@ const KINDS = ["all", "signal", "decision", "order", "fill", "position"] as cons
 type KindFilter = (typeof KINDS)[number];
 
 const KIND_STYLE: Record<string, { bg: string; text: string; dot: string; label: string }> = {
-  signal:   { bg: "bg-blue-400/10",    text: "text-blue-400",    dot: "bg-blue-400",    label: "Signal" },
-  decision: { bg: "bg-amber-400/10",   text: "text-amber-400",   dot: "bg-amber-400",   label: "Decision" },
-  order:    { bg: "bg-emerald-400/10", text: "text-emerald-400", dot: "bg-emerald-400", label: "Order" },
-  fill:     { bg: "bg-green-400/10",   text: "text-green-400",   dot: "bg-green-400",   label: "Fill" },
-  position: { bg: "bg-purple-400/10",  text: "text-purple-400",  dot: "bg-purple-400",  label: "Position" },
+  signal:   { bg: "bg-neon-blue/10",   text: "text-neon-blue",   dot: "bg-neon-blue",   label: "Signal" },
+  decision: { bg: "bg-neon-amber/10",  text: "text-neon-amber",  dot: "bg-neon-amber",  label: "Decision" },
+  order:    { bg: "bg-neon-green/10",  text: "text-neon-green",  dot: "bg-neon-green",  label: "Order" },
+  fill:     { bg: "bg-neon-green/10",  text: "text-neon-green",  dot: "bg-neon-green",  label: "Fill" },
+  position: { bg: "bg-neon-purple/10", text: "text-neon-purple", dot: "bg-neon-purple", label: "Position" },
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -62,13 +62,13 @@ function buildTimeline(
 function SignalSummary({ d }: { d: Signal }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span className="font-mono text-xs text-[#e8e9ea]">{d.ticker}</span>
-      <span className="text-[10px] text-[#9ca3af]">{d.signal_type.replace(/_/g, " ")}</span>
+      <span className="font-mono text-xs text-text-primary">{d.ticker}</span>
+      <span className="text-[10px] text-text-secondary">{d.signal_type.replace(/_/g, " ")}</span>
       {d.edge_pct > 0 && (
-        <span className="text-[10px] text-blue-400">edge {d.edge_pct.toFixed(1)}%</span>
+        <span className="text-[10px] text-neon-blue">edge {d.edge_pct.toFixed(1)}%</span>
       )}
       {d.net_edge > 0 && (
-        <span className="text-[10px] text-[#9ca3af]">net ${fmt(d.net_edge, 4)}</span>
+        <span className="text-[10px] text-text-secondary">net ${fmt(d.net_edge, 4)}</span>
       )}
     </div>
   );
@@ -78,35 +78,35 @@ function DecisionSummary({ d }: { d: Decision }) {
   const pass = d.verdict === "pass";
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span className="font-mono text-xs text-[#e8e9ea]">{d.ticker}</span>
+      <span className="font-mono text-xs text-text-primary">{d.ticker}</span>
       <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-        pass ? "bg-emerald-400/10 text-emerald-400" : "bg-red-400/10 text-red-400"
+        pass ? "bg-neon-green/10 text-neon-green" : "bg-neon-red/10 text-neon-red"
       }`}>
         {d.verdict.toUpperCase()}
       </span>
       {d.edge_pct > 0 && (
-        <span className="text-[10px] text-[#9ca3af]">edge {d.edge_pct.toFixed(1)}%</span>
+        <span className="text-[10px] text-text-secondary">edge {d.edge_pct.toFixed(1)}%</span>
       )}
       {pass && d.suggested_size > 0 && (
-        <span className="text-[10px] text-emerald-400">${fmt(d.suggested_size)}</span>
+        <span className="text-[10px] text-neon-green">${fmt(d.suggested_size)}</span>
       )}
     </div>
   );
 }
 
 function OrderSummary({ d }: { d: Order }) {
-  const statusColor = d.status === "filled" ? "text-emerald-400"
-    : d.status === "partial" ? "text-amber-400"
-    : d.status === "cancelled" ? "text-red-400"
-    : "text-[#9ca3af]";
+  const statusColor = d.status === "filled" ? "text-neon-green"
+    : d.status === "partial" ? "text-neon-amber"
+    : d.status === "cancelled" ? "text-neon-red"
+    : "text-text-secondary";
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span className="font-mono text-xs text-[#e8e9ea]">{d.ticker}</span>
+      <span className="font-mono text-xs text-text-primary">{d.ticker}</span>
       <span className={`text-[10px] font-medium ${statusColor}`}>{d.status}</span>
-      <span className="text-[10px] text-[#9ca3af]">{d.side.replace("_", " ")}</span>
-      <span className="text-[10px] text-[#9ca3af]">${fmt(d.requested_size_dollars)}</span>
+      <span className="text-[10px] text-text-secondary">{d.side.replace("_", " ")}</span>
+      <span className="text-[10px] text-text-secondary">${fmt(d.requested_size_dollars)}</span>
       {d.venue && (
-        <span className="rounded border border-[#1a1d21] px-1 py-0.5 text-[10px] text-[#3b3f46]">{d.venue}</span>
+        <span className="rounded border border-border px-1 py-0.5 text-[10px] text-[#3b3f46]">{d.venue}</span>
       )}
     </div>
   );
@@ -115,12 +115,12 @@ function OrderSummary({ d }: { d: Order }) {
 function FillSummary({ d }: { d: Fill }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      {d.ticker && <span className="font-mono text-xs text-[#e8e9ea]">{d.ticker}</span>}
-      <span className="text-[10px] text-[#9ca3af]">qty {d.quantity}</span>
-      <span className="text-[10px] text-[#9ca3af]">@ {(d.price * 100).toFixed(0)}c</span>
-      <span className="text-[10px] text-[#9ca3af]">${fmt(d.size_dollars)}</span>
+      {d.ticker && <span className="font-mono text-xs text-text-primary">{d.ticker}</span>}
+      <span className="text-[10px] text-text-secondary">qty {d.quantity}</span>
+      <span className="text-[10px] text-text-secondary">@ {(d.price * 100).toFixed(0)}c</span>
+      <span className="text-[10px] text-text-secondary">${fmt(d.size_dollars)}</span>
       {d.slippage_bps !== 0 && (
-        <span className={`text-[10px] ${d.slippage_bps > 0 ? "text-red-400" : "text-emerald-400"}`}>
+        <span className={`text-[10px] ${d.slippage_bps > 0 ? "text-neon-red" : "text-neon-green"}`}>
           {d.slippage_bps > 0 ? "+" : ""}{d.slippage_bps.toFixed(0)}bps slip
         </span>
       )}
@@ -132,21 +132,21 @@ function PositionSummary({ d }: { d: Position }) {
   const closed = d.status === "closed";
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span className="font-mono text-xs text-[#e8e9ea]">{d.ticker}</span>
+      <span className="font-mono text-xs text-text-primary">{d.ticker}</span>
       <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-        closed ? "bg-[#1a1d21] text-[#9ca3af]" : "bg-purple-400/10 text-purple-400"
+        closed ? "bg-bg-elevated text-text-secondary" : "bg-neon-purple/10 text-neon-purple"
       }`}>
         {closed ? "CLOSED" : "OPEN"}
       </span>
-      <span className="text-[10px] text-[#9ca3af]">{d.side.replace("_", " ")}</span>
-      <span className="text-[10px] text-[#9ca3af]">${fmt(d.size_dollars)}</span>
+      <span className="text-[10px] text-text-secondary">{d.side.replace("_", " ")}</span>
+      <span className="text-[10px] text-text-secondary">${fmt(d.size_dollars)}</span>
       {closed && (
-        <span className={`text-[10px] font-medium ${d.realized_pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+        <span className={`text-[10px] font-medium ${d.realized_pnl >= 0 ? "text-neon-green" : "text-neon-red"}`}>
           P&L ${d.realized_pnl >= 0 ? "+" : ""}{fmt(d.realized_pnl)}
         </span>
       )}
       {!closed && d.unrealized_pnl !== 0 && (
-        <span className={`text-[10px] ${d.unrealized_pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+        <span className={`text-[10px] ${d.unrealized_pnl >= 0 ? "text-neon-green" : "text-neon-red"}`}>
           unreal ${d.unrealized_pnl >= 0 ? "+" : ""}{fmt(d.unrealized_pnl)}
         </span>
       )}
@@ -174,15 +174,15 @@ function ItemDetail({ item }: { item: TimelineItem }) {
       <div className="mt-2 space-y-1">
         {d.guard_results.map((g, i) => (
           <div key={i} className="flex items-center gap-2 text-[11px]">
-            <span className={`h-1.5 w-1.5 rounded-full ${g.passed ? "bg-emerald-400" : "bg-red-400"}`} />
-            <span className="text-[#9ca3af]">{g.guard_name}</span>
+            <span className={`h-1.5 w-1.5 rounded-full ${g.passed ? "bg-neon-green" : "bg-neon-red"}`} />
+            <span className="text-text-secondary">{g.guard_name}</span>
             {g.value !== null && g.threshold !== null && (
               <span className="font-mono text-[#3b3f46]">
                 {g.value.toFixed(2)} / {g.threshold.toFixed(2)}
               </span>
             )}
             {!g.passed && g.reason && (
-              <span className="text-red-400/70">{g.reason}</span>
+              <span className="text-neon-red/70">{g.reason}</span>
             )}
           </div>
         ))}
@@ -191,7 +191,7 @@ function ItemDetail({ item }: { item: TimelineItem }) {
   }
   // For other kinds, show raw data
   return (
-    <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-[#9ca3af]">
+    <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-text-secondary">
       {JSON.stringify(item.data, null, 2)}
     </pre>
   );
@@ -239,11 +239,11 @@ export default function ActivityTimeline({ refreshKey }: { refreshKey: number })
   }
 
   return (
-    <div className="card-panel rounded-xl">
+    <div className="hud-panel rounded-xl">
       {/* Header + Filter */}
-      <div className="border-b border-[#1a1d21] px-6 py-4">
+      <div className="border-b border-border px-6 py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="font-[family-name:var(--font-italiana)] text-xl font-normal tracking-[0.04em]">
+          <h2 className="font-mono text-xs font-medium uppercase tracking-[0.15em] text-text-secondary">
             Activity
           </h2>
           <div className="flex items-center gap-1">
@@ -256,8 +256,8 @@ export default function ActivityTimeline({ refreshKey }: { refreshKey: number })
                   onClick={() => setFilter(k)}
                   className={`rounded-md px-2.5 py-1 text-[10px] font-medium transition-colors ${
                     filter === k
-                      ? "bg-[#1a1d21] text-[#e8e9ea]"
-                      : "text-[#9ca3af] hover:text-[#e8e9ea]"
+                      ? "bg-bg-elevated text-text-primary"
+                      : "text-text-secondary hover:text-text-primary"
                   }`}
                 >
                   {k === "all" ? "All" : style?.label ?? k}
@@ -276,7 +276,7 @@ export default function ActivityTimeline({ refreshKey }: { refreshKey: number })
         {loading ? (
           <div className="space-y-3 p-6">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="h-12 animate-pulse rounded bg-[#12151a]" />
+              <div key={i} className="h-12 skeleton" />
             ))}
           </div>
         ) : filtered.length === 0 ? (
@@ -284,7 +284,7 @@ export default function ActivityTimeline({ refreshKey }: { refreshKey: number })
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mb-3 h-10 w-10 text-[#3b3f46]">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
             </svg>
-            <p className="text-sm text-[#9ca3af]">No activity yet</p>
+            <p className="text-sm text-text-secondary">No activity yet</p>
             <p className="mt-1 text-xs text-[#3b3f46]">
               Signals, decisions, orders, and positions will appear here as the engine runs.
             </p>
@@ -297,7 +297,7 @@ export default function ActivityTimeline({ refreshKey }: { refreshKey: number })
               const expanded = expandedId === key;
 
               return (
-                <li key={key} className="border-t border-[#1a1d21]">
+                <li key={key} className="border-t border-border">
                   <button
                     onClick={() => setExpandedId(expanded ? null : key)}
                     className="flex w-full items-start gap-3 px-6 py-3 text-left transition-colors hover:bg-[#0a0d10]/60"
@@ -328,7 +328,7 @@ export default function ActivityTimeline({ refreshKey }: { refreshKey: number })
 
                   {/* Expanded details */}
                   {expanded && (
-                    <div className="mx-6 mb-3 rounded border border-[#1a1d21] bg-[#050608] p-3">
+                    <div className="mx-6 mb-3 rounded border border-border bg-bg-primary p-3">
                       <ItemDetail item={item} />
                     </div>
                   )}

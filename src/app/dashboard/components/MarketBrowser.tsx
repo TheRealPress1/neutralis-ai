@@ -41,24 +41,24 @@ export default function MarketBrowser({ refreshKey }: { refreshKey: number }) {
   }, [searchInput]);
 
   return (
-    <div className="card-panel rounded-xl">
+    <div className="hud-panel rounded-xl">
       {/* Header + Sub-tabs + Filters */}
-      <div className="border-b border-[#1a1d21] px-6 py-4">
+      <div className="border-b border-border px-6 py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <h2 className="font-[family-name:var(--font-italiana)] text-xl font-normal tracking-[0.04em]">
+            <h2 className="font-mono text-sm font-medium uppercase tracking-[0.1em] text-text-primary">
               Markets
             </h2>
             {/* Sub-tab toggle */}
-            <div className="flex items-center rounded-lg border border-[#1a1d21] p-0.5">
+            <div className="flex items-center rounded-lg border border-border p-0.5">
               {SUB_TABS.map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setSubTab(tab)}
                   className={`rounded-md px-3 py-1 text-[11px] font-medium transition-colors ${
                     subTab === tab
-                      ? "bg-[#1a1d21] text-[#e8e9ea]"
-                      : "text-[#9ca3af] hover:text-[#e8e9ea]"
+                      ? "bg-neon-green/10 text-neon-green"
+                      : "text-text-secondary hover:text-text-primary"
                   }`}
                 >
                   {tab === "browse" ? "Browse" : "Pairs"}
@@ -73,7 +73,7 @@ export default function MarketBrowser({ refreshKey }: { refreshKey: number }) {
                 placeholder="Search markets..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="h-8 w-56 rounded-md border border-[#1a1d21] bg-[#050608] px-3 text-xs text-[#e8e9ea] placeholder-[#3b3f46] outline-none focus:border-[#c0c5cb]"
+                className="w-full rounded-lg bg-[#060810] border border-border px-4 py-2.5 text-sm text-text-primary font-mono placeholder:text-text-secondary focus:outline-none focus:border-neon-blue/50 focus:shadow-[0_0_8px_rgba(0,212,255,0.1)] transition-all"
               />
               <div className="flex items-center gap-1">
                 {VENUES.map((v) => (
@@ -82,8 +82,8 @@ export default function MarketBrowser({ refreshKey }: { refreshKey: number }) {
                     onClick={() => setVenue(v)}
                     className={`rounded-md px-2.5 py-1 text-[10px] font-medium transition-colors ${
                       venue === v
-                        ? "bg-[#1a1d21] text-[#e8e9ea]"
-                        : "text-[#9ca3af] hover:text-[#e8e9ea]"
+                        ? "border-neon-blue/30 bg-neon-blue/10 text-neon-blue"
+                        : "border-border text-text-secondary hover:text-text-primary"
                     }`}
                   >
                     {v === "all" ? "All" : v === "polymarket" ? "Polymarket" : "Kalshi"}
@@ -100,7 +100,7 @@ export default function MarketBrowser({ refreshKey }: { refreshKey: number }) {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-[#1a1d21] text-[10px] font-medium uppercase tracking-wider text-[#9ca3af]">
+              <tr className="border-b border-border text-[10px] font-medium uppercase tracking-wider text-text-secondary">
                 <th className="px-6 py-3">Market</th>
                 <th className="px-3 py-3">Venue</th>
                 <th className="px-3 py-3 text-right">Yes Bid</th>
@@ -132,26 +132,26 @@ export default function MarketBrowser({ refreshKey }: { refreshKey: number }) {
                       key={`${m.venue}-${m.ticker}`}
                       className="border-b border-[#0a0d10] transition-colors hover:bg-[#0a0d10]"
                     >
-                      <td className="max-w-xs truncate px-6 py-2.5 text-[#e8e9ea]">
+                      <td className="max-w-xs truncate px-6 py-2.5 text-text-primary">
                         <span className="font-medium">{m.title}</span>
                         <span className="ml-2 text-[10px] text-[#3b3f46]">{m.ticker}</span>
                       </td>
                       <td className="px-3 py-2.5">
                         <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                           m.venue === "kalshi"
-                            ? "bg-blue-400/10 text-blue-400"
-                            : "bg-purple-400/10 text-purple-400"
+                            ? "bg-neon-blue/10 text-neon-blue"
+                            : "bg-neon-purple/10 text-neon-purple"
                         }`}>
                           {m.venue === "kalshi" ? "Kalshi" : "Polymarket"}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-right font-mono text-[#e8e9ea]">
+                      <td className="px-3 py-2.5 text-right font-mono text-text-primary">
                         {priceFmt(m.yes_bid)}
                       </td>
-                      <td className="px-3 py-2.5 text-right font-mono text-[#e8e9ea]">
+                      <td className="px-3 py-2.5 text-right font-mono text-text-primary">
                         {priceFmt(m.yes_ask)}
                       </td>
-                      <td className="px-3 py-2.5 text-right font-mono text-[#9ca3af]">
+                      <td className="px-3 py-2.5 text-right font-mono text-text-secondary">
                         {spread !== "-" ? `${spread}c` : "-"}
                       </td>
                       <td className="px-3 py-2.5 text-right text-[#3b3f46]">
