@@ -1,33 +1,14 @@
 import Navbar from "./navbar";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import MeshGradient from "./components/landing/MeshGradient";
+import TypewriterHero from "./components/landing/TypewriterHero";
+import MarketTicker from "./components/landing/MarketTicker";
 import StatsTicker from "./components/landing/StatsTicker";
 import PipelineViz from "./components/landing/PipelineViz";
+import FeaturesGrid from "./components/landing/FeaturesGrid";
 import TerminalDemo from "./components/landing/TerminalDemo";
-
-const features = [
-  {
-    title: "Cross-platform arb detection",
-    description:
-      "Continuously scans Kalshi and Polymarket for mispriced probabilities. When the same event trades at different prices across venues, Neutralis finds the edge.",
-  },
-  {
-    title: "Automated execution",
-    description:
-      "Trades execute in milliseconds via real-time WebSocket connections. Maker orders minimize fees, and cross-platform hedging locks in arbitrage spreads.",
-  },
-  {
-    title: "Portfolio risk management",
-    description:
-      "Position sizing, exposure limits, stop-losses, and daily drawdown caps — all enforced automatically before every trade.",
-  },
-  {
-    title: "Real-time dashboard",
-    description:
-      "Monitor positions, signals, and execution from a live dashboard. Every decision is logged with full guard transparency.",
-  },
-];
-
+import ScrollReveal from "./components/landing/ScrollReveal";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -39,20 +20,24 @@ export default async function Home() {
       <Navbar />
 
       {/* ── Hero ───────────────────────────────────────────── */}
-      <div className="hero-glow flex min-h-screen items-center justify-center">
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden">
+        {/* Animated mesh gradient background */}
+        <MeshGradient />
+
         <header className="relative z-10 mx-auto max-w-3xl px-6 text-center">
-          <span className="font-mono text-xs font-medium uppercase tracking-[0.25em] text-neon-green/80">
-            Neutralis AI
+          <span className="inline-flex items-center gap-2 rounded-full border border-neon-green/20 bg-neon-green/5 px-4 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-neon-green/90">
+            <span className="h-1.5 w-1.5 rounded-full bg-neon-green neon-pulse" />
+            Engine Active
           </span>
-          <h1 className="mt-4 text-center">
-            <span className="block font-[family-name:var(--font-italiana)] text-4xl font-normal uppercase leading-[1.15] tracking-[0.14em] text-text-primary sm:text-5xl">
+          <h1 className="mt-8 text-center">
+            <span className="block font-[family-name:var(--font-italiana)] text-4xl font-normal uppercase leading-[1.15] tracking-[0.14em] text-text-primary sm:text-5xl md:text-6xl">
               The modern hedge fund for
             </span>
-            <span className="headline-italic block font-[family-name:var(--font-cormorant)] text-5xl font-medium italic uppercase leading-[1.1] tracking-[0.08em] text-text-primary sm:text-6xl">
-              Prediction Markets
+            <span className="headline-italic mt-2 block font-[family-name:var(--font-cormorant)] text-5xl font-medium italic uppercase leading-[1.1] tracking-[0.08em] text-text-primary sm:text-6xl md:text-7xl">
+              <TypewriterHero />
             </span>
           </h1>
-          <p className="mx-auto mt-6 max-w-xl text-lg text-text-secondary">
+          <p className="mx-auto mt-8 max-w-xl text-base leading-relaxed text-text-secondary sm:text-lg">
             Neutralis detects arbitrage across prediction markets in real time,
             evaluates every trade through quantitative risk guards, and executes
             automatically — so you capture edge without watching&nbsp;screens.
@@ -60,19 +45,33 @@ export default async function Home() {
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Link
               href={signedIn ? "/dashboard" : "/signup"}
-              className="btn-sheen btn-pill inline-flex border border-neon-green/50 bg-neon-green/10 px-7 py-3 font-mono font-medium text-neon-green transition-all hover:bg-neon-green/20 hover:shadow-[0_0_20px_rgba(0,255,170,0.15)]"
+              className="btn-sheen btn-pill group relative inline-flex items-center gap-2 border border-neon-green/50 bg-neon-green/10 px-8 py-3.5 font-mono font-medium text-neon-green transition-all hover:bg-neon-green/20 hover:shadow-[0_0_30px_rgba(0,255,170,0.15)]"
             >
               {signedIn ? "Go to Dashboard" : "Get started"}
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 transition-transform group-hover:translate-x-0.5">
+                <path fillRule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L10.23 5.29a.75.75 0 1 1 1.04-1.08l5.5 5.25a.75.75 0 0 1 0 1.08l-5.5 5.25a.75.75 0 1 1-1.04-1.08l4.158-3.96H3.75A.75.75 0 0 1 3 10Z" clipRule="evenodd" />
+              </svg>
             </Link>
             <Link
               href="/docs"
-              className="btn-pill inline-flex border border-border px-7 py-3 font-mono font-medium text-text-secondary transition-all hover:border-neon-blue/30 hover:text-neon-blue"
+              className="btn-pill inline-flex border border-border px-8 py-3.5 font-mono font-medium text-text-secondary transition-all hover:border-neon-blue/30 hover:text-neon-blue"
             >
               How it works
             </Link>
           </div>
+
+          {/* Social proof line */}
+          <p className="mt-12 font-mono text-[10px] uppercase tracking-[0.2em] text-text-secondary/60">
+            Scanning 3,200+ markets across Kalshi & Polymarket
+          </p>
         </header>
+
+        {/* Bottom gradient fade */}
+        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-bg-primary to-transparent" />
       </div>
+
+      {/* ── Market Ticker ──────────────────────────────────── */}
+      <MarketTicker />
 
       {/* ── Stats Ticker ────────────────────────────────────── */}
       <StatsTicker />
@@ -81,29 +80,41 @@ export default async function Home() {
       <PipelineViz />
 
       {/* ── Features ──────────────────────────────────────── */}
-      <section id="features" className="border-t border-border py-24">
-        <div className="mx-auto max-w-5xl px-6">
-          <h2 className="text-center text-3xl font-[family-name:var(--font-italiana)] font-normal uppercase tracking-[0.08em] text-text-primary">
-            What you get
-          </h2>
-          <div className="mt-14 grid gap-8 md:grid-cols-2">
-            {features.map((f) => (
-              <article
-                key={f.title}
-                className="hud-panel p-8"
-              >
-                <h3 className="font-[family-name:var(--font-cormorant)] text-xl font-medium text-text-primary">{f.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-text-secondary">
-                  {f.description}
-                </p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
+      <FeaturesGrid />
 
       {/* ── Terminal Demo ───────────────────────────────────── */}
       <TerminalDemo />
+
+      {/* ── CTA Section ─────────────────────────────────────── */}
+      <section className="border-t border-border py-24">
+        <div className="mx-auto max-w-2xl px-6 text-center">
+          <ScrollReveal>
+            <p className="font-mono text-[10px] font-medium uppercase tracking-[0.3em] text-neon-green/60">
+              Ready to trade
+            </p>
+            <h2 className="mt-4 font-[family-name:var(--font-italiana)] text-3xl font-normal uppercase tracking-[0.08em] text-text-primary sm:text-4xl">
+              Start capturing edge
+            </h2>
+            <p className="mt-4 text-text-secondary">
+              Connect your exchange accounts and let Neutralis handle the rest. No code, no manual monitoring, no missed opportunities.
+            </p>
+            <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+              <Link
+                href={signedIn ? "/dashboard" : "/signup"}
+                className="btn-sheen btn-pill inline-flex items-center gap-2 border border-neon-green/50 bg-neon-green/10 px-8 py-3.5 font-mono font-medium text-neon-green transition-all hover:bg-neon-green/20 hover:shadow-[0_0_30px_rgba(0,255,170,0.15)]"
+              >
+                {signedIn ? "Open Dashboard" : "Create account"}
+              </Link>
+              <Link
+                href="/pricing"
+                className="btn-pill inline-flex border border-border px-8 py-3.5 font-mono font-medium text-text-secondary transition-all hover:border-neon-blue/30 hover:text-neon-blue"
+              >
+                View pricing
+              </Link>
+            </div>
+          </ScrollReveal>
+        </div>
+      </section>
 
       {/* ── Footer ──────────────────────────────────────────── */}
       <footer className="border-t border-border py-10">
@@ -116,26 +127,17 @@ export default async function Home() {
           </span>
           <ul className="flex gap-6">
             <li>
-              <Link
-                href="/docs"
-                className="transition-colors hover:text-text-primary"
-              >
+              <Link href="/docs" className="transition-colors hover:text-text-primary">
                 How it Works
               </Link>
             </li>
             <li>
-              <a
-                href="#"
-                className="transition-colors hover:text-text-primary"
-              >
+              <a href="#" className="transition-colors hover:text-text-primary">
                 Privacy
               </a>
             </li>
             <li>
-              <a
-                href="mailto:neutralis.ai@gmail.com"
-                className="transition-colors hover:text-text-primary"
-              >
+              <a href="mailto:neutralis.ai@gmail.com" className="transition-colors hover:text-text-primary">
                 Contact
               </a>
             </li>
