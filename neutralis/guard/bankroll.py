@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 
 # ── Proportional scaling constants ──────────────────────────────────────────
 # These define what fraction of total bankroll each limit represents.
-_TOTAL_EXPOSURE_PCT = 0.90     # Use up to 90% of bankroll
+_TOTAL_EXPOSURE_PCT = 0.95     # Use up to 95% of bankroll
 _MAX_POSITION_PCT = 0.25       # 25% per position
 _MAX_EVENT_EXPOSURE_PCT = 0.40 # 40% per event
 _MAX_TICKER_EXPOSURE_PCT = 0.25
