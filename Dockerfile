@@ -29,6 +29,14 @@ CMD ["python", "scripts/event_daemon.py"]
 # ── Frontend target (Next.js, port 3000) ──
 FROM node:22-slim AS frontend-build
 WORKDIR /app
+
+# NEXT_PUBLIC_* vars must be present at build time (baked into client JS bundle)
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+ARG NEXT_PUBLIC_SITE_URL
+ARG NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+
 COPY package.json package-lock.json* ./
 RUN npm ci
 COPY src/ src/
