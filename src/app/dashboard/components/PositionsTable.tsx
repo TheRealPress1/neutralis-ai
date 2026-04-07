@@ -24,10 +24,7 @@ function timeAgo(iso: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-/** Parse raw exchange tickers into readable event names.
- *  Kalshi:  "KXEPLGAME-26APR12SUNTOT-TOT" → "Sunderland vs Tottenham · TOT"
- *  Poly US: "atc-epl-sun-tot-2026-04-12-tot" → "Sunderland vs Tottenham · TOT"
- */
+/** Parse raw exchange tickers into readable event names. */
 const TEAM_NAMES: Record<string, string> = {
   ARS: "Arsenal", AVL: "Aston Villa", BOU: "Bournemouth", BRE: "Brentford",
   BRI: "Brighton", BUR: "Burnley", CHE: "Chelsea", CRY: "Crystal Palace",
@@ -37,12 +34,13 @@ const TEAM_NAMES: Record<string, string> = {
   NAP: "Napoli", ACM: "AC Milan", INT: "Inter Milan", JUV: "Juventus",
   ATA: "Atalanta", LAZ: "Lazio", ROM: "Roma", FIO: "Fiorentina",
   BOL: "Bologna", CAG: "Cagliari", CRE: "Cremonese", COM: "Como",
+  UDI: "Udinese", MIL: "AC Milan",
   SCH: "Schalke", WOB: "Wolfsburg", SGE: "Frankfurt", FRE: "Freiburg",
-  BOR: "Dortmund", BAY: "Bayern",
+  BOR: "Dortmund", BAY: "Bayern", MAI: "Mainz",
+  HUM: "Humbert", SIN: "Sinner", MED: "Medvedev", BER: "Berrettini",
 };
 
 function parseTicker(raw: string): { event: string; outcome: string; date: string } {
-  // Kalshi format: KXEPLGAME-26APR12SUNTOT-TOT
   const kalshiMatch = raw.match(/^KX\w+-(\d{2})([A-Z]{3})(\d{2})([A-Z]{3,})([A-Z]{3,})-([A-Z]+)$/);
   if (kalshiMatch) {
     const [, , month, day, team1, team2, outcome] = kalshiMatch;
@@ -51,23 +49,21 @@ function parseTicker(raw: string): { event: string; outcome: string; date: strin
     return { event: `${t1} vs ${t2}`, outcome, date: `${month} ${day}` };
   }
 
-  // Polymarket US format: atc-epl-sun-tot-2026-04-12-tot or atc-sea-ata-juv-2026-04-11-juv
-  const polyMatch = raw.match(/^atc-\w+-(\w+)-(\w+)-\d{4}-(\d{2})-(\d{2})-(\w+)$/);
+  const polyMatch = raw.match(/^(?:atc|aec)-\w+-(\w+)-(\w+)-\d{4}-(\d{2})-(\d{2})-?(\w*)$/);
   if (polyMatch) {
     const [, t1raw, t2raw, mo, day, outcomeRaw] = polyMatch;
     const t1 = TEAM_NAMES[t1raw.toUpperCase()] ?? t1raw.toUpperCase();
     const t2 = TEAM_NAMES[t2raw.toUpperCase()] ?? t2raw.toUpperCase();
     const months = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    return { event: `${t1} vs ${t2}`, outcome: outcomeRaw.toUpperCase(), date: `${months[parseInt(mo)]} ${day}` };
+    return { event: `${t1} vs ${t2}`, outcome: (outcomeRaw || "").toUpperCase(), date: `${months[parseInt(mo)]} ${day}` };
   }
 
-  // Fallback: show raw but truncated
   return { event: raw.length > 30 ? raw.slice(0, 28) + "..." : raw, outcome: "", date: "" };
 }
 
 function venueBadge(venue: string) {
   const isKalshi = venue === "kalshi";
-  const label = venue === "polymarket_us" ? "POLY US" : venue.toUpperCase();
+  const label = venue === "polymarket_us" ? "POLY US" : venue === "polymarket" ? "POLY" : venue.toUpperCase();
   return (
     <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${
       isKalshi
@@ -77,6 +73,196 @@ function venueBadge(venue: string) {
       <span className={`h-1.5 w-1.5 rounded-full ${isKalshi ? "bg-neon-blue" : "bg-neon-purple"}`} />
       {label}
     </span>
+  );
+}
+
+function sideBadge(side: string) {
+  const isYes = side === "buy_yes";
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+      isYes ? "bg-neon-green/10 text-neon-green" : "bg-neon-red/10 text-neon-red"
+    }`}>
+      {isYes ? "YES" : "NO"}
+    </span>
+  );
+}
+
+/** A group of positions that belong to the same arb trade (same event_ticker). */
+interface ArbTrade {
+  eventTicker: string;
+  event: string;
+  date: string;
+  legs: Position[];
+  totalSize: number;
+  totalPnl: number;
+  venues: string[];
+  isMultiLeg: boolean;
+  openedAt: string;
+}
+
+function groupIntoArbTrades(positions: Position[]): ArbTrade[] {
+  const groups = new Map<string, Position[]>();
+  for (const p of positions) {
+    const key = p.event_ticker || p.ticker;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(p);
+  }
+
+  const trades: ArbTrade[] = [];
+  for (const [eventTicker, legs] of groups) {
+    const parsed = parseTicker(legs[0].ticker);
+    const venues = [...new Set(legs.map((l) => l.venue))];
+    const totalSize = legs.reduce((s, l) => s + l.size_dollars, 0);
+    const totalPnl = legs.reduce((s, l) => s + (l.unrealized_pnl || l.realized_pnl || 0), 0);
+    const earliest = legs.reduce((min, l) => (l.opened_at < min ? l.opened_at : min), legs[0].opened_at);
+
+    trades.push({
+      eventTicker,
+      event: parsed.event,
+      date: parsed.date,
+      legs,
+      totalSize,
+      totalPnl,
+      venues,
+      isMultiLeg: legs.length > 1 || venues.length > 1,
+      openedAt: earliest,
+    });
+  }
+
+  return trades.sort((a, b) => new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime());
+}
+
+function tradeTypeBadge(trade: ArbTrade) {
+  if (trade.venues.length >= 2) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded border border-neon-green/20 bg-neon-green/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-neon-green">
+        <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+        </svg>
+        Cross-Platform Arb
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded border border-neon-amber/20 bg-neon-amber/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-neon-amber">
+      Directional
+    </span>
+  );
+}
+
+function ArbTradeCard({ trade, isOpen }: { trade: ArbTrade; isOpen: boolean }) {
+  const [expanded, setExpanded] = useState(trade.legs.length <= 3);
+
+  return (
+    <div className="border-b border-border last:border-b-0">
+      {/* Trade header */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-white/[0.02]"
+      >
+        {/* Expand chevron */}
+        <svg
+          className={`h-4 w-4 shrink-0 text-text-secondary transition-transform ${expanded ? "rotate-90" : ""}`}
+          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="m9 5 7 7-7 7" />
+        </svg>
+
+        {/* Event name + date */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2.5">
+            <span className="truncate text-sm font-medium text-text-primary">{trade.event}</span>
+            {trade.date && (
+              <span className="shrink-0 text-xs text-text-secondary">{trade.date}</span>
+            )}
+          </div>
+          <div className="mt-1 flex items-center gap-2">
+            {tradeTypeBadge(trade)}
+            <span className="text-[10px] text-text-secondary">
+              {trade.legs.length} leg{trade.legs.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+        </div>
+
+        {/* Venues */}
+        <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
+          {trade.venues.map((v) => (
+            <span key={v}>{venueBadge(v)}</span>
+          ))}
+        </div>
+
+        {/* Total size */}
+        <div className="shrink-0 text-right">
+          <div className="font-mono text-sm text-text-primary">${fmt(trade.totalSize)}</div>
+          <div className="text-[10px] text-text-secondary">invested</div>
+        </div>
+
+        {/* P&L */}
+        <div className="shrink-0 text-right" style={{ minWidth: 72 }}>
+          <div className={`font-mono text-sm ${pnlColor(trade.totalPnl)}`}>
+            {trade.totalPnl >= 0 ? "+" : ""}${fmt(trade.totalPnl)}
+          </div>
+          <div className="text-[10px] text-text-secondary">
+            {isOpen ? "unreal." : "realized"}
+          </div>
+        </div>
+
+        {/* Time */}
+        {isOpen && (
+          <div className="hidden shrink-0 text-right text-xs text-text-secondary sm:block" style={{ minWidth: 56 }}>
+            {timeAgo(trade.openedAt)}
+          </div>
+        )}
+      </button>
+
+      {/* Expanded legs */}
+      {expanded && (
+        <div className="border-t border-border/50 bg-white/[0.01]">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wider text-text-secondary/60">
+                <th className="py-2 pl-14 pr-3 font-medium">Venue</th>
+                <th className="px-3 py-2 font-medium">Side</th>
+                <th className="px-3 py-2 font-medium">Outcome</th>
+                <th className="px-3 py-2 text-right font-medium">Entry</th>
+                <th className="px-3 py-2 text-right font-medium">Qty</th>
+                <th className="px-3 py-2 text-right font-medium">Size</th>
+                <th className="px-3 py-2 text-right font-medium">P&L</th>
+              </tr>
+            </thead>
+            <tbody>
+              {trade.legs.map((leg) => {
+                const parsed = parseTicker(leg.ticker);
+                const pnl = isOpen ? leg.unrealized_pnl : leg.realized_pnl;
+                return (
+                  <tr key={leg.id} className="border-t border-border/30 transition-colors hover:bg-white/[0.02]">
+                    <td className="py-2.5 pl-14 pr-3">{venueBadge(leg.venue)}</td>
+                    <td className="px-3 py-2.5">{sideBadge(leg.side)}</td>
+                    <td className="px-3 py-2.5">
+                      <span className="font-mono text-[11px] font-medium text-neon-amber">
+                        {parsed.outcome || "—"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono text-text-primary">
+                      ${fmt(leg.entry_price, 2)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono text-text-secondary">
+                      {fmt(leg.quantity, 1)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono text-text-primary">
+                      ${fmt(leg.size_dollars)}
+                    </td>
+                    <td className={`px-3 py-2.5 text-right font-mono ${pnlColor(pnl)}`}>
+                      {pnl >= 0 ? "+" : ""}${fmt(pnl)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -103,7 +289,8 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
   }, [refreshKey, tab]);
 
   const isOpen = tab === "open";
-  const isEmpty = positions.length === 0;
+  const trades = groupIntoArbTrades(positions);
+  const isEmpty = trades.length === 0;
 
   return (
     <div className="hud-panel">
@@ -129,103 +316,60 @@ export default function PositionsTable({ refreshKey }: { refreshKey: number }) {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="text-xs uppercase tracking-wider text-text-secondary">
-              <th className="px-5 py-3 font-medium">Event</th>
-              <th className="px-5 py-3 font-medium">Venue</th>
-              <th className="px-5 py-3 font-medium">Side</th>
-              <th className="px-5 py-3 font-medium text-right">Entry</th>
-              <th className="px-5 py-3 font-medium text-right">Size</th>
-              <th className="px-5 py-3 font-medium text-right">
-                {isOpen ? "Unreal. P&L" : "Real. P&L"}
-              </th>
-              {isOpen && (
-                <th className="px-5 py-3 font-medium text-right">Opened</th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <tr key={i} className="border-t border-border">
-                  {Array.from({ length: isOpen ? 7 : 6 }).map((_, j) => (
-                    <td key={j} className="px-5 py-3">
-                      <div className="h-4 w-16 skeleton" />
-                    </td>
-                  ))}
-                </tr>
-              ))
-            ) : isEmpty ? (
-              <tr>
-                <td colSpan={isOpen ? 7 : 6} className="px-5 py-16 text-center">
-                  <div className="flex flex-col items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mb-3 h-10 w-10 text-border">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6" />
-                    </svg>
-                    <p className="font-mono text-sm text-text-secondary">No {tab} positions</p>
-                    <p className="mt-1 text-xs text-border">
-                      {isOpen
-                        ? "Positions will appear here when the bot opens trades."
-                        : "Closed positions will be shown here."}
-                    </p>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              positions.map((p) => {
-                const pnl = isOpen ? p.unrealized_pnl : p.realized_pnl;
-                return (
-                  <tr key={p.id} className="border-t border-border transition-colors hover:bg-white/[0.02]">
-                    <td className="px-5 py-3">
-                      {(() => {
-                        const parsed = parseTicker(p.ticker);
-                        return (
-                          <div className="flex flex-col">
-                            <span className="text-xs text-text-primary">{parsed.event}</span>
-                            <span className="flex items-center gap-1.5 text-[10px] text-text-secondary">
-                              {parsed.outcome && (
-                                <span className="font-mono font-medium text-neon-amber">{parsed.outcome}</span>
-                              )}
-                              {parsed.date && <span>{parsed.date}</span>}
-                            </span>
-                          </div>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-5 py-3">{venueBadge(p.venue)}</td>
-                    <td className="px-5 py-3">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                        p.side === "buy_yes"
-                          ? "bg-neon-green/10 text-neon-green"
-                          : "bg-neon-red/10 text-neon-red"
-                      }`}>
-                        {p.side === "buy_yes" ? "Yes" : "No"}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-right font-mono">
-                      ${fmt(p.entry_price, 4)}
-                    </td>
-                    <td className="px-5 py-3 text-right font-mono">
-                      ${fmt(p.size_dollars)}
-                    </td>
-                    <td className={`px-5 py-3 text-right font-mono ${pnlColor(pnl)}`}>
-                      {pnl >= 0 ? "+" : ""}${fmt(pnl)}
-                    </td>
-                    {isOpen && (
-                      <td className="px-5 py-3 text-right text-xs text-text-secondary">
-                        {timeAgo(p.opened_at)}
-                      </td>
-                    )}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+      {/* Trade cards */}
+      <div>
+        {loading ? (
+          <div className="space-y-0">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 border-b border-border px-5 py-4">
+                <div className="h-4 w-4 skeleton rounded" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-48 skeleton rounded" />
+                  <div className="h-3 w-24 skeleton rounded" />
+                </div>
+                <div className="h-4 w-16 skeleton rounded" />
+                <div className="h-4 w-16 skeleton rounded" />
+              </div>
+            ))}
+          </div>
+        ) : isEmpty ? (
+          <div className="px-5 py-16 text-center">
+            <div className="flex flex-col items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mb-3 h-10 w-10 text-border">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6" />
+              </svg>
+              <p className="font-mono text-sm text-text-secondary">No {tab} positions</p>
+              <p className="mt-1 text-xs text-border">
+                {isOpen
+                  ? "Positions will appear here when the bot opens trades."
+                  : "Closed positions will be shown here."}
+              </p>
+            </div>
+          </div>
+        ) : (
+          trades.map((trade) => (
+            <ArbTradeCard key={trade.eventTicker} trade={trade} isOpen={isOpen} />
+          ))
+        )}
       </div>
+
+      {/* Summary footer */}
+      {!loading && !isEmpty && (
+        <div className="flex items-center justify-between border-t border-border px-5 py-3">
+          <span className="text-xs text-text-secondary">
+            {trades.length} trade{trades.length !== 1 ? "s" : ""} · {positions.length} leg{positions.length !== 1 ? "s" : ""}
+          </span>
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-text-secondary">
+              Total: <span className="font-mono text-text-primary">${fmt(trades.reduce((s, t) => s + t.totalSize, 0))}</span>
+            </span>
+            <span className={`text-xs font-mono ${pnlColor(trades.reduce((s, t) => s + t.totalPnl, 0))}`}>
+              {trades.reduce((s, t) => s + t.totalPnl, 0) >= 0 ? "+" : ""}
+              ${fmt(trades.reduce((s, t) => s + t.totalPnl, 0))}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
