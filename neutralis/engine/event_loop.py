@@ -1850,9 +1850,9 @@ class EventEngine:
             return
 
         try:
-            with PostgresStorage(settings.db) as storage:
+            _user_id = os.environ.get("NEUTRALIS_USER_ID")
+            with PostgresStorage(settings.db, user_id=_user_id) as storage:
                 fee_accruer = None
-                _user_id = os.environ.get("NEUTRALIS_USER_ID")
                 if settings.performance_fees.enabled and _user_id:
                     fee_accruer = PerformanceFeeAccruer(
                         storage, settings.performance_fees, user_id=_user_id,
@@ -2577,7 +2577,8 @@ class EventEngine:
 
     def _run_mtm(self) -> None:
         settings = self._state.settings if self._state else load_settings()
-        with PostgresStorage(settings.db) as storage:
+        _user_id = os.environ.get("NEUTRALIS_USER_ID")
+        with PostgresStorage(settings.db, user_id=_user_id) as storage:
             portfolio = PortfolioManager(storage, settings.portfolio)
             marked = portfolio.mark_to_market(settings)
             if marked > 0:
