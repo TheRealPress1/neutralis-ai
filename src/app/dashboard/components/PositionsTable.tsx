@@ -132,6 +132,116 @@ function groupIntoArbTrades(positions: Position[]): ArbTrade[] {
   return trades.sort((a, b) => new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime());
 }
 
+/**
+ * Compute payout for each possible outcome of an arb trade.
+ *
+ * For each leg: if the leg's outcome matches the scenario, the YES side pays $1/contract
+ * and the NO side pays $0. If it doesn't match, YES pays $0 and NO pays $1.
+ */
+interface Scenario {
+  label: string;
+  payout: number;
+  profit: number;
+  profitPct: number;
+}
+
+function computeScenarios(trade: ArbTrade): Scenario[] {
+  // Collect all distinct outcomes from the legs
+  const outcomes = new Set<string>();
+  const legData: { outcome: string; side: "buy_yes" | "buy_no"; quantity: number }[] = [];
+
+  for (const leg of trade.legs) {
+    const parsed = parseTicker(leg.ticker);
+    const outcome = parsed.outcome || "UNKNOWN";
+    outcomes.add(outcome);
+    legData.push({ outcome, side: leg.side, quantity: leg.quantity });
+  }
+
+  // For 3-way soccer matches, add "DRAW" if we have exactly 2 team outcomes
+  const outcomeArr = [...outcomes];
+  if (outcomeArr.length === 2 && trade.event.includes(" vs ")) {
+    // Check if this looks like a soccer match (not tennis)
+    const hasDraw = outcomeArr.some((o) => o === "DRAW" || o === "TIE");
+    if (!hasDraw) {
+      outcomes.add("DRAW");
+    }
+  }
+
+  const scenarios: Scenario[] = [];
+  for (const scenario of outcomes) {
+    let payout = 0;
+    for (const leg of legData) {
+      const outcomeMatches = leg.outcome === scenario;
+      if (leg.side === "buy_yes") {
+        // YES pays $1 if outcome matches, $0 otherwise
+        payout += outcomeMatches ? leg.quantity * 1.0 : 0;
+      } else {
+        // NO pays $1 if outcome does NOT match, $0 if it matches
+        payout += outcomeMatches ? 0 : leg.quantity * 1.0;
+      }
+    }
+    const profit = payout - trade.totalSize;
+    const profitPct = trade.totalSize > 0 ? (profit / trade.totalSize) * 100 : 0;
+    scenarios.push({
+      label: TEAM_NAMES[scenario] || scenario,
+      payout: Math.round(payout * 100) / 100,
+      profit: Math.round(profit * 100) / 100,
+      profitPct: Math.round(profitPct * 10) / 10,
+    });
+  }
+
+  return scenarios.sort((a, b) => b.profit - a.profit);
+}
+
+function ScenarioTable({ trade }: { trade: ArbTrade }) {
+  const scenarios = computeScenarios(trade);
+  if (scenarios.length === 0) return null;
+
+  const allProfit = scenarios.every((s) => s.profit > 0);
+
+  return (
+    <div className="border-t border-border/50 bg-white/[0.015] px-5 py-3">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+          Payout Scenarios
+        </span>
+        {allProfit && (
+          <span className="rounded border border-neon-green/30 bg-neon-green/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-neon-green">
+            All outcomes profitable
+          </span>
+        )}
+      </div>
+      <div className="grid gap-1.5">
+        {scenarios.map((s) => {
+          const isProfit = s.profit > 0;
+          return (
+            <div
+              key={s.label}
+              className={`flex items-center justify-between rounded px-3 py-2 ${
+                isProfit
+                  ? "bg-neon-green/[0.04] ring-1 ring-inset ring-neon-green/10"
+                  : "bg-neon-red/[0.04] ring-1 ring-inset ring-neon-red/10"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-medium ${isProfit ? "text-neon-green" : "text-neon-red"}`}>
+                  {isProfit ? "+" : ""}{fmt(s.profit)}
+                </span>
+                <span className="text-[10px] text-text-secondary">
+                  ({isProfit ? "+" : ""}{fmt(s.profitPct, 1)}%)
+                </span>
+              </div>
+              <span className="text-xs text-text-secondary">
+                if <span className="font-medium text-text-primary">{s.label}</span> wins
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function tradeTypeBadge(trade: ArbTrade) {
   if (trade.venues.length >= 2) {
     return (
@@ -260,6 +370,8 @@ function ArbTradeCard({ trade, isOpen }: { trade: ArbTrade; isOpen: boolean }) {
               })}
             </tbody>
           </table>
+          {/* Payout scenarios for multi-leg arb trades */}
+          {trade.isMultiLeg && <ScenarioTable trade={trade} />}
         </div>
       )}
     </div>
