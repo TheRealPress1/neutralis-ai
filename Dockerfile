@@ -30,12 +30,20 @@ CMD ["python", "scripts/event_daemon.py"]
 FROM node:22-slim AS frontend-build
 WORKDIR /app
 
-COPY .env.production .env.production
 COPY package.json package-lock.json* ./
 RUN npm ci
+COPY .env.production* ./
 COPY src/ src/
 COPY public/ public/
 COPY next.config.ts tsconfig.json postcss.config.mjs ./
+
+# NEXT_PUBLIC_* must be present at build time (inlined into client JS bundle)
+# These are public/client-safe keys, not secrets
+ENV NEXT_PUBLIC_SUPABASE_URL=https://xbiifeqzbxfqpjrpdhjk.supabase.co
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhiaWlmZXF6YnhmcXBqcnBkaGprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2NjUyMzksImV4cCI6MjA4NjI0MTIzOX0.x4qzv0Mj7itwOSMH194Zo-cZu26cClHNc5qoPTPe38A
+ENV NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_51T2FSpPmKg4lJxzMYZfoa4dVfq4NKTystawyLnLjNurj48ohV5MLAc67ltyre9BVh4xIXR8gIUIa7YeLafd9osLM00ibSArWTX
+ENV NEXT_PUBLIC_SITE_URL=https://neutralis.ai
+
 RUN npm run build
 
 FROM node:22-slim AS frontend
