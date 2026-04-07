@@ -3,6 +3,7 @@ node_modules/
 .git/
 .env*
 !.env.example
+!.env.production
 *.pem
 *.key
 __pycache__/
