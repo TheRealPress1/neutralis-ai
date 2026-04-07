@@ -5,6 +5,7 @@
 # Env/secrets (injected at runtime via Railway env vars)
 .env*
 !.env.example
+!.env.production
 *.pem
 *.key
 

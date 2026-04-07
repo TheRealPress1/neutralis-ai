@@ -30,13 +30,7 @@ CMD ["python", "scripts/event_daemon.py"]
 FROM node:22-slim AS frontend-build
 WORKDIR /app
 
-# NEXT_PUBLIC_* vars must be present at build time (baked into client JS bundle)
-ARG NEXT_PUBLIC_SUPABASE_URL
-ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
-ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-ARG NEXT_PUBLIC_SITE_URL
-ARG NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
-
+COPY .env.production .env.production
 COPY package.json package-lock.json* ./
 RUN npm ci
 COPY src/ src/
