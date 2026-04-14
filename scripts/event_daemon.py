@@ -152,44 +152,59 @@ async def main() -> None:
         )
 
     # Load credentials from DB — find the first active user with valid keys
+    # Retry with backoff so the daemon survives while users set up credentials
     kalshi_key_id = ""
     kalshi_pem = ""
     poly_us_key_id = ""
     poly_us_secret = ""
-    try:
-        with PostgresStorage(settings.db) as storage:
-            users = load_active_users(storage)
-            for user in users:
-                uid = str(user["user_id"])
-                creds = load_user_credentials(storage, uid)
-                if creds.kalshi and not kalshi_key_id:
-                    kalshi_key_id = creds.kalshi.api_key_id
-                    kalshi_pem = creds.kalshi.private_key_pem
-                    logger.info(
-                        "Loaded Kalshi credentials from user %s for WS auth",
-                        uid[:8],
-                    )
-                if creds.polymarket and not poly_us_key_id:
-                    poly_us_key_id = creds.polymarket.api_key
-                    poly_us_secret = creds.polymarket.api_secret
-                    logger.info(
-                        "Loaded Polymarket US credentials from user %s",
-                        uid[:8],
-                    )
-                if kalshi_key_id and poly_us_key_id:
-                    break
-    except Exception:
-        logger.warning("Failed to load user credentials from DB", exc_info=True)
+    max_cred_attempts = 30  # ~5 minutes total with 10s interval
+    for cred_attempt in range(1, max_cred_attempts + 1):
+        try:
+            with PostgresStorage(settings.db) as storage:
+                users = load_active_users(storage)
+                for user in users:
+                    uid = str(user["user_id"])
+                    creds = load_user_credentials(storage, uid)
+                    if creds.kalshi and not kalshi_key_id:
+                        kalshi_key_id = creds.kalshi.api_key_id
+                        kalshi_pem = creds.kalshi.private_key_pem
+                        logger.info(
+                            "Loaded Kalshi credentials from user %s for WS auth",
+                            uid[:8],
+                        )
+                    if creds.polymarket and not poly_us_key_id:
+                        poly_us_key_id = creds.polymarket.api_key
+                        poly_us_secret = creds.polymarket.api_secret
+                        logger.info(
+                            "Loaded Polymarket US credentials from user %s",
+                            uid[:8],
+                        )
+                    if kalshi_key_id and poly_us_key_id:
+                        break
+        except Exception:
+            logger.warning("Failed to load user credentials from DB", exc_info=True)
 
-    # Fallback to env vars if no DB credentials
-    if not kalshi_key_id:
-        kalshi_key_id = settings.execution.kalshi_api_key_id
-        logger.info("Using env-var Kalshi credentials for WS auth")
+        # Fallback to env vars if no DB credentials
+        if not kalshi_key_id:
+            kalshi_key_id = settings.execution.kalshi_api_key_id
+            if kalshi_key_id:
+                logger.info("Using env-var Kalshi credentials for WS auth")
+
+        if kalshi_key_id:
+            break
+
+        logger.warning(
+            "No Kalshi credentials found (attempt %d/%d). "
+            "Waiting for a user to save valid Kalshi API keys in the dashboard...",
+            cred_attempt, max_cred_attempts,
+        )
+        await asyncio.sleep(10)
 
     if not kalshi_key_id:
         logger.error(
-            "No Kalshi credentials found (DB or env vars). "
-            "A user must save Kalshi API keys in the dashboard and start automation."
+            "No Kalshi credentials found after %d attempts (DB or env vars). "
+            "A user must save Kalshi API keys in the dashboard and start automation.",
+            max_cred_attempts,
         )
         sys.exit(1)
 

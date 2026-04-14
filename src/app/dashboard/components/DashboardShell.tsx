@@ -15,7 +15,7 @@ import LivePanel from "./LivePanel";
 import MarketBrowser from "./MarketBrowser";
 import AuthNav from "@/app/components/AuthNav";
 import Link from "next/link";
-import { hasAccess, type SubscriptionTier } from "@/lib/subscription";
+import type { SubscriptionTier } from "@/lib/subscription";
 import { useRealtimeDashboard } from "@/hooks/useRealtimeDashboard";
 
 type NavTab = "dashboard" | "live" | "activity" | "markets" | "connections" | "settings" | "founder";
@@ -34,7 +34,6 @@ function secondsAgo(date: Date) {
 }
 
 export default function DashboardShell({
-  initialTier = "free",
   initialIsFounder = false,
   initialHasApiKeys = true,
   initialHasBothVenues = false,
@@ -51,7 +50,6 @@ export default function DashboardShell({
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [elapsed, setElapsed] = useState(0);
-  const tier = initialTier;
   const isFounder = initialIsFounder;
 
   const router = useRouter();
@@ -120,14 +118,6 @@ export default function DashboardShell({
                   )}
                 </button>
               ))}
-              {!hasAccess(tier, "starter") && (
-                <Link
-                  href="/pricing"
-                  className="ml-2 rounded-md border border-neon-green/30 bg-neon-green/10 px-3 py-1.5 text-xs font-mono font-medium uppercase tracking-wider text-neon-green transition-colors hover:bg-neon-green/20"
-                >
-                  Upgrade
-                </Link>
-              )}
 
               {/* External exchange links */}
               <span className="mx-2 h-4 w-px bg-border" />
@@ -246,7 +236,7 @@ export default function DashboardShell({
 
         {activeTab === "settings" && (
           <section className="mt-2">
-            <SettingsPage tier={tier} />
+            <SettingsPage />
           </section>
         )}
 
