@@ -31,23 +31,24 @@ export default async function Home() {
           </span>
           <h1 className="mt-8 text-center">
             <span className="block font-[family-name:var(--font-italiana)] text-4xl font-normal uppercase leading-[1.15] tracking-[0.14em] text-text-primary sm:text-5xl md:text-6xl">
-              The modern hedge fund for
+              Real-time arbitrage alerts for
             </span>
             <span className="headline-italic mt-2 block font-[family-name:var(--font-cormorant)] text-5xl font-medium italic uppercase leading-[1.1] tracking-[0.08em] text-text-primary sm:text-6xl md:text-7xl">
               <TypewriterHero />
             </span>
           </h1>
           <p className="mx-auto mt-8 max-w-xl text-base leading-relaxed text-text-secondary sm:text-lg">
-            Neutralis detects arbitrage across prediction markets in real time,
-            evaluates every trade through quantitative risk guards, and executes
-            automatically — so you capture edge without watching&nbsp;screens.
+            Neutralis scans thousands of markets across Kalshi and Polymarket,
+            scores every opportunity through quantitative risk guards, and
+            alerts you the moment edge appears — trade it yourself, or let
+            Neutralis auto-execute.
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Link
               href={signedIn ? "/dashboard" : "/signup"}
               className="btn-sheen btn-pill group relative inline-flex items-center gap-2 border border-neon-green/50 bg-neon-green/10 px-8 py-3.5 font-mono font-medium text-neon-green transition-all hover:bg-neon-green/20 hover:shadow-[0_0_30px_rgba(0,255,170,0.15)]"
             >
-              {signedIn ? "Go to Dashboard" : "Get started"}
+              {signedIn ? "Go to Dashboard" : "Start free"}
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 transition-transform group-hover:translate-x-0.5">
                 <path fillRule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L10.23 5.29a.75.75 0 1 1 1.04-1.08l5.5 5.25a.75.75 0 0 1 0 1.08l-5.5 5.25a.75.75 0 1 1-1.04-1.08l4.158-3.96H3.75A.75.75 0 0 1 3 10Z" clipRule="evenodd" />
               </svg>
@@ -62,7 +63,7 @@ export default async function Home() {
 
           {/* Social proof line */}
           <p className="mt-12 font-mono text-[10px] uppercase tracking-[0.2em] text-text-secondary/60">
-            Scanning 3,200+ markets across Kalshi & Polymarket
+            Free to start · Scanning 3,200+ markets across Kalshi & Polymarket
           </p>
         </header>
 
@@ -90,26 +91,20 @@ export default async function Home() {
         <div className="mx-auto max-w-2xl px-6 text-center">
           <ScrollReveal>
             <p className="font-mono text-[10px] font-medium uppercase tracking-[0.3em] text-neon-green/60">
-              Ready to trade
+              Free to start
             </p>
             <h2 className="mt-4 font-[family-name:var(--font-italiana)] text-3xl font-normal uppercase tracking-[0.08em] text-text-primary sm:text-4xl">
-              Start capturing edge
+              See the edge for yourself
             </h2>
             <p className="mt-4 text-text-secondary">
-              Connect your exchange accounts and let Neutralis handle the rest. No code, no manual monitoring, no missed opportunities.
+              Sign up free and watch live arbitrage signals stream in. Upgrade when you want auto-execution — your trades, your accounts, your capital.
             </p>
             <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
               <Link
                 href={signedIn ? "/dashboard" : "/signup"}
                 className="btn-sheen btn-pill inline-flex items-center gap-2 border border-neon-green/50 bg-neon-green/10 px-8 py-3.5 font-mono font-medium text-neon-green transition-all hover:bg-neon-green/20 hover:shadow-[0_0_30px_rgba(0,255,170,0.15)]"
               >
-                {signedIn ? "Open Dashboard" : "Create account"}
-              </Link>
-              <Link
-                href="/pricing"
-                className="btn-pill inline-flex border border-border px-8 py-3.5 font-mono font-medium text-text-secondary transition-all hover:border-neon-blue/30 hover:text-neon-blue"
-              >
-                View pricing
+                {signedIn ? "Open Dashboard" : "Start free"}
               </Link>
             </div>
           </ScrollReveal>

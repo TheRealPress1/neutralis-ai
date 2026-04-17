@@ -38,22 +38,13 @@ export default async function DashboardPage() {
     .select("platform")
     .eq("user_id", user.id);
 
-  const platforms = (apiKeys ?? []).map(
-    (k: { platform: string }) => k.platform,
-  );
-  const hasKalshi = platforms.includes("kalshi");
-  const hasPoly = platforms.includes("polymarket_us");
-  const hasApiKeys = hasKalshi || hasPoly;
-  const hasBothVenues = hasKalshi && hasPoly;
+  const hasApiKeys = (apiKeys ?? []).length > 0;
 
   return (
     <DashboardShell
       initialTier={tier}
       initialIsFounder={isFounder}
       initialHasApiKeys={hasApiKeys}
-      initialHasBothVenues={hasBothVenues}
-      initialHasKalshi={hasKalshi}
-      initialHasPoly={hasPoly}
     />
   );
 }

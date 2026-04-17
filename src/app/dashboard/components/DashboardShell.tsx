@@ -11,18 +11,16 @@ import ActivityTimeline from "./ActivityTimeline";
 import SetupBanner from "./SetupBanner";
 import ApiKeyManager from "./ApiKeyManager";
 import AccessCodeGenerator from "./AccessCodeGenerator";
-import LivePanel from "./LivePanel";
 import MarketBrowser from "./MarketBrowser";
 import AuthNav from "@/app/components/AuthNav";
 import Link from "next/link";
 import { hasAccess, type SubscriptionTier } from "@/lib/subscription";
 import { useRealtimeDashboard } from "@/hooks/useRealtimeDashboard";
 
-type NavTab = "dashboard" | "live" | "activity" | "markets" | "connections" | "settings" | "founder";
+type NavTab = "dashboard" | "activity" | "markets" | "connections" | "settings" | "founder";
 
 const BASE_NAV_ITEMS: { id: NavTab; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
-  { id: "live", label: "Live" },
   { id: "activity", label: "Activity" },
   { id: "markets", label: "Markets" },
   { id: "connections", label: "Connections" },
@@ -37,16 +35,10 @@ export default function DashboardShell({
   initialTier = "free",
   initialIsFounder = false,
   initialHasApiKeys = true,
-  initialHasBothVenues = false,
-  initialHasKalshi = false,
-  initialHasPoly = false,
 }: {
   initialTier?: SubscriptionTier;
   initialIsFounder?: boolean;
   initialHasApiKeys?: boolean;
-  initialHasBothVenues?: boolean;
-  initialHasKalshi?: boolean;
-  initialHasPoly?: boolean;
 }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
@@ -56,7 +48,7 @@ export default function DashboardShell({
 
   const router = useRouter();
   const searchParams = useSearchParams();
-  const VALID_TABS = useMemo(() => new Set<NavTab>(["dashboard", "live", "activity", "markets", "connections", "settings", "founder"]), []);
+  const VALID_TABS = useMemo(() => new Set<NavTab>(["dashboard", "activity", "markets", "connections", "settings", "founder"]), []);
 
   const rawTab = searchParams.get("tab") ?? "dashboard";
   const activeTab: NavTab = VALID_TABS.has(rawTab as NavTab) ? (rawTab as NavTab) : "dashboard";
@@ -212,18 +204,6 @@ export default function DashboardShell({
               <ActivityFeed refreshKey={refreshKey} />
             </section>
           </>
-        )}
-
-        {activeTab === "live" && (
-          <section className="mt-2">
-            <LivePanel
-              refreshKey={refreshKey}
-              hasBothVenues={initialHasBothVenues}
-              hasKalshi={initialHasKalshi}
-              hasPoly={initialHasPoly}
-              onNavigate={setActiveTab}
-            />
-          </section>
         )}
 
         {activeTab === "activity" && (

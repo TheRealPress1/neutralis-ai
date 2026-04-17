@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 export default function TypewriterHero() {
-  const words = ["Prediction Markets", "Event Contracts", "Binary Options"];
+  const words = ["Kalshi", "Polymarket", "Prediction Markets"];
   const [wordIndex, setWordIndex] = useState(0);
   const [text, setText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);

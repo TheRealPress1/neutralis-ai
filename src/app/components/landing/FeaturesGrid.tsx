@@ -12,25 +12,12 @@ const features = [
         <path d="M11 8v6M8 11h6" />
       </svg>
     ),
-    title: "Cross-platform arb detection",
+    title: "Signals, in real time",
     description:
-      "Continuously scans Kalshi and Polymarket for mispriced probabilities. When the same event trades at different prices across venues, Neutralis finds the edge.",
-    stat: "3,200+",
-    statLabel: "markets scanned",
-    beam: "neon-blue" as const,
-  },
-  {
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-7 w-7">
-        <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
-      </svg>
-    ),
-    title: "Automated execution",
-    description:
-      "Trades execute in milliseconds via real-time WebSocket connections. Maker orders minimize fees, and cross-platform hedging locks in arbitrage spreads.",
+      "Cross-platform arbitrage detection across Kalshi and Polymarket. The moment the same event prices differently across venues, you get an alert with the edge, legs, and expected payout.",
     stat: "<200ms",
-    statLabel: "execution latency",
-    beam: "neon-green" as const,
+    statLabel: "alert latency",
+    beam: "neon-blue" as const,
   },
   {
     icon: (
@@ -39,12 +26,25 @@ const features = [
         <path d="m9 12 2 2 4-4" />
       </svg>
     ),
-    title: "Portfolio risk management",
+    title: "Risk-scored every time",
     description:
-      "Position sizing, exposure limits, stop-losses, and daily drawdown caps — all enforced automatically before every trade.",
+      "Every signal passes through quantitative guards — position sizing, exposure limits, liquidity checks, fee-aware edge. You see the reasoning, not just the number.",
     stat: "11",
     statLabel: "risk guards",
     beam: "neon-purple" as const,
+  },
+  {
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-7 w-7">
+        <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+      </svg>
+    ),
+    title: "Trade it your way",
+    description:
+      "Click through to the venue and trade it yourself, or connect your exchange keys and let Neutralis auto-execute with maker orders and cross-platform hedging.",
+    stat: "2",
+    statLabel: "venues supported",
+    beam: "neon-green" as const,
   },
   {
     icon: (
@@ -54,9 +54,9 @@ const features = [
         <circle cx="15" cy="15" r="2" />
       </svg>
     ),
-    title: "Real-time dashboard",
+    title: "Transparent dashboard",
     description:
-      "Monitor positions, signals, and execution from a live dashboard. Every decision is logged with full guard transparency.",
+      "Live feed of every signal, decision, and position. Every rejection is logged with the exact guard that triggered it — so you always know why.",
     stat: "24/7",
     statLabel: "live monitoring",
     beam: "neon-green" as const,
@@ -69,10 +69,10 @@ export default function FeaturesGrid() {
       <div className="mx-auto max-w-5xl px-6">
         <ScrollReveal>
           <p className="text-center font-mono text-[10px] font-medium uppercase tracking-[0.3em] text-text-secondary">
-            Core Capabilities
+            How it works
           </p>
           <h2 className="mt-3 text-center text-3xl font-[family-name:var(--font-italiana)] font-normal uppercase tracking-[0.08em] text-text-primary">
-            What you get
+            Signals first. Execution optional.
           </h2>
         </ScrollReveal>
 
