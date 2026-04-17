@@ -165,6 +165,7 @@ class PortfolioManager:
                 trade_count=1,
                 category=category,
                 signal_type=signal_type,
+                is_paper=trade.is_paper,
             )
             self._storage.save_position(position)
             return position

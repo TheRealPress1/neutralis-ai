@@ -244,6 +244,7 @@ class Position:
     exit_price: Optional[float] = None
     signal_type: str = ""
     hwm_pnl_pct: float = 0.0
+    is_paper: bool = False
     # Polymarket US: slug for order placement (empty for Kalshi/intl Poly)
     market_slug: str = ""
 

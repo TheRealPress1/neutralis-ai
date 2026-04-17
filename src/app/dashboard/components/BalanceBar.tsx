@@ -58,10 +58,18 @@ export default function BalanceBar({
               ${fmt(balances.kalshi.balance)}
             </p>
             <p className="mt-1 text-xs text-text-secondary">
-              Portfolio value:{" "}
+              Cash:{" "}
               <span className="font-mono text-text-mono">
-                ${fmt(balances.kalshi.portfolio_value)}
+                ${fmt(balances.kalshi.cash)}
               </span>
+              {balances.kalshi.positions_value > 0 && (
+                <>
+                  {" "}&middot; Positions:{" "}
+                  <span className="font-mono text-text-mono">
+                    ${fmt(balances.kalshi.positions_value)}
+                  </span>
+                </>
+              )}
             </p>
           </div>
         ) : (

@@ -201,7 +201,7 @@ function ScenarioTable({ trade }: { trade: ArbTrade }) {
 
   return (
     <div className="border-t border-border/50 bg-white/[0.015] px-5 py-3">
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-2.5 flex items-center gap-2">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
           Payout Scenarios
         </span>
@@ -211,33 +211,47 @@ function ScenarioTable({ trade }: { trade: ArbTrade }) {
           </span>
         )}
       </div>
-      <div className="grid gap-1.5">
-        {scenarios.map((s) => {
-          const isProfit = s.profit > 0;
-          return (
-            <div
-              key={s.label}
-              className={`flex items-center justify-between rounded px-3 py-2 ${
-                isProfit
-                  ? "bg-neon-green/[0.04] ring-1 ring-inset ring-neon-green/10"
-                  : "bg-neon-red/[0.04] ring-1 ring-inset ring-neon-red/10"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <span className={`text-xs font-medium ${isProfit ? "text-neon-green" : "text-neon-red"}`}>
-                  {isProfit ? "+" : ""}{fmt(s.profit)}
-                </span>
-                <span className="text-[10px] text-text-secondary">
-                  ({isProfit ? "+" : ""}{fmt(s.profitPct, 1)}%)
-                </span>
-              </div>
-              <span className="text-xs text-text-secondary">
-                if <span className="font-medium text-text-primary">{s.label}</span> wins
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-[10px] uppercase tracking-wider text-text-secondary/60">
+            <th className="pb-1.5 text-left font-medium">Outcome</th>
+            <th className="pb-1.5 text-right font-medium">Cost</th>
+            <th className="pb-1.5 text-right font-medium">Payout</th>
+            <th className="pb-1.5 text-right font-medium">Profit</th>
+            <th className="pb-1.5 text-right font-medium">ROI</th>
+          </tr>
+        </thead>
+        <tbody>
+          {scenarios.map((s) => {
+            const isProfit = s.profit > 0;
+            return (
+              <tr
+                key={s.label}
+                className={`border-t ${
+                  isProfit ? "border-neon-green/10" : "border-neon-red/10"
+                }`}
+              >
+                <td className="py-2 text-left">
+                  <span className="font-medium text-text-primary">{s.label}</span>
+                  <span className="ml-1.5 text-text-secondary/50">wins</span>
+                </td>
+                <td className="py-2 text-right font-mono text-text-secondary">
+                  ${fmt(trade.totalSize)}
+                </td>
+                <td className="py-2 text-right font-mono text-text-primary">
+                  ${fmt(s.payout)}
+                </td>
+                <td className={`py-2 text-right font-mono font-medium ${isProfit ? "text-neon-green" : "text-neon-red"}`}>
+                  {isProfit ? "+" : ""}${fmt(s.profit)}
+                </td>
+                <td className={`py-2 text-right font-mono ${isProfit ? "text-neon-green/70" : "text-neon-red/70"}`}>
+                  {isProfit ? "+" : ""}{fmt(s.profitPct, 1)}%
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

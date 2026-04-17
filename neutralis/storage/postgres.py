@@ -353,7 +353,7 @@ class PostgresStorage:
         "entry_price, size_dollars, quantity, "
         "realized_pnl, unrealized_pnl, trade_count, "
         "opened_at, closed_at, category, exit_reason, exit_price, signal_type, "
-        "hwm_pnl_pct"
+        "hwm_pnl_pct, is_paper"
     )
 
     @staticmethod
@@ -378,6 +378,7 @@ class PostgresStorage:
             exit_price=float(row[16]) if len(row) > 16 and row[16] is not None else None,
             signal_type=row[17] if len(row) > 17 and row[17] is not None else "",
             hwm_pnl_pct=float(row[18]) if len(row) > 18 and row[18] is not None else 0.0,
+            is_paper=bool(row[19]) if len(row) > 19 and row[19] is not None else False,
         )
 
     def save_trade(self, trade: Trade) -> str:
@@ -430,14 +431,14 @@ class PostgresStorage:
                     entry_price, size_dollars, quantity,
                     realized_pnl, unrealized_pnl, trade_count,
                     opened_at, closed_at, category, exit_reason, exit_price,
-                    signal_type, hwm_pnl_pct, user_id
+                    signal_type, hwm_pnl_pct, is_paper, user_id
                 ) VALUES (
                     %(id)s, %(ticker)s, %(event_ticker)s, %(venue)s, %(side)s, %(status)s,
                     %(entry_price)s, %(size_dollars)s, %(quantity)s,
                     %(realized_pnl)s, %(unrealized_pnl)s, %(trade_count)s,
                     %(opened_at)s, %(closed_at)s, %(category)s,
                     %(exit_reason)s, %(exit_price)s,
-                    %(signal_type)s, %(hwm_pnl_pct)s, %(uid)s
+                    %(signal_type)s, %(hwm_pnl_pct)s, %(is_paper)s, %(uid)s
                 )
                 """,
                 {
@@ -460,6 +461,7 @@ class PostgresStorage:
                     "exit_price": position.exit_price,
                     "signal_type": position.signal_type,
                     "hwm_pnl_pct": position.hwm_pnl_pct,
+                    "is_paper": position.is_paper,
                     "uid": self._user_id,
                 },
             )
@@ -712,7 +714,7 @@ class PostgresStorage:
                     COUNT(*) FILTER (WHERE status = 'closed' AND realized_pnl > 0) AS wins,
                     COUNT(*) FILTER (WHERE status = 'closed' AND realized_pnl <= 0) AS losses
                 FROM positions
-                WHERE 1=1{uf}
+                WHERE (is_paper IS NOT TRUE){uf}
             """, p)
             row = cur.fetchone()
 
@@ -744,6 +746,7 @@ class PostgresStorage:
                 SUM(CASE WHEN realized_pnl <= 0 THEN 1 ELSE 0 END) AS losses
             FROM positions
             WHERE status = 'closed'
+              AND (is_paper IS NOT TRUE)
               AND closed_at >= now() - make_interval(days => %(days)s)
               {self._user_filter()}
             GROUP BY DATE(closed_at)

@@ -259,7 +259,7 @@ export async function testConnection(
 /* ── Exchange balances ─────────────────────────────────────────────── */
 
 export interface ExchangeBalances {
-  kalshi: { balance: number; portfolio_value: number } | null;
+  kalshi: { balance: number; cash: number; positions_value: number } | null;
   polymarket_us: {
     balance: number;
     buying_power: number;
@@ -340,7 +340,7 @@ async function fetchPolymarketUSBalance(
 async function fetchKalshiBalance(
   keyId: string,
   pem: string,
-): Promise<{ balance: number; portfolio_value: number } | null> {
+): Promise<{ balance: number; cash: number; positions_value: number } | null> {
   try {
     const timestampMs = Date.now().toString();
     const path = "/trade-api/v2/portfolio/balance";
@@ -368,9 +368,12 @@ async function fetchKalshiBalance(
     if (!res.ok) return null;
 
     const data = await res.json();
+    const cash = (data.balance ?? 0) / 100;
+    const positionsValue = (data.portfolio_value ?? 0) / 100;
     return {
-      balance: (data.balance ?? 0) / 100,
-      portfolio_value: (data.portfolio_value ?? 0) / 100,
+      balance: cash + positionsValue,
+      cash,
+      positions_value: positionsValue,
     };
   } catch {
     return null;

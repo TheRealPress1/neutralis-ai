@@ -24,6 +24,7 @@ export interface Position {
   realized_pnl: number;
   unrealized_pnl: number;
   trade_count: number;
+  is_paper: boolean;
   opened_at: string;
   closed_at: string | null;
 }

@@ -131,7 +131,8 @@ async function getStats(supabase: SB, userId: string): Promise<PortfolioStats> {
     .from("positions")
     .select("size_dollars")
     .eq("status", "open")
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .neq("is_paper", true);
 
   const openPositions = openData?.length ?? 0;
   const totalExposure = openData?.reduce((s, r) => s + (r.size_dollars ?? 0), 0) ?? 0;
@@ -140,7 +141,8 @@ async function getStats(supabase: SB, userId: string): Promise<PortfolioStats> {
     .from("positions")
     .select("realized_pnl")
     .eq("status", "closed")
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .neq("is_paper", true);
 
   const totalRealizedPnl = closedData?.reduce((s, r) => s + (r.realized_pnl ?? 0), 0) ?? 0;
   // Exclude paper/unsettled positions ($0 P&L) from win rate calculation
@@ -171,6 +173,7 @@ async function getPositions(supabase: SB, params: URLSearchParams, userId: strin
     .select("*")
     .eq("status", status)
     .eq("user_id", userId)
+    .neq("is_paper", true)
     .order("opened_at", { ascending: false })
     .limit(limit);
 
@@ -262,7 +265,8 @@ async function getAnalyticsSummary(supabase: SB, userId: string): Promise<Analyt
     .from("positions")
     .select("realized_pnl, closed_at")
     .eq("status", "closed")
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .neq("is_paper", true);
 
   if (!closed || closed.length === 0) {
     return {
@@ -325,6 +329,7 @@ async function getPnLTimeline(supabase: SB, params: URLSearchParams, userId: str
     .select("realized_pnl, closed_at")
     .eq("status", "closed")
     .eq("user_id", userId)
+    .neq("is_paper", true)
     .gte("closed_at", since)
     .order("closed_at", { ascending: true });
 
@@ -352,7 +357,8 @@ async function getBreakdown(supabase: SB, userId: string): Promise<{
     .from("positions")
     .select("realized_pnl, category, venue")
     .eq("status", "closed")
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .neq("is_paper", true);
 
   if (!closed || closed.length === 0) {
     return { by_category: [], by_venue: [], pnl_distribution: [] };
