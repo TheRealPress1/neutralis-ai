@@ -2,7 +2,6 @@
 
 type NavTab =
   | "dashboard"
-  | "live"
   | "activity"
   | "markets"
   | "connections"
