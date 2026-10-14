@@ -1,0 +1,386 @@
+{
+  "createdAt": "2026-09-07T23:45:55.078Z",
+  "assignment": "Temporary Astra/GPT public-document research; no cross-family claim",
+  "root": "/home/vercel-sandbox/neutralis-concept-terminal/.context/astra-data-rights-20260907",
+  "report": {
+    "path": "report.md",
+    "bytes": 11566,
+    "sha256": "fa469ff495ff4bc5c60393a7e8f5e8ad4094ba563602bb1ac63975ace8770d7e"
+  },
+  "sourceCheckout": {
+    "head": "689e7d516a148310de015c5c9ddf4502021ac6ab",
+    "branch": "concept/retro-terminal",
+    "trackedProduct": "Unchanged; only new ignored research artifacts"
+  },
+  "sources": [
+    {
+      "id": "disclosures",
+      "requestedURL": "https://alpaca.markets/disclosures",
+      "effectiveURL": "https://alpaca.markets/disclosures",
+      "startedAt": "2026-09-07T23:30:58.805Z",
+      "retrievedAt": "2026-09-07T23:30:58.860Z",
+      "httpStatus": 200,
+      "contentType": "text/html; charset=utf-8",
+      "bytes": 112839,
+      "sha256": "5d1928c4f79c3f88801869ee2ea0fa207c464cc1180445a79e68578d5ee9eb45",
+      "accessDenied": false,
+      "retrieval": "Unauthenticated public GET, no retries; normal HTTP redirects only",
+      "role": "Actual source of the three Alpaca disclosure PDF links",
+      "version": null,
+      "anchors": [
+        "Terms & Conditions",
+        "NASDAQ OMX Global Subscriber Agreement",
+        "NYSE Market Data Display Services Agreement"
+      ],
+      "rawFile": "sources/disclosures.bin",
+      "receipt": "sources/disclosures.json",
+      "headers": "sources/disclosures.headers",
+      "extracted": {}
+    },
+    {
+      "id": "nasdaq",
+      "requestedURL": "https://files.alpaca.markets/disclosures/library/NASDAQ+OMX+Global+Subscriber+Agreement.pdf",
+      "effectiveURL": "https://files.alpaca.markets/disclosures/library/NASDAQ+OMX+Global+Subscriber+Agreement.pdf",
+      "startedAt": "2026-09-07T23:31:22.529Z",
+      "retrievedAt": "2026-09-07T23:31:22.576Z",
+      "httpStatus": 200,
+      "contentType": "application/pdf",
+      "bytes": 427324,
+      "sha256": "54dc85b3e4a2a4d023a1de66373f0221f868ecfa8f7638ef122dade7e46a3b53",
+      "accessDenied": false,
+      "retrieval": "Unauthenticated public GET, no retries; normal HTTP redirects only",
+      "role": "N: exact Alpaca-linked subscriber agreement",
+      "version": "Version 2013.1",
+      "effectiveDate": "No executed effective date; blank form",
+      "pages": 10,
+      "anchors": [
+        "1(a)/(b): PDF p3",
+        "2: PDF p3",
+        "10: PDF p5",
+        "11: PDF pp5–6",
+        "12: PDF pp6–7"
+      ],
+      "scope": "Information as defined; U.S. and non-U.S. classifications differ; no express age cutoff; actual Alpaca feed/subscriber applicability unverified",
+      "rawFile": "sources/nasdaq.bin",
+      "receipt": "sources/nasdaq.json",
+      "headers": "sources/nasdaq.headers",
+      "extracted": {
+        "nasdaq.txt": {
+          "bytes": 41187,
+          "sha256": "daabb59f8134aded3b8c5fe39eea6bb00d8e17c4119cb6f56b6fb6fe26c53142"
+        },
+        "nasdaq-pages.json": {
+          "bytes": 254556,
+          "sha256": "35d535c7e648b10e582b6b5547b5a18a784a1f08e4b9269c55c7f2758aac056a"
+        }
+      }
+    },
+    {
+      "id": "nyse",
+      "requestedURL": "https://files.alpaca.markets/disclosures/library/NYSE+Market+Data+Display+Services+Agreement.pdf",
+      "effectiveURL": "https://files.alpaca.markets/disclosures/library/NYSE+Market+Data+Display+Services+Agreement.pdf",
+      "startedAt": "2026-09-07T23:31:22.531Z",
+      "retrievedAt": "2026-09-07T23:31:22.574Z",
+      "httpStatus": 200,
+      "contentType": "application/pdf",
+      "bytes": 175675,
+      "sha256": "d5a672e2895c69398b3064e16719354940aa6f585f3c4f22e058ff0a778933e2",
+      "accessDenied": false,
+      "retrieval": "Unauthenticated public GET, no retries; normal HTTP redirects only",
+      "role": "Y: exact Alpaca-linked subscriber agreement",
+      "version": "Last Update: March 4, 2013",
+      "effectiveDate": "No executed effective date; blank form",
+      "pages": 6,
+      "anchors": [
+        "1: PDF p1",
+        "5 and 7: PDF p2",
+        "9–10: PDF p3",
+        "11–13: PDF pp4–5"
+      ],
+      "scope": "Market Data Display Services (Usage-Based Services/Nonprofessional Subscriber Status); defined data includes derived information; no express age cutoff; actual applicability unverified",
+      "rawFile": "sources/nyse.bin",
+      "receipt": "sources/nyse.json",
+      "headers": "sources/nyse.headers",
+      "extracted": {
+        "nyse.txt": {
+          "bytes": 11156,
+          "sha256": "00373dd4b4530b8aa7a40d1443b270a099e80d1b00e7d3137fda1dadbec0c30f"
+        },
+        "nyse-pages.json": {
+          "bytes": 62405,
+          "sha256": "31f161a09f1b722ff22a3b3e1daa2d74dcfe17275d5f25b9d5d60d7a4e4fa1c1"
+        }
+      }
+    },
+    {
+      "id": "terms",
+      "requestedURL": "https://files.alpaca.markets/disclosures/library/TermsAndConditions.pdf",
+      "effectiveURL": "https://files.alpaca.markets/disclosures/library/TermsAndConditions.pdf",
+      "startedAt": "2026-09-07T23:31:22.532Z",
+      "retrievedAt": "2026-09-07T23:31:22.575Z",
+      "httpStatus": 200,
+      "contentType": "application/pdf",
+      "bytes": 27092,
+      "sha256": "2dc774d4aeeafbe4c7f0565e7842d932bc8bc10488af805fce43b8734e7b9859",
+      "accessDenied": false,
+      "retrieval": "Unauthenticated public GET, no retries; normal HTTP redirects only",
+      "role": "A: Alpaca general terms, additive to other applicable agreements",
+      "version": "No visible version/effective date found",
+      "effectiveDate": null,
+      "pages": 4,
+      "anchors": [
+        "General/Data Plans/Personal and Non-Commercial Usage: PDF p1",
+        "U.S. Residents Only/Content: PDF p2",
+        "Termination; Modification: PDF p3"
+      ],
+      "scope": "Service/API/Content; explicit Pro-plan exchange incorporation each to extent applicable; no delayed/historical carveout",
+      "rawFile": "sources/terms.bin",
+      "receipt": "sources/terms.json",
+      "headers": "sources/terms.headers",
+      "extracted": {
+        "terms.txt": {
+          "bytes": 22466,
+          "sha256": "0ac9f69d5bb0c4f871605d459840fa81393a80efc64035edb1af05a6b7bd4936"
+        },
+        "terms-pages.json": {
+          "bytes": 59084,
+          "sha256": "64256cfec26440d3dbc7eb08edc204eccb8504d9ffe949589ac231d3e2440133"
+        }
+      }
+    },
+    {
+      "id": "redistribute",
+      "requestedURL": "https://alpaca.markets/support/redistribute-alpaca-api",
+      "effectiveURL": "https://alpaca.markets/support/redistribute-alpaca-api",
+      "startedAt": "2026-09-07T23:31:22.534Z",
+      "retrievedAt": "2026-09-07T23:31:22.584Z",
+      "httpStatus": 200,
+      "contentType": "text/html; charset=utf-8",
+      "bytes": 312387,
+      "sha256": "bda53dd167e9db1a2ffd327276422be8928c837cb98748b3ca6074fc8d2e26d3",
+      "accessDenied": false,
+      "retrieval": "Unauthenticated public GET, no retries; normal HTTP redirects only",
+      "role": "S: official support explanation",
+      "version": "November 2022 (visible article date)",
+      "effectiveDate": null,
+      "anchors": [
+        "Can I redistribute Alpaca API data via my platform?"
+      ],
+      "scope": "Alpaca API redistribution; no real-time-only qualification stated",
+      "rawFile": "sources/redistribute.bin",
+      "receipt": "sources/redistribute.json",
+      "headers": "sources/redistribute.headers",
+      "extracted": {}
+    },
+    {
+      "id": "cta_delayed",
+      "requestedURL": "https://www.ctaplan.com/publicdocs/ctaplan/Policy_Delayed_Market_Data.pdf",
+      "effectiveURL": "https://www.ctaplan.com/publicdocs/ctaplan/Policy_Delayed_Market_Data.pdf",
+      "startedAt": "2026-09-07T23:40:57.477Z",
+      "retrievedAt": "2026-09-07T23:40:57.614Z",
+      "httpStatus": 200,
+      "contentType": "application/pdf",
+      "bytes": 483396,
+      "sha256": "9911bb46fd6236bc074d7144579ea1c772ebc224d0617756c120c51f265e2812",
+      "accessDenied": false,
+      "retrieval": "Unauthenticated public GET, no retries; normal HTTP redirects only",
+      "role": "D: official CTA/CQ delayed policy, linked by current official policy index",
+      "version": "February 2016 (footer); index labels 23 Feb 2016",
+      "effectiveDate": "No distinct effective date asserted",
+      "pages": 6,
+      "anchors": [
+        "II–IV: PDF p2",
+        "V: PDF pp3–4",
+        "VI: PDF pp4–5",
+        "VII: PDF p5",
+        "X: PDF p6"
+      ],
+      "scope": "Network A/B last-sale/quotation delayed at least 15 minutes; separate index treatment; excludes Nasdaq-listed-data policy; no general archive authorization",
+      "rawFile": "sources/cta_delayed.bin",
+      "receipt": "sources/cta_delayed.json",
+      "headers": "sources/cta_delayed.headers",
+      "extracted": {
+        "cta_delayed.txt": {
+          "bytes": 15835,
+          "sha256": "267e5d537ddc2d18ce1778e13a7ad46d26c48f27f98ca0cf67c1f25a3ec52f56"
+        },
+        "cta_delayed-pages.json": {
+          "bytes": 86248,
+          "sha256": "ee56a52a429eaad006e6346fb319b1002b6095ccb6ade864ae8fe93a8979d27c"
+        }
+      }
+    },
+    {
+      "id": "cta_nondisplay",
+      "requestedURL": "https://www.ctaplan.com/publicdocs/ctaplan/Policy_CTA_Non_Display_with_FAQ.pdf",
+      "effectiveURL": "https://www.ctaplan.com/publicdocs/ctaplan/Policy_CTA_Non_Display_with_FAQ.pdf",
+      "startedAt": "2026-09-07T23:41:22.017Z",
+      "retrievedAt": "2026-09-07T23:41:22.142Z",
+      "httpStatus": 200,
+      "contentType": "application/pdf",
+      "bytes": 323448,
+      "sha256": "46996211595fe0d46aa659f5085c665ae5da42f9d8a558f71547751853876205",
+      "accessDenied": false,
+      "retrieval": "Unauthenticated public GET, no retries; normal HTTP redirects only",
+      "role": "C: official CTA/CQ non-display policy",
+      "version": "Nov 2015 (footer); index labels 1 Nov 2015",
+      "effectiveDate": "No distinct effective date asserted",
+      "pages": 2,
+      "anchors": [
+        "Definition/examples: PDF p1",
+        "Declaration/fees/compliance: PDF p2"
+      ],
+      "scope": "Expressly real-time Network A/B; not an affirmative delayed/historical license",
+      "rawFile": "sources/cta_nondisplay.bin",
+      "receipt": "sources/cta_nondisplay.json",
+      "headers": "sources/cta_nondisplay.headers",
+      "extracted": {
+        "cta_nondisplay.txt": {
+          "bytes": 4482,
+          "sha256": "084f4f7386b77a028dc5b23a4a186f40c098eb03a6d6bd7876e853144b9ec068"
+        },
+        "cta_nondisplay-pages.json": {
+          "bytes": 301099,
+          "sha256": "24d78d8d7c1d44c7db03c282e2d2968eb4f4332a89367ca5f4c5ae8b939317f9"
+        }
+      }
+    },
+    {
+      "id": "cta_policy_index",
+      "requestedURL": "https://www.ctaplan.com/policy",
+      "effectiveURL": "https://www.ctaplan.com/policy",
+      "startedAt": "2026-09-07T23:40:57.651Z",
+      "retrievedAt": "2026-09-07T23:40:57.771Z",
+      "httpStatus": 200,
+      "contentType": "text/html; charset=utf-8",
+      "bytes": 34630,
+      "sha256": "a3b6eae0974feb0a9c64e071d43f308dcf3dda062b228d67daf58b08cea71a08",
+      "accessDenied": false,
+      "retrieval": "Unauthenticated public GET, no retries; normal HTTP redirects only",
+      "role": "Official current discovery index for D and C",
+      "version": null,
+      "anchors": [
+        "Delayed Market Data",
+        "CTA Non Display with FAQ"
+      ],
+      "rawFile": "sources/cta_policy_index.bin",
+      "receipt": "sources/cta_policy_index.json",
+      "headers": "sources/cta_policy_index.headers",
+      "extracted": {}
+    },
+    {
+      "id": "nyse_policy_index",
+      "requestedURL": "https://www.nyse.com/market-data/policies",
+      "effectiveURL": "https://www.nyse.com/market-data/policies",
+      "startedAt": "2026-09-07T23:43:07.495Z",
+      "retrievedAt": "2026-09-07T23:43:07.568Z",
+      "httpStatus": 200,
+      "contentType": "text/html; charset=utf-8",
+      "bytes": 3253,
+      "sha256": "5ca2a7d181f3ce62f19c610c4213c038a4d6760510041d9eed8cb34b4c55d580",
+      "accessDenied": false,
+      "retrieval": "Unauthenticated public GET, no retries; normal HTTP redirects only",
+      "role": "Scope/discovery only; proprietary policy titles not used as SIP permission",
+      "version": null,
+      "anchors": [
+        "Historical Use of Real-Time NYSE Proprietary Data Products Policy",
+        "Non-Display Use Policy - Proprietary Data Products"
+      ],
+      "rawFile": "sources/nyse_policy_index.bin",
+      "receipt": "sources/nyse_policy_index.json",
+      "headers": "sources/nyse_policy_index.headers",
+      "extracted": {}
+    },
+    {
+      "id": "utp_admin",
+      "requestedURL": "https://www.utpplan.com/data_admin",
+      "effectiveURL": "https://www.utpplan.com/data_admin",
+      "startedAt": "2026-09-07T23:41:21.607Z",
+      "retrievedAt": "2026-09-07T23:41:21.961Z",
+      "httpStatus": 200,
+      "contentType": "text/html; charset=utf-8",
+      "bytes": 7694,
+      "sha256": "a2b1e5ae84faa0eaf91115ab8d6d65f374694f18c12a9299da05b29d80e980c0",
+      "accessDenied": false,
+      "retrieval": "Unauthenticated public GET, no retries; normal HTTP redirects only",
+      "role": "Current public UTP administration HTML; no policy PDF exposed in retrieved HTML",
+      "version": null,
+      "anchors": [],
+      "scope": "No authenticated/iframe/feed/approval request made",
+      "rawFile": "sources/utp_admin.bin",
+      "receipt": "sources/utp_admin.json",
+      "headers": "sources/utp_admin.headers",
+      "extracted": {}
+    },
+    {
+      "id": "nasdaq_policy_notice",
+      "requestedURL": "https://www.nasdaqtrader.com/TraderNews.aspx?id=dn2014-02",
+      "effectiveURL": "https://www.nasdaqtrader.com/TraderNews.aspx?id=dn2014-02",
+      "startedAt": "2026-09-07T23:42:12.091Z",
+      "retrievedAt": "2026-09-07T23:42:12.399Z",
+      "httpStatus": 200,
+      "contentType": "text/html; charset=utf-8",
+      "bytes": 63226,
+      "sha256": "91967478afc708684fe311a40094676a35a22a4ed909e5f25517e8a03eaa045e",
+      "accessDenied": false,
+      "retrieval": "Unauthenticated public GET, no retries; normal HTTP redirects only",
+      "role": "Official source for legacy UTP policy link and separation from Nasdaq proprietary policies; not current permission evidence",
+      "version": "February 28, 2014",
+      "effectiveDate": null,
+      "anchors": [
+        "What you need to know: UTP Data Policies link"
+      ],
+      "scope": "Historical notice only",
+      "rawFile": "sources/nasdaq_policy_notice.bin",
+      "receipt": "sources/nasdaq_policy_notice.json",
+      "headers": "sources/nasdaq_policy_notice.headers",
+      "extracted": {}
+    }
+  ],
+  "accessLimitations": [
+    {
+      "urls": [
+        "https://files.alpaca.markets/disclosures/library/NASDAQ%2BOMX%2BGlobal%2BSubscriber%2BAgreement.pdf",
+        "https://files.alpaca.markets/disclosures/library/NYSE%2BMarket%2BData%2BDisplay%2BServices%2BAgreement.pdf"
+      ],
+      "status": 403,
+      "client": "Web renderer after successful literal-plus GET downloads",
+      "time": "After 2026-09-07T23:31:22.576Z; exact renderer timestamp not supplied",
+      "action": "No further retrieval of either PDF or encoded variant; read previously saved bytes locally"
+    },
+    {
+      "url": "https://www.nasdaqomxtrader.com/content/AdministrationSupport/AgreementsData/utpdatapolicies.pdf",
+      "discovery": "nasdaq_policy_notice link labelled UTP Data Policies",
+      "browserStatus": 502,
+      "ordinaryGET": "curl exit 7; could not connect; HTTP status 0; zero downloaded bytes",
+      "attemptTime": "2026-09-07T23:42:12Z (rounded from adjacent successful receipt and output)",
+      "action": "Stopped; no policy contents or permissions inferred; no alternate hostname/path attempted"
+    }
+  ],
+  "method": {
+    "requests": "Public unauthenticated document GETs only; no account, financial data, credentials, subscription, feed or samples",
+    "pdf": "Local Node zlib/PDF stream + embedded font CMap extraction. Primary contract bodies and relevant page boundaries read; no visual-layout/legal execution verification.",
+    "files": [
+      {
+        "path": "retrieve.mjs",
+        "bytes": 1426,
+        "sha256": "139bc19873a5a634f7522548a02f25f6b51bd55932cdd67b06fb6625a224f9fb"
+      },
+      {
+        "path": "extract-pdf.mjs",
+        "bytes": 4324,
+        "sha256": "34d13153ca0a1a8a59b80bb680fbc4bda2bd60f97f9bce42f44b6e26ce3b746d"
+      }
+    ],
+    "discoveryLinks": {
+      "path": "sources/discovered-links.json",
+      "sha256": "4add356d58fa0036e3a4b011b3ca508461a3df11d41714ca733c612bd13fce53"
+    }
+  },
+  "limits": [
+    "No actual subscriber classification or entitlement determination",
+    "No complete incorporated Requirements/amendment audit",
+    "No current UTP Tape C policy permission established",
+    "No product edits/tests, services, purchases, vendor contacts or Conductor messages"
+  ]
+}

@@ -1,0 +1,28 @@
+# R001 v2 — Account-scoped risk settings
+
+Status: draft for peer challenge and founder approval. No builder assigned. Proposed dispatcher: Fable; bootstrap coordinator: Astra.
+
+Outcome: an authenticated user with an existing owned risk profile can read and update only that profile. An unauthenticated request or one user's attempt to update the other's profile must not read or mutate privileged rows. Runtime validation must reject unexpected fields and malformed values before mutation. An account with no profile receives an honest error; account provisioning is a separate dependency. Neither user's actual database rows have been inspected.
+
+This ticket establishes the server-action security boundary, not end-to-end effective trading settings. The current Python profile loader selects a global NULL-user row (`neutralis/profiles.py:167`). R003 owns the separate contract to propagate authenticated-account settings into execution and verify which profile every decision consumes; live readiness cannot be claimed before that contract is verified.
+
+- Reference: source `d524b5a75643df5f508c068e3c4fb930ba54b4eb`, `src/app/actions/dashboard.ts:95`, `src/app/dashboard/components/RiskProfileEditor.tsx`, and `src/types/api.ts:83`. Resolve the latest approved upstream/base immediately before dispatch.
+- Preserve the missing `ad37071` patch. This ticket does not touch its Python accounting scope and does not claim to include or verify it.
+- Allowed files: `src/app/actions/dashboard.ts`, `src/lib/risk-profile-validation.ts` if needed, `tests/frontend/risk-profile-actions.test.mjs`, and a minimal `package.json` test script if needed. Use Node's built-in test/assert/vm modules and the existing TypeScript dev dependency; no new dependency or lockfile change is needed. Other lanes must not edit this test setup concurrently.
+- Exclusions: automation behavior changes, UI redesign, live service access, migrations, portfolio/engine/execution Python, financial-data endpoint changes, account bootstrap/seeding, historical records, billing removal, pushes/merges/deploys beyond an explicitly approved PR-open boundary.
+
+## Behavior and proof
+
+1. Resolve the authenticated user server-side before any service-role query in both risk actions. Scope reads by `user_id` and active status; scope updates by both supplied profile ID and authenticated `user_id`. Never trust a client-supplied owner or fall back to a global active row.
+2. Preserve the existing `{ data?, error? }` action contract. Auth failure, missing/foreign profile and query failure must return an honest error without leaking another user's profile or claiming a successful save.
+3. Accept only the numeric controls currently submitted by RiskProfileEditor. Reject unknown/protected keys (including owner, ID, active status and timestamps), nonnumeric/nonfinite values, arrays/null and invalid profile IDs. Keep the current editor bounds; convert display percentages to stored fractions. Preserve immutable fields server-side.
+4. Stored-value bounds from the current editor: total exposure `[50,10000]`, event exposure `[10,5000]`, ticker exposure `[5,2000]`, venue fraction `[0.1,1]`, open positions integer `[5,500]`, position dollars `[1,500]`, edge percentage `[0.1,20]`, liquidity dollars `[5,1000]`, min expiry hours `[0,168]`, max expiry hours `[24,8760]`, similarity fraction `[0.1,1]`. Partial updates must satisfy min expiry <= max expiry when combined with the user's existing values. These limits preserve the visible existing contract; they are not recommendations about how much to trade.
+5. Offline tests invoke the real action exports. Load their actual TypeScript source with the existing `typescript.transpileModule` into CommonJS, evaluate using `node:vm`, and supply a restricted `require` mapping for the two mocked Supabase factories and any actual local validation module. Unexpected imports fail closed. The action module, not a copied function, must execute; `npm run build` supplies the separate TypeScript/Next integration check. Use `node --test tests/frontend/risk-profile-actions.test.mjs`.
+6. Cover two synthetic accounts with distinct profiles, cross-account ID submission, unauthenticated calls, missing user profile, read/update query failures, protected/unknown fields, NaN/infinity/wrong types, valid boundary values, invalid counts and stored fractional units. Exercise full editor-style payloads and direct partial server-action calls with contradictory expiry updates; the visible editor currently sends all fields, but direct action callers can send partials. Assert unauthorized updates produce no mutation.
+7. Run focused tests and frontend build at the isolated candidate head. Repeat the focused checks/build at the exact combined source tree before integrated acceptance; no isolated pass proves production or integrated readiness. Return exact commit, file list, command output and any pre-existing build failure. Do not silently accept a changed fixture or failing baseline.
+
+Stop: first obtain peer challenge and founder-approved profile/ticket/budget. Once dispatched, stop at PR open with evidence; no merge or deployment.
+
+## Peer challenge
+
+Fable reviewed v1 through Conductor on 2026-09-06. It identified missing-profile provisioning, the engine's global-profile contract and the undefined test harness. v2 explicitly bounds the outcome, hands effective execution settings to R003 and specifies the offline runner/import mechanism plus integrated checks. v2 remains a draft; the revised ticket has not been represented as peer-approved or dispatched. See `../reviews/bootstrap-fable.md`.

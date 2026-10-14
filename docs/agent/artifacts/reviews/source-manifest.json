@@ -1,0 +1,24 @@
+{
+  "archived_on": "2026-10-14",
+  "description": "Exact copies of original documentation from preserved candidate custody. Historical statuses and relative paths are preserved.",
+  "files": [
+    {
+      "path": "arb003-venue-response-contracts.md",
+      "original_path": ".context/arb005-review-c02/docs/arbitrage/reviews/arb003-venue-response-contracts.md",
+      "bytes": 16234,
+      "sha256": "e84896cf0d5f249d6172c3dbdb677c6f64575af846777f973c5d32a166538f12"
+    },
+    {
+      "path": "arb003-peer-contract-challenge.md",
+      "original_path": ".context/arb005-review-c02/docs/arbitrage/reviews/arb003-peer-contract-challenge.md",
+      "bytes": 9212,
+      "sha256": "7a624164f88339657093807900393ee49e723391423d98cd95f89d2d8e876830"
+    },
+    {
+      "path": "arb003-entry-projection-clarification.md",
+      "original_path": ".context/arb005-review-c02/docs/arbitrage/reviews/arb003-entry-projection-clarification.md",
+      "bytes": 2469,
+      "sha256": "1fd722adf286fa4c65bfc8f183ce2d44dc32dfb61a9d24147102993403cf85ca"
+    }
+  ]
+}

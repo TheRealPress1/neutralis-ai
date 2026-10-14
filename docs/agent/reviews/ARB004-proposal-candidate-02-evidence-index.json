@@ -1,0 +1,39 @@
+{
+  "review_kind": "full-artifact documentation contract challenge",
+  "verdict": "PASS",
+  "material_gaps": 0,
+  "head": "c5bbaf306f4e7768c61458318dcc9087a4ea7834",
+  "parent": "a9e226a06f3e709bacb96256357b4d50284713e6",
+  "tree": "66005957a525773633e611f072d2292dd34a2e1a",
+  "clean": true,
+  "proposal_lines": 706,
+  "execution": {
+    "product_imports": false,
+    "tests": false,
+    "network": false,
+    "database_or_sql": false,
+    "publication": false
+  },
+  "prior_preserved": {
+    ".context/arb004-protocol-critic.md": "517cf2d420627a70324ea5a52ac5a674e9c1881960a335576e9ba323b403d634",
+    ".context/arb004-proposal-c01-review.md": "cdb5a6a089b5e73771309c4dd977b85f2919c3631980f042271e532df1de9ad4"
+  },
+  "files": {
+    ".context/arb004-proposal-c02-review.md": {
+      "bytes": 8117,
+      "sha256": "bbafcdcfbdf59eefab8bee604cbf309ea59725847372a528127cc10ee65e3346"
+    },
+    ".context/arb004-protocol-c02-critic.md": {
+      "bytes": 6799,
+      "sha256": "3bc9a1333094465ea6c8aecc1a3254291f701cbae1e9ee9479574c0c6ce3d68d"
+    },
+    ".context/arb004-proposal-c02/docs/arbitrage/ARB-DURABLE-1-proposed-contract.md": {
+      "bytes": 71265,
+      "sha256": "9e9f3625c4fb71a9b7cf3958820fc6aa908272dd558a4e446726cda6ff0090f0"
+    },
+    ".context/arb004-proposal-c02-ticket-receipt.md": {
+      "bytes": 11335,
+      "sha256": "41fd628194ab34702a681f8b651d28ba43332c68ca515c77d45a537e0d6a2dae"
+    }
+  }
+}

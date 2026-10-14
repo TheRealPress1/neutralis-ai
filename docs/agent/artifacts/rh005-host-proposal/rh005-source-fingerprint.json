@@ -1,0 +1,83 @@
+{
+  "artifact": "RH005 unaccepted source-grounded proposal",
+  "utc": "2026-09-08T00:00:42.778614+00:00",
+  "head": "6fb1a69e65d08b968784dfe453c4905f763e23bf",
+  "parent": "da47a4bce132c48a958f399aaa6ab8c945d9c530",
+  "tree": "a62736fc9beeaa2cb63a174b4d8088807b488447",
+  "review_worktree": "/home/vercel-sandbox/review-rh004-c02-gpt",
+  "review_head_clean_detached": true,
+  "builder": "/home/vercel-sandbox/rh004-offline-completion",
+  "builder_branch": "feat/rh004-offline-authorization-completion",
+  "builder_clean": true,
+  "owner_receipt": {
+    "workspaceId": "cbda5480-4b47-4ffb-81af-186d42414dfc",
+    "sessionId": "6b3800cf-a445-4f3c-a668-ea03f6d59c41",
+    "status": "idle",
+    "updatedAt": "2026-09-07T23:11:21.852Z"
+  },
+  "source_files": [
+    {
+      "path": "docs/robinhood/RH003-hosted-client-contract.md",
+      "sha256": "332a52612754b2106bdc15e9ba710941c8b7fa20cc8782b236a915276e2d01a5"
+    },
+    {
+      "path": "src/lib/brokers/robinhood/security.ts",
+      "sha256": "f5917b2f01b1611e16b6e1d44b68e82455e910575955e573ca82130646865f9c"
+    },
+    {
+      "path": "src/lib/brokers/robinhood/authorization.ts",
+      "sha256": "3d934efe0dc3b42769e170619d8d311350f8cc59cb0d7541a78e18573a18e85f"
+    },
+    {
+      "path": "src/lib/brokers/robinhood/completion.ts",
+      "sha256": "19888efbc5a583c473d8383b31548cf8867108046e56bea86acfe0cf2469335f"
+    },
+    {
+      "path": "src/lib/brokers/robinhood/storage.ts",
+      "sha256": "3a092bf5937cc8e52b8ef92266aedc49ea56eed348711753efa9c405d5a4ec20"
+    },
+    {
+      "path": "src/lib/brokers/robinhood/token-vault.ts",
+      "sha256": "7281993719bf822a81bf102f4380bdd4daed3ad597a7a26889f9881e1d6d83b0"
+    },
+    {
+      "path": "src/lib/brokers/robinhood/connection.ts",
+      "sha256": "925248df57dccb01753977cccf1bb5a7cf5ef94741bd3758990e81af77f0c43d"
+    },
+    {
+      "path": "src/lib/brokers/robinhood/endpoints.ts",
+      "sha256": "23acc1815452b5bc04e9e81949dfc39d26a618929e893bcc39297515e7e7bd9c"
+    },
+    {
+      "path": "src/app/auth/callback/route.ts",
+      "sha256": "9897f9bbd2574e2ba4f2b7c99ba26a52e36eb2511940656ad8be475629dc3540"
+    },
+    {
+      "path": "src/lib/supabase/server.ts",
+      "sha256": "f20ee9ee2cbceffb8f721ef90a62bca5d65654469621fb09e6973ef74a7386c4"
+    },
+    {
+      "path": "src/lib/supabase/proxy.ts",
+      "sha256": "e9c5a35f7a48785637f29eee1a565a513af5e1e97e2d04e1a85d8c03185f0635"
+    },
+    {
+      "path": "src/proxy.ts",
+      "sha256": "70cc6e5213404a540f1948034034f7eb355197c2f010bac4a5e6307a9b53152f"
+    }
+  ],
+  "prior_review_hashes_unchanged": {
+    "review/RH004-C02-REVIEW.md": "9bdaf6fa9dd39bc8f82c2e3b3cd7237b1eda400c2ba4203b7cef24aadd5a7492",
+    "review/RH004-c02-review-export.tar.xz": "4aaaa93831a77f58431d75d4fe8f9f93b4627fd1be019e1b7b51f31404580dd7"
+  },
+  "proposal": {
+    "path": ".context/rh005-host-boundary-proposal.md",
+    "bytes": 18261,
+    "words": 2164,
+    "sha256": "5995cd47a7c1bf3c028710ef6731d2a268bb2f8b88509026a6958e0d79de93df"
+  },
+  "checks_status": "all RH005 checks unrun; no product import or compile/test/lint execution",
+  "only_new_private_files": [
+    ".context/rh005-host-boundary-proposal.md",
+    ".context/rh005-source-fingerprint.json"
+  ]
+}

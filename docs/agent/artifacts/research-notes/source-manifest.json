@@ -1,0 +1,96 @@
+{
+  "archived_on": "2026-10-14",
+  "description": "Exact copies of original project research and proposals from local evidence storage. Historical statuses and relative paths are preserved. Later settlements and accepted tickets govern.",
+  "files": [
+    {
+      "path": "alpaca-auction-selection-followup.md",
+      "original_path": ".context/alpaca-auction-selection-followup.md",
+      "bytes": 5161,
+      "sha256": "1d84d92598645ffebce422b96f0480feb3ac0509a0a786ae2077c54c7d855044"
+    },
+    {
+      "path": "deepfund-primary-note.md",
+      "original_path": ".context/deepfund-primary-note.md",
+      "bytes": 1863,
+      "sha256": "569a41afcceec538bc1a797beb386ac11c786257c4218ed16651c02543b73e92"
+    },
+    {
+      "path": "investment-team-paper-note.md",
+      "original_path": ".context/investment-team-paper-note.md",
+      "bytes": 2783,
+      "sha256": "ba932bd86966233c8c7d966c51c77c02bb9da0562f972a42a65b7fc17255a0bc"
+    },
+    {
+      "path": "official-open-documentary-proof.md",
+      "original_path": ".context/official-open-documentary-proof.md",
+      "bytes": 6887,
+      "sha256": "57ee640d1cfac49f18904dff946e5c91d1d283a4aa1171661f95ed674b4b8518"
+    },
+    {
+      "path": "official-open-selection-followup.md",
+      "original_path": ".context/official-open-selection-followup.md",
+      "bytes": 4380,
+      "sha256": "61a7bd25a950791c972b7949a2f5f79ed564fa37c62015c05f3de1bf683aff90"
+    },
+    {
+      "path": "rh-runtime-hosting-research-20260907.md",
+      "original_path": ".context/rh-runtime-hosting-research-20260907.md",
+      "bytes": 10974,
+      "sha256": "fbc0a70bcdf7126d9d8cc5c2a1c3a6aa0bb90496b4fd24d1cf6988118d4e0356"
+    },
+    {
+      "path": "rh003-data-coverage-research-20260907.md",
+      "original_path": ".context/rh003-data-coverage-research-20260907.md",
+      "bytes": 18666,
+      "sha256": "7e550eeddd226230307f20f6b13e31bcb7024a5c330f96052778b441791ec6b8"
+    },
+    {
+      "path": "robinhood-agentic-agreement-research.md",
+      "original_path": ".context/robinhood-agentic-agreement-research.md",
+      "bytes": 3185,
+      "sha256": "329a6cd5356629b6367c60163a5f9e62d63fc4c8e82ca5aa61174edae023230e"
+    },
+    {
+      "path": "cohead-robinhood-return/2026-09-07-desk-foundation-contract-v2.md",
+      "original_path": ".context/cohead-robinhood-return/2026-09-07-desk-foundation-contract-v2.md",
+      "bytes": 6840,
+      "sha256": "4a7b4fa6eb3f11dae660e0d47d353daac54941eb056effae12bca8918ca7dd7a"
+    },
+    {
+      "path": "cohead-robinhood-return/2026-09-07-desk-foundation-proposal-v1.md",
+      "original_path": ".context/cohead-robinhood-return/2026-09-07-desk-foundation-proposal-v1.md",
+      "bytes": 11032,
+      "sha256": "3569fe24c368affe9a3eb4f0b3c128f497fa3cb77212e3147f3e1a914b665a44"
+    },
+    {
+      "path": "cohead-robinhood-return/2026-09-07-fable-addendum-v2-experiment-proposal.md",
+      "original_path": ".context/cohead-robinhood-return/2026-09-07-fable-addendum-v2-experiment-proposal.md",
+      "bytes": 6831,
+      "sha256": "0bc859326a5aa7229a3145483c8578772af3a50f69db488b9353286961364a29"
+    },
+    {
+      "path": "cohead-robinhood-return/2026-09-07-fable-peer-note-robinhood-investment-team.md",
+      "original_path": ".context/cohead-robinhood-return/2026-09-07-fable-peer-note-robinhood-investment-team.md",
+      "bytes": 11386,
+      "sha256": "992b870095fc6c4007130c51eef0b5ac41f77c6f802b89acddc1c45883c87e92"
+    },
+    {
+      "path": "cohead-robinhood-return/2026-09-07-rh-runtime-packaging-addendum.md",
+      "original_path": ".context/cohead-robinhood-return/2026-09-07-rh-runtime-packaging-addendum.md",
+      "bytes": 1504,
+      "sha256": "92fd592342f9ebd8cbb6a1a551c200ebd356461e0debe1fee842ee5d8dfe2ebc"
+    },
+    {
+      "path": "cohead-robinhood-return/2026-09-07-rh-runtime-packaging-challenge.md",
+      "original_path": ".context/cohead-robinhood-return/2026-09-07-rh-runtime-packaging-challenge.md",
+      "bytes": 5031,
+      "sha256": "93de277bbea09511224a10dff6a4e30e701397566e4c2efcf9c4c4f020fc759b"
+    },
+    {
+      "path": "ARB002-proposed-ticket-export-a62c0f46.md",
+      "original_path": ".context/ARB002-proposed-ticket-export-a62c0f46.md",
+      "bytes": 28214,
+      "sha256": "e1903b249d2d859d97464e7824def8917aa509d824e1e39fa868e2b2d5dcc11f"
+    }
+  ]
+}

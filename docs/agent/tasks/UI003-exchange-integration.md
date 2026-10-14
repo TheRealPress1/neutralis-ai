@@ -1,0 +1,51 @@
+# UI003 — selected Exchange integration and main publication
+
+Accepted 2026-09-07. Constantine: “In the meantime let's get the design pushed to MIMO [corrected: main] and let's start getting the arbitrage up and running.” In the context of his Exchange preference and the completed Exchange refinement, Astra proceeds with Exchange as the selected direction. This supersedes the UI002 comparison-only/publication freeze for the selected design and authorizes its reviewed integration, merge/push to main. A/C remain frozen. No separate request for the same publication approval is required.
+
+Sole builder: existing Exchange owner `e2558a2b-4981-4d9b-8547-72c234ff2603` in frontend workspace `71f761b2-e913-4149-9bd1-150c1b2a7553`. Independent reviewer: existing GPT reviewer/A owner `c8639b0a-38dd-41fe-b014-5c31e915cc6d`, in a separate detached review worktree. Same-family review during reported Claude quota; prior Fable/UI002 evidence remains retained. Astra is dispatcher and sole shared-record writer.
+
+Starting selected candidate: product `62f5fa1ef0f8fb0d39635c482e193aff69d6ef36`, evidence `f0674f46e6ceb835aa02885839cc86e97838a606`. Upstream freshly fetched by root at dispatch preparation: `origin/main = d524b5a75643df5f508c068e3c4fb930ba54b4eb`. Builder must independently verify repository, remote head, full diff, local changes and source provenance before editing. Preserve all existing work and do not rename the current branch.
+
+## Result and scope
+
+Integrate Exchange's reviewed cool paper/ink-blue entry market artwork into the actual front page, with a working route into the desk. Integrate the selected terminal presentation into the actual authenticated desk using existing connected contracts and values. Preserve authentication/authorization, clear empty/disconnected/stale/error states, existing operational controls and account isolation. Keep metrics simple and avoid adding new backend capabilities.
+
+The reviewed preview uses fixtures. Those must never become apparent live balances, positions, performance, prices, engine health or account connections on operational routes. Public artwork may remain clearly illustrative. A fixture preview is still available separately. Robinhood remains honestly unconnected/setup-only until its own integration is ready. No new package/theme migration or Shadcn expansion is required.
+
+Allowed: selected frontend presentation, route wiring, necessary frontend style/layout integration and scoped deterministic tests/evidence. Do not import competing concepts. Inspect the full branch diff and exclude unrelated histories or temporary artifacts from the proposed publication. No Python/execution/accounting, SQL/migrations, database changes, secret inspection, real account/exchange calls or daemon startup. Preserve exact recovered ad37071 separately; this frontend publication must neither replay it nor substitute for its arbitrage branch.
+
+## Review and publication
+
+Builder prepares and locally commits the integration, runs appropriate build/lint and deterministic route/auth/data-state checks, then captures actual integrated routes with controlled fixtures/stubs and a fresh browser at desktop/mobile/reduced motion. Report exact tested code and evidence heads, full diff from fresh origin/main and any material limits. No production account authentication is required for the offline checks.
+
+Independent reviewer examines the committed integration and real route behavior in isolation, runs a fresh bounded critic, and returns evidence-based findings. Resolve material findings before publication. Astra then authorizes the exact reviewed candidate to use the normal GitHub main integration path under Constantine's existing order. Use a non-forced push/merge, respect branch protections and recheck if upstream changes. Publication is within scope; no additional paid resources or manual infrastructure/deployment reconfiguration is implied. Report actual main SHA and hosting/check status separately; do not call a successful push a verified healthy deployment.
+
+## Narrow field-selection correction during integration
+
+Browser checks exposed a baseline PositionsTable mismatch: group totals prefer any truthy unrealized P&L while closed leg rows show realized P&L. Source confirmed at d524 line116. Correct frontend field selection within UI003: open uses unrealized, closed uses realized, valid zero/negative values preserved, missing required values visibly unavailable. Group and leg views must agree. Add a regression fixture for stale nonzero unrealized on a closed leg and for valid zero. This does not change backend accounting or compete with the Python owner.
+
+Publication shape: prepare a separate clean release commit directly on fresh origin/main with only required frontend product changes. Preserve prototype/evidence branches. Verify all application/build inputs and full diff, including required files outside src. The independent reviewer targets this exact intended main commit; visual proof from an identical application tree may be retained with explicit parity evidence. Do not publish accumulated workspace/prototype histories solely to obtain the selected source.
+
+## Candidate 01 independent review — 2026-09-07
+
+Intended main commit `9d182ae8ac627719954ea82b0a3860c872767350`, parent d524b5a, branch `release/ui003-exchange`; exact src tree `3eb3df7b86b7fd46f1d67b6668b257754e648f43`. Original builder product `adbd86d136fe7f003780c5931f952851a0f57ff7`, evidence `34d99311be5e43191d1879589b46de592a9d51a6`, with parity proof for all 151 tracked inputs outside src. Release diff is 33 src files only. Candidate and builder trees reported clean/frozen.
+
+Builder reports 29 capture hashes, 48 browser checks and 15 accessibility scans with no violations. Independent assigned reviewer reproduced build/lint at the exact release head, verified parent/source/full-input parity and 29 capture hashes, and is testing actual routes with isolated local auth/data and a fresh critic. Potential missing-P&L Activity crash is under reproduction; final verdict pending. Recipe and evidence are `docs/design/integration/RELEASE.md` and `docs/design/integration/evidence/candidate-01/` in the frontend evidence checkout. No publication has occurred. See root `DEPLOYMENT-PREFLIGHT.md` for current alias/source mapping and pending Railway trigger access.
+
+### Material Activity finding and candidate02 revision
+
+Independent reviewer reproduced missing open unrealized P&L or missing closed realized P&L crashing the Activity tab into the desk error boundary on candidate01; Portfolio handles those same records as unavailable. The unsafe ActivityTimeline formatter predates integration but violates this ticket's required honest incomplete-data behavior. Astra accepts the finding and assigns only a narrow frontend correction to existing B writer: status-appropriate finite values, valid zero/negative retained, missing/null/nonfinite shown unavailable, no alternate-status fallback, with actual Activity browser regression and malformed-value formatter checks. No backend arithmetic change.
+
+Dispatch `968af4d0-1c62-4ae3-ac59-424ee88b3c1a`, receipt `.context/ui003-activity-revision-c02-receipt.json`. Reviewer acknowledgement `2ef54764-b659-414b-ab95-748089da82d6`, receipt `.context/ui003-review-finding-ack-c01-receipt.json`. Preserve candidate01 source/evidence/harness/ports while its report finishes. Candidate02 requires a new clean release hash and affected-path independent recheck plus fresh critic before publication.
+
+### Candidate02 frozen and dispatched for independent recheck
+
+Exact release `e5d9f705ad3978377bb573065ee2f571ef4cf3b8`, parent d524b5a, src tree `51861c48836a7af36aa9fe688f0cb28ca9100d40`; builder product `38c9bb45111cb89944f9b4e3f33514de64c5124f`, evidence `4d91c7bebe70025227862ab936194727a662f10f`. Only ActivityTimeline and RiskProfileEditor differ from candidate01; full main diff34 src files, all151 tracked non-src inputs unchanged. Builder reports exact-head build/scoped lint/source/formatter checks and18browser checks/four accessibility scans/six captures passing.
+
+Release worktree `/home/vercel-sandbox/neutralis-exchange-release-c02`, branch `release/ui003-exchange-c02`. Candidate02 harness: `docs/design/integration/revisions/candidate-02/README.md`; evidence `docs/design/integration/evidence/candidate-02/` in frontend builder checkout. Builder owns ports3105/3023. Assigned reviewer gets a fresh detached checkout and separate ports3106/43106, affected-path recheck with its own adverse fixtures and fresh bounded critic. Message `e6842f60-7bc5-465f-8bf9-9ace3c1d197e`, receipt `.context/ui003-review-c02-gpt-receipt.json`. Verdict pending; no push.
+
+### Candidate02 accepted after independent PASS
+
+The stable reviewer and a fresh bounded critic both passed the exact intended-main `e5d9f705ad3978377bb573065ee2f571ef4cf3b8`. Build/scoped lint, full-input parity, Activity adverse fixtures, all eleven Settings labels and keyboard behavior, responsive/reduced-motion checks and four accessibility scans pass with no material findings. [Review record](../reviews/UI003-candidate-02-gpt.md) preserves exact evidence and limits. Reviewer ports3106/43106 are stopped. Astra notified the builder to preserve the accepted frozen candidate under message `2624bf1a-f543-40d7-ab7f-957b4c3ba9c5`. Publication already has founder authorization but has not occurred: current Railway deployment-trigger metadata remains unavailable until the pending Mac login restores hosting authentication. No renewed publication permission is required.
+
+Root now has the exact reviewed release at `refs/reviews/ui003-exchange-c02`. Scoped export message `eba9a74b-b16b-47b6-a97f-8e2c8a29ed3f` produced a41,680-byte bundle, SHA256 `5f966b381083dce52b365091640a0c1f3c97472022316b4bcf83af02ecf354ce`, requiring only d524. Root independently verified hash/bytes, Git prerequisite/ref, exact parent/full tree `34985a3280718fc569aa53f1803e721b970cdd2b`, src tree, all34 changed src paths and151 unchanged non-src inputs. Receipt `.context/ui003-release-transfer/verified-custody.json`; bundle in that directory. Root product checkout remains d524; no source replay, repeat tests, push or deployment occurred. The completed independent review remains attached to the unchanged candidate.

@@ -1,0 +1,81 @@
+{
+  "head": "edbe260cbd65313385e12fac212f9a1cbf50c8a0",
+  "parent": "232fe82e00698776caf73c9b45cdff3f5319f22f",
+  "tree": "73bb15b599416260905654b49c8c46fec9f73036",
+  "clean": true,
+  "verdict": "PASS",
+  "material_findings": 0,
+  "tests": {
+    "affected": {
+      "passed": 424,
+      "exit": 0
+    },
+    "original_outcomes_plus_completion": {
+      "passed": 21,
+      "exit": 0
+    },
+    "original_dispatch": {
+      "passed": 16,
+      "exit": 0
+    },
+    "additional_dispatch_controls": {
+      "passed": 8,
+      "exit": 0
+    },
+    "historical_directional": {
+      "passed": 34,
+      "failed": 1,
+      "exit": 1
+    }
+  },
+  "files": {
+    ".context/arb003-review-c02-independent.md": {
+      "bytes": 7510,
+      "sha256": "f454c7b4c950d647b3ecd828e36536dd8600db119a5bd087e9e22d5fe12aa7b8"
+    },
+    ".context/arb003-review-c02/tests/arbitrage/.context/reviewer/test_review_outcomes.py": {
+      "bytes": 7391,
+      "sha256": "574c061dc656bb9da5312ebe65e0afe87ab6658d3b5db354e29d2c68cfac4571"
+    },
+    ".context/arb003-review-c02/tests/arbitrage/.context/reviewer/test_review_completion.py": {
+      "bytes": 2099,
+      "sha256": "c7fda202d1ea9e213e1ac87ddd74dd66da07fe6d12c669fcf1c618be0a202fc6"
+    },
+    ".context/arb003-review-c02/.context/independent/affected.log": {
+      "bytes": 702,
+      "sha256": "e5c71f35ee9a7ddebb26cb259bf01678637e509377b66fb9bc6be5d4661fe513"
+    },
+    ".context/arb003-review-c02/.context/independent/outcomes-completion.log": {
+      "bytes": 300,
+      "sha256": "24318caea97e36cf8fb252de4f07fe506d8ce94a2b5243084171a4b4b6eed408"
+    },
+    ".context/arb003-review-c02/.context/independent/directional.log": {
+      "bytes": 1331,
+      "sha256": "3b0398ed3ac15ca7d8ed8e878471f559f2a262301a07747a6791f64d49e361d5"
+    },
+    ".context/arb003-review-c02/.context/entry-review/test_entry_paths.py": {
+      "bytes": 7390,
+      "sha256": "515c888b3819869f52a076790b3d6ccfab84722f25b2a46ab078d5aca66f15f2"
+    },
+    ".context/arb003-review-c02/.context/entry-review/test_revision_controls.py": {
+      "bytes": 4238,
+      "sha256": "13f942e98992c703a43e3324497c4a2170df3463d375309ff673b562b98c69e7"
+    },
+    ".context/arb003-review-c02/.context/entry-review/original-results.log": {
+      "bytes": 27133,
+      "sha256": "bb2f9001155432769edf2902a0b1302a7bf05f5f97bb9414bb0f77757038fe79"
+    },
+    ".context/arb003-review-c02/.context/entry-review/controls-results.log": {
+      "bytes": 299,
+      "sha256": "9c44c64796f9cf1e58b0b09dfda195649c2aa4af4ee00ef16b0523b9d0d5ec13"
+    },
+    ".context/arb003-review-c02/.context/entry-review/REVIEW.md": {
+      "bytes": 5549,
+      "sha256": "f3e3568a5519a3176d3832eeed35abfbd058d7cd6835004169b237dda624008e"
+    },
+    ".context/arb003-review-c02/.context/entry-review/manifest.json": {
+      "bytes": 1260,
+      "sha256": "7adbb26d528d747a9a4e69829eebaf58faa9143bb0de30cfde4d28782225a96c"
+    }
+  }
+}

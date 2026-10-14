@@ -1,0 +1,13 @@
+# Minimum-data evidence settlement
+
+2026-09-07, Astra. The complete [source assessment](../EQUITIES-MINIMUM-DATA-20260907.md) and original Fable's [v2 challenge](EQUITIES-minimum-data-fable-v2.md) have been read. [V1](EQUITIES-minimum-data-fable-v1.md) is preserved as superseded review evidence. V2 withdraws its own unsupported action-coverage, source-clock, admission and zero-cost claims; it identifies remaining documentary gaps without admitting any feed, observation, entitlement or expense.
+
+Root accepts the corrected evidence distinction and the sequence of public documentation before account samples. One precision applies to the v2 stop wording: undocumented coverage means **not established against v4 on the examined evidence**, not a proof that a provider can never satisfy it. Retrieval time must never be placed in a source-publication field. An auction event timestamp is also not automatically a publication or revision clock.
+
+Subsequent [official-open documentary proof](../EQUITIES-OFFICIAL-OPEN-20260907.md), attributed internal GPT research, closes one part of the semantic mapping. The pinned Alpaca schema explicitly connects auction conditions and venues to the corresponding metadata definitions. In conjunction with the official definitions and SPY's current listing, `o[]` with `c=Q,x=P` is a documented candidate for a primary-venue official-open announcement. Root verified the pinned schema bytes and those cross-references. It does not establish unique core-session selection, corrections, publication timing, actual delivered coverage, entitlement or historical listing identity. Daily OHLC open remains an unsupported substitute.
+
+No source supplies an admitted complete packet here. Positive coverage of all required corporate-action types/dates, price publication/revision semantics, contemporaneous availability and the founders' storage/sharing/model-use rights remain unresolved. SEC's documented copying policy is separate from the completeness of a specific experiment packet; the earlier single-filing check stays historical evidence. Advertised no-charge plans are separate from actual route access and total operating cost.
+
+ETF v4 bytes, accepted P1 v2 mathematical addendum, the distinct momentum/profitability proposal and all product source remain unchanged. There is no strategy return result, backtest, account, paid dataset or experiment authorization from this documentary settlement.
+
+Exact inputs: minimum-data source SHA256 `7e550eeddd226230307f20f6b13e31bcb7024a5c330f96052778b441791ec6b8`; Fable v2 `3f0a786aa934baabeb60cf9b11ef74b3c29552cf94ff24aa3c9f3cb2b9ec7e92`; official-open proof `57ee640d1cfac49f18904dff946e5c91d1d283a4aa1171661f95ed674b4b8518`.

@@ -1,0 +1,36 @@
+{
+  "review_kind": "read-only documentation contract challenge",
+  "verdict": "REQUEST CLARIFICATION / REVISE",
+  "material_gaps": 3,
+  "head": "a9e226a06f3e709bacb96256357b4d50284713e6",
+  "parent": "edbe260cbd65313385e12fac212f9a1cbf50c8a0",
+  "tree": "e62c6b2b0aec99bdf69169a69026bf206d0e0d61",
+  "clean": true,
+  "proposal_lines": 466,
+  "execution": {
+    "product_imports": false,
+    "tests": false,
+    "network": false,
+    "database_or_sql": false,
+    "publication": false
+  },
+  "files": {
+    ".context/arb004-proposal-c01-review.md": {
+      "bytes": 8558,
+      "sha256": "cdb5a6a089b5e73771309c4dd977b85f2919c3631980f042271e532df1de9ad4"
+    },
+    ".context/arb004-protocol-critic.md": {
+      "bytes": 8192,
+      "sha256": "517cf2d420627a70324ea5a52ac5a674e9c1881960a335576e9ba323b403d634"
+    },
+    ".context/arb004-proposal-c01/docs/arbitrage/ARB-DURABLE-1-proposed-contract.md": {
+      "bytes": 44603,
+      "sha256": "fb2b29e765be3c301ff056310353ca02d4be696609a72eb5f96056c33c1cf27b"
+    },
+    ".context/arb004-proposal-c01-ticket-receipt.md": {
+      "bytes": 9413,
+      "sha256": "4e5464fd6bcb095e32649bc17d99eec8a63a8dad408c106ad0cf4108e248bf38",
+      "source": "docs/agent/tasks/ARB004-durable-entry-proposal.md"
+    }
+  }
+}

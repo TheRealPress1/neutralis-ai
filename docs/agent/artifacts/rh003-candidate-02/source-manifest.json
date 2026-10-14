@@ -1,0 +1,24 @@
+{
+  "archived_on": "2026-10-14",
+  "description": "Exact copies of original documentation from preserved candidate custody. Historical statuses and relative paths are preserved.",
+  "files": [
+    {
+      "path": "RH003-hosted-client-contract.md",
+      "original_path": ".context/rh003-c02-custody/docs/robinhood/RH003-hosted-client-contract.md",
+      "bytes": 19132,
+      "sha256": "332a52612754b2106bdc15e9ba710941c8b7fa20cc8782b236a915276e2d01a5"
+    },
+    {
+      "path": "RH003-source-receipt.md",
+      "original_path": ".context/rh003-c02-custody/docs/robinhood/RH003-source-receipt.md",
+      "bytes": 20487,
+      "sha256": "a36b1313bb9d4d366e8f8faa1ed901dc5c3bbea4b14b666489453e71b16ab018"
+    },
+    {
+      "path": "RH003-HANDOFF.md",
+      "original_path": ".context/rh003-c02-custody/docs/robinhood/RH003-HANDOFF.md",
+      "bytes": 9004,
+      "sha256": "caae49bedc7a644560ab57091f2c1ab2cccb0b29f8868aa468db51da56f1921d"
+    }
+  ]
+}
