@@ -56,9 +56,7 @@ from neutralis.models import (
     ThreeWayGroup,
     TradeLeg,
 )
-from neutralis.execution.executor import PaperExecutor
-from neutralis.execution.models import TickContext
-from neutralis.portfolio.manager import PortfolioManager
+from neutralis.portfolio.manager import PortfolioManager, is_confirmed_execution
 from neutralis.settlement.settler import run_settlement
 from neutralis.storage.postgres import PostgresStorage
 from neutralis.venues.kalshi_client import KalshiClient
@@ -1928,7 +1926,9 @@ class EventEngine:
                         "verdict": "pass",
                     })
 
-                    # Try live execution first, fall back to paper
+                    # A live failure is not a simulated fill. Paper trading is
+                    # an explicit mode in the polling pipeline, never recovery
+                    # for an unavailable executor or uncertain exchange result.
                     live_executed = self._try_live_execute(
                         sig, dec, decision_id, settings, storage, portfolio,
                     )
@@ -1944,35 +1944,11 @@ class EventEngine:
                             "size": dec.suggested_size_dollars,
                         })
                     else:
-                        # Paper fallback — record the trade for tracking
-                        tick_ctx = TickContext(
-                            tick_id=f"rt_{int(time.time())}_{signal.ticker}",
-                            run_number=0,
-                            timestamp=datetime.now(timezone.utc),
-                        )
-                        paper = PaperExecutor(storage, portfolio)
-                        exec_result = paper.execute(
-                            sig, dec, decision_id, tick_ctx, market=market,
-                        )
-                        if exec_result.orders:
-                            state.orders_placed += len(exec_result.orders)
-                            logger.info(
-                                "RT execution: %s edge=%.2f%% PAPER (%d orders)",
-                                signal.ticker, signal.edge_pct, len(exec_result.orders),
-                            )
-                            self._log_pipeline("order", "execution", f"Paper order filled: {signal.ticker}", {
-                                "ticker": signal.ticker, "edge_pct": round(signal.edge_pct, 2),
-                                "size": dec.suggested_size_dollars,
-                                "mode": "paper",
-                            })
-                        else:
-                            logger.warning(
-                                "RT execution SKIPPED (live + paper failed): %s edge=%.2f%%",
-                                signal.ticker, signal.edge_pct,
-                            )
-                            self._log_pipeline("error", "execution", f"Order failed: {signal.ticker}", {
-                                "ticker": signal.ticker, "edge_pct": round(signal.edge_pct, 2),
-                            })
+                        logger.warning("Live execution failed or unavailable: %s", signal.ticker)
+                        self._log_pipeline("error", "execution", f"Live execution failed: {signal.ticker}", {
+                            "ticker": signal.ticker, "decision_id": decision_id,
+                            "mode": "live", "status": "failed_or_unconfirmed",
+                        })
 
         except Exception as exc:
             logger.exception("Execution pipeline error for %s", signal.ticker)
@@ -1985,6 +1961,8 @@ class EventEngine:
         settings: Settings, storage: PostgresStorage, portfolio: PortfolioManager,
     ) -> bool:
         """Attempt live order placement on Kalshi and/or Polymarket. Returns True if successful."""
+        if not settings.execution.live_trading_enabled:
+            return False
         # Venue is set correctly by cross_scanner.py from NormalizedMarket.venue:
         #   "kalshi", "polymarket" (international), or "polymarket_us"
         kalshi_legs = [leg for leg in signal.legs if (leg.venue or "kalshi") == "kalshi"]
@@ -1992,6 +1970,13 @@ class EventEngine:
         poly_us_legs = [leg for leg in signal.legs if leg.venue == "polymarket_us"]
 
         # Cross-platform arb via Polymarket US
+        has_kalshi = bool(settings.execution.kalshi_api_key_id or self._has_kalshi_db_creds)
+        if kalshi_legs and not has_kalshi:
+            return False
+        if any((leg.venue or "kalshi") not in {"kalshi", "polymarket", "polymarket_us"} for leg in signal.legs):
+            return False
+        if poly_legs and poly_us_legs:
+            return False
         if kalshi_legs and poly_us_legs and settings.execution.polymarket_us_key_id:
             return self._execute_cross_platform_us_live(
                 signal, decision, decision_id, settings, storage, portfolio,
@@ -2006,7 +1991,7 @@ class EventEngine:
             )
 
         # Single-venue Kalshi only (complement arb or Kalshi-only cross-platform)
-        if kalshi_legs and (settings.execution.kalshi_api_key_id or self._has_kalshi_db_creds):
+        if kalshi_legs and not poly_legs and not poly_us_legs and has_kalshi:
             return self._execute_kalshi_live(
                 signal, decision, decision_id, settings, storage, portfolio,
                 kalshi_legs,
@@ -2020,9 +2005,10 @@ class EventEngine:
         kalshi_legs: list[TradeLeg],
     ) -> bool:
         """Execute Kalshi-only legs. Returns True if all legs fill."""
+        results = []
+        all_filled = True
         try:
             with self._make_kalshi_executor(settings) as executor:
-                results = []
                 for leg in kalshi_legs:
                     price_cents = max(1, min(99, round(leg.price_dollars * 100)))
                     if signal.combined_cost > 0:
@@ -2035,21 +2021,43 @@ class EventEngine:
 
                     resp = executor.place_order(leg.ticker, leg.side, price_cents, count)
                     order = resp.get("order", {})
-                    if order.get("status") == "executed":
+                    if is_confirmed_execution(order):
+                        order.setdefault("ticker", leg.ticker)
+                        order.setdefault("side", leg.side)
+                        order.setdefault("venue", "kalshi")
                         results.append(order)
                     else:
-                        return False
-
-                if results:
-                    portfolio.record_fill(
-                        signal, decision, decision_id,
-                        is_paper=False, execution_results=results,
-                    )
-                    return True
+                        all_filled = False
+                        break
         except (TimeoutError, httpx.TimeoutException):
+            all_filled = False
             logger.warning("Kalshi live execution TIMED OUT for %s", signal.ticker)
         except Exception:
+            all_filled = False
             logger.warning("Kalshi live execution failed for %s", signal.ticker, exc_info=True)
+        if results:
+            trades = portfolio.record_fill(
+                signal, decision, decision_id,
+                is_paper=False, execution_results=results,
+            )
+            return all_filled and len(trades) == len(kalshi_legs)
+        return False
+
+    def _record_partial_live_results(
+        self, signal: Signal, decision: Decision, decision_id: int,
+        portfolio: PortfolioManager, results: list[dict],
+    ) -> bool:
+        """Preserve confirmed exposure before aborting a multi-leg execution."""
+        if results:
+            try:
+                portfolio.record_fill(
+                    signal, decision, decision_id,
+                    is_paper=False, execution_results=results,
+                )
+            except Exception:
+                # Do not retry partially persisted fills from an outer exchange
+                # exception handler. An accounting failure needs reconciliation.
+                logger.exception("Unable to persist confirmed partial fills for %s", signal.ticker)
         return False
 
     def _execute_cross_platform_us_live(
@@ -2076,7 +2084,9 @@ class EventEngine:
                     slug = us_market.market_slug if us_market else ""
                     if not slug:
                         logger.warning("No market_slug for Poly US ticker %s — skipping", leg.ticker)
-                        return False
+                        return self._record_partial_live_results(
+                            signal, decision, decision_id, portfolio, poly_us_results + kalshi_results,
+                        )
 
                     if signal.combined_cost > 0:
                         leg_frac = leg.price_dollars / signal.combined_cost
@@ -2086,10 +2096,11 @@ class EventEngine:
                     leg_dollars = min(leg_dollars, settings.execution.max_order_dollars)
 
                     resp = us_exec.place_market_order(slug, leg.side, leg_dollars)
-                    if resp.get("success"):
+                    if is_confirmed_execution(resp):
                         poly_us_results.append({
                             "order_id": resp.get("orderID", ""),
                             "ticker": leg.ticker,
+                            "side": leg.side,
                             "status": "executed",
                             "venue": "polymarket_us",
                         })
@@ -2098,13 +2109,19 @@ class EventEngine:
                             "Polymarket US leg failed: %s error=%s",
                             signal.ticker, resp.get("errorMsg", ""),
                         )
-                        return False
+                        return self._record_partial_live_results(
+                            signal, decision, decision_id, portfolio, poly_us_results + kalshi_results,
+                        )
         except (TimeoutError, httpx.TimeoutException):
             logger.warning("Polymarket US execution TIMED OUT for %s", signal.ticker)
-            return False
+            return self._record_partial_live_results(
+                signal, decision, decision_id, portfolio, poly_us_results + kalshi_results,
+            )
         except Exception:
             logger.warning("Polymarket US execution failed for %s", signal.ticker, exc_info=True)
-            return False
+            return self._record_partial_live_results(
+                signal, decision, decision_id, portfolio, poly_us_results + kalshi_results,
+            )
 
         # Step 2: Kalshi FOK
         try:
@@ -2121,8 +2138,10 @@ class EventEngine:
 
                     resp = k_exec.place_order(leg.ticker, leg.side, price_cents, count)
                     order = resp.get("order", {})
-                    if order.get("status") == "executed":
+                    if is_confirmed_execution(order):
                         order.setdefault("ticker", leg.ticker)
+                        order.setdefault("side", leg.side)
+                        order.setdefault("venue", "kalshi")
                         kalshi_results.append(order)
                     else:
                         logger.warning(
@@ -2137,7 +2156,7 @@ class EventEngine:
 
         all_results = poly_us_results + kalshi_results
         if all_results:
-            portfolio.record_fill(
+            trades = portfolio.record_fill(
                 signal, decision, decision_id,
                 is_paper=False, execution_results=all_results,
             )
@@ -2145,7 +2164,7 @@ class EventEngine:
                 "Cross-platform US taker: %s poly_us=%d kalshi=%d fills",
                 signal.ticker, len(poly_us_results), len(kalshi_results),
             )
-            return True
+            return len(trades) == len(signal.legs)
         return False
 
     def _resolve_poly_token_id(self, poly_ticker: str, side: str) -> str | None:
@@ -2276,7 +2295,9 @@ class EventEngine:
                             "No CLOB token ID for Polymarket ticker %s — skipping",
                             leg.ticker,
                         )
-                        return False
+                        return self._record_partial_live_results(
+                            signal, decision, decision_id, portfolio, poly_results + kalshi_results,
+                        )
 
                     if signal.combined_cost > 0:
                         leg_frac = leg.price_dollars / signal.combined_cost
@@ -2290,20 +2311,26 @@ class EventEngine:
                         token_id=token_id, side=poly_side,
                         amount=round(leg_dollars, 2),
                     )
-                    if resp.get("success"):
-                        poly_results.append(resp)
+                    if is_confirmed_execution(resp):
+                        poly_results.append({**resp, "ticker": leg.ticker, "side": leg.side, "venue": "polymarket"})
                     else:
                         logger.warning(
                             "Polymarket leg failed for %s: %s",
                             signal.ticker, resp.get("errorMsg", "unknown"),
                         )
-                        return False
+                        return self._record_partial_live_results(
+                            signal, decision, decision_id, portfolio, poly_results + kalshi_results,
+                        )
         except (TimeoutError, httpx.TimeoutException):
             logger.warning("Polymarket execution TIMED OUT for %s", signal.ticker)
-            return False
+            return self._record_partial_live_results(
+                signal, decision, decision_id, portfolio, poly_results + kalshi_results,
+            )
         except Exception:
             logger.warning("Polymarket execution failed for %s", signal.ticker, exc_info=True)
-            return False
+            return self._record_partial_live_results(
+                signal, decision, decision_id, portfolio, poly_results + kalshi_results,
+            )
 
         # ── Step 2: Kalshi FOK (with depth check) ──
         for leg in kalshi_legs:
@@ -2315,7 +2342,9 @@ class EventEngine:
                     "(one-legged position, exit strategies will manage)",
                     leg.ticker, leg.side, leg.price_dollars,
                 )
-                return False
+                return self._record_partial_live_results(
+                    signal, decision, decision_id, portfolio, poly_results + kalshi_results,
+                )
 
         try:
             with self._make_kalshi_executor(settings) as k_exec:
@@ -2331,7 +2360,10 @@ class EventEngine:
 
                     resp = k_exec.place_order(leg.ticker, leg.side, price_cents, count)
                     order = resp.get("order", {})
-                    if order.get("status") == "executed":
+                    if is_confirmed_execution(order):
+                        order.setdefault("ticker", leg.ticker)
+                        order.setdefault("side", leg.side)
+                        order.setdefault("venue", "kalshi")
                         kalshi_results.append(order)
                     else:
                         logger.warning(
@@ -2354,7 +2386,7 @@ class EventEngine:
         # ── Step 3: Record fills ──
         all_results = poly_results + kalshi_results
         if all_results:
-            portfolio.record_fill(
+            trades = portfolio.record_fill(
                 signal, decision, decision_id,
                 is_paper=False, execution_results=all_results,
             )
@@ -2362,7 +2394,7 @@ class EventEngine:
                 "Cross-platform taker: %s poly=%d kalshi=%d fills",
                 signal.ticker, len(poly_results), len(kalshi_results),
             )
-            return True
+            return len(trades) == len(signal.legs)
         return False
 
     def _execute_xp_maker(
@@ -2383,7 +2415,9 @@ class EventEngine:
         poly_results = []
         k_market = signal.market_snapshot  # Kalshi NormalizedMarket with bid/ask data
         if k_market is None:
-            return False
+            return self._record_partial_live_results(
+                signal, decision, decision_id, portfolio, kalshi_results + poly_results,
+            )
 
         offset = settings.execution.maker_price_offset_cents
         timeout = settings.execution.maker_fill_timeout_sec
@@ -2397,7 +2431,9 @@ class EventEngine:
                     "Insufficient Kalshi depth for %s %s — skipping maker order",
                     leg.ticker, leg.side,
                 )
-                return False
+                return self._record_partial_live_results(
+                    signal, decision, decision_id, portfolio, kalshi_results + poly_results,
+                )
 
         # ── Step 1: Kalshi GTC limit order (maker) ──
         try:
@@ -2422,6 +2458,9 @@ class EventEngine:
 
                     # May fill immediately if price crosses the spread
                     if status == "executed":
+                        order.setdefault("ticker", leg.ticker)
+                        order.setdefault("side", leg.side)
+                        order.setdefault("venue", "kalshi")
                         kalshi_results.append(order)
                         continue
 
@@ -2430,7 +2469,9 @@ class EventEngine:
                             "Kalshi maker order rejected for %s: status=%s",
                             signal.ticker, status,
                         )
-                        return False
+                        return self._record_partial_live_results(
+                            signal, decision, decision_id, portfolio, kalshi_results + poly_results,
+                        )
 
                     # Poll for fill with exponential backoff
                     filled = False
@@ -2444,6 +2485,9 @@ class EventEngine:
                         check_order = check.get("order", {})
                         check_status = check_order.get("status", "")
                         if check_status == "executed":
+                            check_order.setdefault("ticker", leg.ticker)
+                            check_order.setdefault("side", leg.side)
+                            check_order.setdefault("venue", "kalshi")
                             kalshi_results.append(check_order)
                             filled = True
                             break
@@ -2462,20 +2506,29 @@ class EventEngine:
                             )
                             check_order["_partial_fill_count"] = partial_count
                             check_order["_original_count"] = count
+                            check_order.setdefault("ticker", leg.ticker)
+                            check_order.setdefault("side", leg.side)
+                            check_order.setdefault("venue", "kalshi")
                             kalshi_results.append(check_order)
                         else:
                             logger.info(
                                 "Kalshi maker order unfilled after %.1fs, canceled for %s",
                                 timeout, signal.ticker,
                             )
-                            return False
+                            return self._record_partial_live_results(
+                                signal, decision, decision_id, portfolio, kalshi_results + poly_results,
+                            )
 
         except (TimeoutError, httpx.TimeoutException):
             logger.warning("Kalshi maker execution TIMED OUT for %s", signal.ticker)
-            return False
+            return self._record_partial_live_results(
+                signal, decision, decision_id, portfolio, kalshi_results + poly_results,
+            )
         except Exception:
             logger.warning("Kalshi maker execution failed for %s", signal.ticker, exc_info=True)
-            return False
+            return self._record_partial_live_results(
+                signal, decision, decision_id, portfolio, kalshi_results + poly_results,
+            )
 
         # ── Step 2: Kalshi filled — immediately execute Poly FOK ──
         # Scale Poly leg if Kalshi was a partial fill
@@ -2509,8 +2562,8 @@ class EventEngine:
                         token_id=token_id, side=poly_side,
                         amount=round(leg_dollars, 2),
                     )
-                    if resp.get("success"):
-                        poly_results.append(resp)
+                    if is_confirmed_execution(resp):
+                        poly_results.append({**resp, "ticker": leg.ticker, "side": leg.side, "venue": "polymarket"})
                     else:
                         logger.warning(
                             "Polymarket leg FAILED after Kalshi maker filled for %s — "
@@ -2532,7 +2585,7 @@ class EventEngine:
         # ── Step 3: Record fills ──
         all_results = kalshi_results + poly_results
         if all_results:
-            portfolio.record_fill(
+            trades = portfolio.record_fill(
                 signal, decision, decision_id,
                 is_paper=False, execution_results=all_results,
             )
@@ -2540,7 +2593,7 @@ class EventEngine:
                 "Cross-platform maker: %s kalshi=%d poly=%d fills",
                 signal.ticker, len(kalshi_results), len(poly_results),
             )
-            return True
+            return len(trades) == len(signal.legs)
         return False
 
     # ── Periodic tasks ─────────────────────────────────────────────────

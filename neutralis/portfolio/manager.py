@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timezone
+import math
 
 from neutralis.categories import classify_market
 from neutralis.config import DirectionalConfig, ExitConfig, PortfolioConfig, Settings
@@ -22,6 +23,21 @@ from neutralis.models import (
 from neutralis.storage.postgres import PostgresStorage
 
 logger = get_logger(__name__)
+
+
+def is_confirmed_execution(result: dict) -> bool:
+    """Accepted/submitted is not filled. Require an exchange fill indication."""
+    if not (result.get("order_id") or result.get("orderID")):
+        return False
+    count = result.get("fill_count_fp", result.get("fill_count"))
+    if count is not None:
+        try:
+            return math.isfinite(float(count)) and float(count) > 0
+        except (TypeError, ValueError):
+            return False
+    return result.get("filled") is True or str(result.get("status", "")).lower() in {
+        "executed", "filled", "matched",
+    }
 
 
 class PortfolioManager:
@@ -58,7 +74,7 @@ class PortfolioManager:
     ) -> list[Trade]:
         """Record trades from a PASS decision and update positions.
 
-        For each leg in the signal, create a Trade and upsert the Position.
+        For each confirmed leg, create a Trade and upsert the Position.
         When execution_results is provided, uses actual fill data from the exchange.
         Returns the list of created Trade objects.
         """
@@ -66,6 +82,7 @@ class PortfolioManager:
             return []
 
         trades: list[Trade] = []
+        used_order_ids: set[tuple[str, str]] = set()
         venue = "kalshi"
         if signal.market_snapshot is not None:
             venue = signal.market_snapshot.venue
@@ -86,32 +103,41 @@ class PortfolioManager:
 
             quantity = leg_size / leg.price_dollars if leg.price_dollars > 0 else 0.0
 
-            # Use actual execution data if available.
-            # Match by ticker (not position) to avoid venue-ordering mismatches
-            # when xp_results is [poly_result, kalshi_result] but signal.legs
-            # is [kalshi_leg, poly_leg].
+            # Live results must identify this exact venue/ticker/side. A
+            # partially filled pair must never create its missing hedge leg.
             order_id = None
             fill_price = None
             ex = None
-            if execution_results:
+            if not is_paper:
                 ex = next(
-                    (er for er in execution_results if er.get("ticker") == leg.ticker),
+                    (er for er in (execution_results or [])
+                     if er.get("ticker") == leg.ticker
+                     and er.get("side") == leg.side
+                     and er.get("venue", "kalshi") == leg_venue
+                     and is_confirmed_execution(er)
+                     and (leg_venue, str(er.get("order_id") or er.get("orderID"))) not in used_order_ids),
                     None,
                 )
-                if ex is None and i < len(execution_results):
-                    ex = execution_results[i]  # fallback to positional
+                if ex is None:
+                    continue
+                used_order_ids.add((leg_venue, str(ex.get("order_id") or ex.get("orderID"))))
+            elif execution_results and i < len(execution_results):
+                ex = execution_results[i]
             if ex is not None:
-                order_id = ex.get("order_id")
+                order_id = ex.get("order_id") or ex.get("orderID")
                 # Kalshi returns prices in cents; convert to dollars
-                if leg.side == "yes" and ex.get("yes_price"):
+                dollar_price = ex.get(f"{leg.side}_price_dollars")
+                if dollar_price is not None:
+                    fill_price = float(dollar_price)
+                elif leg.side == "yes" and ex.get("yes_price") is not None:
                     fill_price = ex["yes_price"] / 100.0
-                elif leg.side == "no" and ex.get("no_price"):
+                elif leg.side == "no" and ex.get("no_price") is not None:
                     fill_price = ex["no_price"] / 100.0
                 # Use actual fill count if available
-                actual_count = ex.get("fill_count")
-                if actual_count and actual_count > 0:
+                actual_count = ex.get("fill_count_fp", ex.get("fill_count"))
+                if actual_count is not None and float(actual_count) > 0:
                     quantity = float(actual_count)
-                    if fill_price and fill_price > 0:
+                    if fill_price is not None:
                         leg_size = round(quantity * fill_price, 2)
 
             trade = Trade(
@@ -121,7 +147,7 @@ class PortfolioManager:
                 event_ticker=signal.event_ticker,
                 venue=leg_venue,
                 side=side,
-                price=fill_price or leg.price_dollars,
+                price=fill_price if fill_price is not None else leg.price_dollars,
                 size_dollars=leg_size,
                 quantity=round(quantity, 4),
                 is_paper=is_paper,

@@ -43,7 +43,7 @@ from neutralis.guard.decision import evaluate_directional_signal, evaluate_signa
 from neutralis.guard.regime import apply_regime_to_pipeline, compute_regime
 from neutralis.logging import get_logger
 from neutralis.models import Decision, DecisionVerdict, MarketType, NormalizedMarket, Signal
-from neutralis.portfolio.manager import PortfolioManager
+from neutralis.portfolio.manager import PortfolioManager, is_confirmed_execution
 from neutralis.services.user_credentials import load_active_users, load_user_credentials
 from neutralis.settlement.settler import run_settlement
 from neutralis.storage.postgres import PostgresStorage
@@ -394,6 +394,16 @@ class UserRunResult:
     fills_created: int = 0
 
 
+def _record_execution_failure(storage: PostgresStorage, signal: Signal, decision_id: int, reason: str) -> None:
+    """Persist an unsuccessful live attempt without inventing orders or fills."""
+    logger.warning("Live execution failed or unconfirmed for %s: %s", signal.ticker, reason)
+    storage.save_pipeline_log("error", "execution", f"Live execution failed: {signal.ticker}", {
+        "ticker": signal.ticker, "decision_id": decision_id,
+        "mode": "live", "status": "failed_or_unconfirmed", "reason": reason,
+    })
+    storage.flush_pipeline_logs()
+
+
 def evaluate_and_execute_for_user(
     user: dict,
     scan: ScanResult,
@@ -558,7 +568,7 @@ def evaluate_and_execute_for_user(
                     balance = live_kalshi.get_balance()
                     if balance < settings.execution.balance_floor_dollars:
                         logger.warning(
-                            "Kalshi balance $%.2f below floor $%.2f, falling back to paper",
+                            "Kalshi balance $%.2f below floor $%.2f, live execution unavailable",
                             balance, settings.execution.balance_floor_dollars,
                         )
                         live_kalshi.close()
@@ -636,8 +646,8 @@ def evaluate_and_execute_for_user(
             scored = _score_signal(signal, market, storage, match_score=match_conf)
             signal_market_pairs.append((scored, market))
 
-        # Paper executor for this user
-        paper_executor = PaperExecutor(storage, portfolio)
+        # Simulation is an explicit mode, not fallback for failed live orders.
+        paper_executor = PaperExecutor(storage, portfolio) if not settings.execution.live_trading_enabled else None
 
         # ── Directional signals (isolated portfolio) ──
         directional_selected = 0
@@ -676,12 +686,12 @@ def evaluate_and_execute_for_user(
                         )
                         if not token_id:
                             logger.warning(
-                                "Directional %s: no CLOB token ID (clob_token_ids=%s), paper fallback",
+                                "Directional %s: no CLOB token ID (clob_token_ids=%s), no live fill confirmed",
                                 scored.ticker, market.clob_token_ids,
                             )
                         if not scored.entry_side:
                             logger.warning(
-                                "Directional %s: no entry_side, paper fallback",
+                                "Directional %s: no entry_side, no live fill confirmed",
                                 scored.ticker,
                             )
                         if token_id and scored.entry_side:
@@ -694,17 +704,19 @@ def evaluate_and_execute_for_user(
                                 resp = live_poly.place_market_order(
                                     token_id, poly_side, leg_dollars,
                                 )
-                                if resp.get("success"):
-                                    portfolio.record_fill(
+                                if is_confirmed_execution(resp):
+                                    trades = portfolio.record_fill(
                                         scored, decision, decision_db_id,
                                         is_paper=False,
                                         execution_results=[{
                                             "order_id": resp.get("orderID", ""),
+                                            "ticker": scored.ticker,
+                                            "side": scored.entry_side,
                                             "status": "executed",
                                             "venue": "polymarket",
                                         }],
                                     )
-                                    dir_live_ok = True
+                                    dir_live_ok = bool(trades) and len(trades) == len(scored.legs)
                                     logger.info(
                                         "LIVE directional fill: %s %s $%.2f",
                                         scored.entry_side, scored.ticker, leg_dollars,
@@ -716,7 +728,7 @@ def evaluate_and_execute_for_user(
                                     )
                             except Exception:
                                 logger.warning(
-                                    "Polymarket directional failed: %s, paper fallback",
+                                    "Polymarket directional failed: %s, no live fill confirmed",
                                     scored.ticker, exc_info=True,
                                 )
 
@@ -725,7 +737,7 @@ def evaluate_and_execute_for_user(
                         slug = market.market_slug
                         if not slug:
                             logger.warning(
-                                "Directional %s: no market_slug, paper fallback",
+                                "Directional %s: no market_slug, no live fill confirmed",
                                 scored.ticker,
                             )
                         elif scored.entry_side:
@@ -737,17 +749,19 @@ def evaluate_and_execute_for_user(
                                 resp = live_poly_us.place_market_order(
                                     slug, scored.entry_side, leg_dollars,
                                 )
-                                if resp.get("success"):
-                                    portfolio.record_fill(
+                                if is_confirmed_execution(resp):
+                                    trades = portfolio.record_fill(
                                         scored, decision, decision_db_id,
                                         is_paper=False,
                                         execution_results=[{
                                             "order_id": resp.get("orderID", ""),
+                                            "ticker": scored.ticker,
+                                            "side": scored.entry_side,
                                             "status": "executed",
                                             "venue": "polymarket_us",
                                         }],
                                     )
-                                    dir_live_ok = True
+                                    dir_live_ok = bool(trades) and len(trades) == len(scored.legs)
                                     logger.info(
                                         "LIVE directional fill: %s %s $%.2f on Polymarket US",
                                         scored.entry_side, scored.ticker, leg_dollars,
@@ -759,7 +773,7 @@ def evaluate_and_execute_for_user(
                                     )
                             except Exception:
                                 logger.warning(
-                                    "Polymarket US directional failed: %s, paper fallback",
+                                    "Polymarket US directional failed: %s, no live fill confirmed",
                                     scored.ticker, exc_info=True,
                                 )
 
@@ -780,13 +794,16 @@ def evaluate_and_execute_for_user(
                                     scored.ticker, scored.entry_side, price_cents, count,
                                 )
                                 order = resp.get("order", {})
-                                if order.get("status") == "executed":
-                                    portfolio.record_fill(
+                                if is_confirmed_execution(order):
+                                    order.setdefault("ticker", scored.ticker)
+                                    order.setdefault("side", scored.entry_side)
+                                    order.setdefault("venue", "kalshi")
+                                    trades = portfolio.record_fill(
                                         scored, decision, decision_db_id,
                                         is_paper=False,
                                         execution_results=[order],
                                     )
-                                    dir_live_ok = True
+                                    dir_live_ok = bool(trades) and len(trades) == len(scored.legs)
                                     logger.info(
                                         "LIVE directional fill: %s %s $%.2f on Kalshi",
                                         scored.entry_side, scored.ticker, leg_dollars,
@@ -798,16 +815,18 @@ def evaluate_and_execute_for_user(
                                     )
                             except Exception:
                                 logger.warning(
-                                    "Kalshi directional failed: %s, paper fallback",
+                                    "Kalshi directional failed: %s, no live fill confirmed",
                                     scored.ticker, exc_info=True,
                                 )
 
-                    if not dir_live_ok:
+                    if paper_executor is not None:
                         exec_result = paper_executor.execute(
                             scored, decision, decision_db_id, tick_ctx, market=market,
                         )
                         result.orders_created += len(exec_result.orders)
                         result.fills_created += len(exec_result.fills)
+                    elif not dir_live_ok:
+                        _record_execution_failure(storage, scored, decision_db_id, "Executor unavailable or no confirmed fill")
                     dir_snapshot = portfolio.get_snapshot_filtered("high_probability_directional")
 
         # ── Guard evaluation (provisional) ──
@@ -860,11 +879,18 @@ def evaluate_and_execute_for_user(
                 poly_legs = [leg for leg in signal.legs if leg.venue == "polymarket"]
                 poly_us_legs = [leg for leg in signal.legs if leg.venue == "polymarket_us"]
 
+                if settings.execution.live_trading_enabled:
+                    executors = {"kalshi": live_kalshi, "polymarket": live_poly, "polymarket_us": live_poly_us}
+                    required_venues = {leg.venue or "kalshi" for leg in signal.legs}
+                    if not required_venues or any(executors.get(venue) is None for venue in required_venues) or (poly_legs and poly_us_legs):
+                        _record_execution_failure(storage, signal, decision_id, "Required venue executor unavailable")
+                        continue
+
                 if poly_legs and kalshi_legs and live_kalshi is not None and live_poly is not None:
                     # ── Polymarket maintenance window check ──
                     if settings.execution.suppress_poly_maintenance and _is_poly_maintenance_window():
-                        logger.warning("Polymarket maintenance window — skipping XP execution, paper fallback")
-                        poly_legs = []  # fall through to paper executor
+                        _record_execution_failure(storage, signal, decision_id, "Polymarket maintenance window")
+                        continue
 
                 if poly_legs and kalshi_legs and live_kalshi is not None and live_poly is not None:
                     # ── Cross-platform: Polymarket FOK first, then Kalshi ──
@@ -889,7 +915,7 @@ def evaluate_and_execute_for_user(
                         )
                         if not token_id:
                             logger.warning(
-                                "No CLOB token ID for Polymarket ticker %s, falling back to paper",
+                                "No CLOB token ID for Polymarket ticker %s, no live fill confirmed",
                                 leg.ticker,
                             )
                             xp_ok = False
@@ -899,10 +925,11 @@ def evaluate_and_execute_for_user(
                         poly_side = "BUY" if leg.side == "yes" else "SELL"
                         try:
                             resp = live_poly.place_market_order(token_id, poly_side, leg_dollars)
-                            if resp.get("success"):
+                            if is_confirmed_execution(resp):
                                 xp_results.append({
                                     "order_id": resp.get("orderID", ""),
                                     "ticker": leg.ticker,
+                                    "side": leg.side,
                                     "status": "executed",
                                     "venue": "polymarket",
                                 })
@@ -915,14 +942,14 @@ def evaluate_and_execute_for_user(
                                 break
                         except (TimeoutError, httpx.TimeoutException):
                             logger.warning(
-                                "Polymarket order TIMED OUT for %s, falling back to paper",
+                                "Polymarket order TIMED OUT for %s, no live fill confirmed",
                                 leg.ticker,
                             )
                             xp_ok = False
                             break
                         except Exception:
                             logger.warning(
-                                "Polymarket order failed for %s, falling back to paper",
+                                "Polymarket order failed for %s, no live fill confirmed",
                                 leg.ticker, exc_info=True,
                             )
                             xp_ok = False
@@ -944,8 +971,10 @@ def evaluate_and_execute_for_user(
                                     leg.ticker, leg.side, price_cents, count,
                                 )
                                 order = resp.get("order", {})
-                                if order.get("status") == "executed":
+                                if is_confirmed_execution(order):
                                     order.setdefault("ticker", leg.ticker)
+                                    order.setdefault("side", leg.side)
+                                    order.setdefault("venue", "kalshi")
                                     xp_results.append(order)
                                 else:
                                     logger.warning(
@@ -998,7 +1027,7 @@ def evaluate_and_execute_for_user(
                         slug = us_market.market_slug if us_market else ""
                         if not slug:
                             logger.warning(
-                                "No market_slug for Polymarket US ticker %s, falling back to paper",
+                                "No market_slug for Polymarket US ticker %s, no live fill confirmed",
                                 leg.ticker,
                             )
                             xp_ok = False
@@ -1006,10 +1035,11 @@ def evaluate_and_execute_for_user(
 
                         try:
                             resp = live_poly_us.place_market_order(slug, leg.side, leg_dollars)
-                            if resp.get("success"):
+                            if is_confirmed_execution(resp):
                                 xp_results.append({
                                     "order_id": resp.get("orderID", ""),
                                     "ticker": leg.ticker,
+                                    "side": leg.side,
                                     "status": "executed",
                                     "venue": "polymarket_us",
                                 })
@@ -1022,14 +1052,14 @@ def evaluate_and_execute_for_user(
                                 break
                         except (TimeoutError, httpx.TimeoutException):
                             logger.warning(
-                                "Polymarket US order TIMED OUT for %s, falling back to paper",
+                                "Polymarket US order TIMED OUT for %s, no live fill confirmed",
                                 leg.ticker,
                             )
                             xp_ok = False
                             break
                         except Exception:
                             logger.warning(
-                                "Polymarket US order failed for %s, falling back to paper",
+                                "Polymarket US order failed for %s, no live fill confirmed",
                                 leg.ticker, exc_info=True,
                             )
                             xp_ok = False
@@ -1050,8 +1080,10 @@ def evaluate_and_execute_for_user(
                                     leg.ticker, leg.side, price_cents, count,
                                 )
                                 order = resp.get("order", {})
-                                if order.get("status") == "executed":
+                                if is_confirmed_execution(order):
                                     order.setdefault("ticker", leg.ticker)
+                                    order.setdefault("side", leg.side)
+                                    order.setdefault("venue", "kalshi")
                                     xp_results.append(order)
                                 else:
                                     logger.warning(
@@ -1088,7 +1120,6 @@ def evaluate_and_execute_for_user(
                 elif not poly_legs and not poly_us_legs and live_kalshi is not None:
                     # ── Kalshi-only signal ──
                     results = []
-                    all_filled = True
                     for leg in signal.legs:
                         price_cents = max(1, min(99, round(leg.price_dollars * 100)))
                         if signal.combined_cost > 0:
@@ -1103,52 +1134,60 @@ def evaluate_and_execute_for_user(
                                 leg.ticker, leg.side, price_cents, count,
                             )
                             order = resp.get("order", {})
-                            if order.get("status") == "executed":
+                            if is_confirmed_execution(order):
+                                order.setdefault("ticker", leg.ticker)
+                                order.setdefault("side", leg.side)
+                                order.setdefault("venue", "kalshi")
                                 results.append(order)
                             else:
                                 logger.warning(
                                     "Order not filled: %s status=%s",
                                     leg.ticker, order.get("status"),
                                 )
-                                all_filled = False
                                 break
                         except (TimeoutError, httpx.TimeoutException):
                             logger.warning(
-                                "Kalshi order TIMED OUT for %s, falling back to paper",
+                                "Kalshi order TIMED OUT for %s, no live fill confirmed",
                                 leg.ticker,
                             )
-                            all_filled = False
                             break
                         except Exception:
                             logger.warning(
-                                "Live order failed for %s, falling back to paper",
+                                "Live order failed for %s, no live fill confirmed",
                                 leg.ticker, exc_info=True,
                             )
-                            all_filled = False
                             break
-                    if all_filled and results:
+                    if results:
+                        # Preserve any actual first-leg fill even when the
+                        # subsequent leg failed. Never simulate the missing leg.
                         live_results = results
 
                 if live_results is not None:
-                    portfolio.record_fill(
+                    executed_trades = portfolio.record_fill(
                         signal, decision, decision_id,
                         is_paper=False, execution_results=live_results,
                     )
-                else:
+                    if len(executed_trades) != len(signal.legs):
+                        _record_execution_failure(storage, signal, decision_id, "Not all legs have confirmed fills; reconcile exchange orders")
+                elif paper_executor is not None:
                     market = scan.enriched_markets.get(signal.ticker, signal.market_snapshot)
                     exec_result = paper_executor.execute(
                         signal, decision, decision_id, tick_ctx, market=market,
                     )
                     result.orders_created += len(exec_result.orders)
                     result.fills_created += len(exec_result.fills)
+                    executed_trades = exec_result.trades
+                else:
+                    _record_execution_failure(storage, signal, decision_id, "Executor unavailable or no confirmed fill")
+                    continue
                 portfolio_snapshot = portfolio.get_snapshot()
-                for leg in signal.legs:
+                for trade in executed_trades:
                     notifier.notify_fill(
-                        ticker=leg.ticker,
-                        side=leg.side,
-                        venue=leg.venue or signal.legs[0].venue or "kalshi",
-                        size=leg.quantity_dollars,
-                        price=leg.price_dollars,
+                        ticker=trade.ticker,
+                        side=trade.side.value.removeprefix("buy_"),
+                        venue=trade.venue,
+                        size=trade.size_dollars,
+                        price=trade.price,
                     )
 
         # ── Final snapshot ──

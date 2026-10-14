@@ -20,7 +20,7 @@ import { useRealtimeDashboard } from "@/hooks/useRealtimeDashboard";
 type NavTab = "dashboard" | "activity" | "markets" | "connections" | "settings" | "founder";
 
 const BASE_NAV_ITEMS: { id: NavTab; label: string }[] = [
-  { id: "dashboard", label: "Dashboard" },
+  { id: "dashboard", label: "Portfolio" },
   { id: "activity", label: "Activity" },
   { id: "markets", label: "Markets" },
   { id: "connections", label: "Connections" },
@@ -55,11 +55,7 @@ export default function DashboardShell({
 
   const setActiveTab = useCallback((tab: NavTab) => {
     const params = new URLSearchParams(searchParams.toString());
-    if (tab === "dashboard") {
-      params.delete("tab");
-    } else {
-      params.set("tab", tab);
-    }
+    params.set("tab", tab);
     const qs = params.toString();
     router.push(`/dashboard${qs ? `?${qs}` : ""}`, { scroll: false });
   }, [router, searchParams]);
@@ -96,6 +92,7 @@ export default function DashboardShell({
             </Link>
             {/* Tab navigation */}
             <div className="flex items-center gap-1">
+              <Link href="/terminal" className="rounded-md px-3 py-1.5 text-xs font-mono text-neon-green">Terminal ↗</Link>
               {[...BASE_NAV_ITEMS, ...(isFounder ? [{ id: "founder" as NavTab, label: "Founder Tools" }] : [])].map((item) => (
                 <button
                   key={item.id}

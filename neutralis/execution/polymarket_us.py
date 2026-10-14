@@ -144,7 +144,7 @@ class PolymarketUSExecutor:
         # Polymarket US returns ORD_REJECT_REASON_EXCHANGE_OPTION on
         # moneyline fills and close_position — treat as success if filled.
         if filled:
-            return {"success": True, "errorMsg": "", "orderID": order_id}
+            return {"success": True, "filled": True, "errorMsg": "", "orderID": order_id}
 
         if rejected:
             return {
@@ -158,6 +158,7 @@ class PolymarketUSExecutor:
         success = bool(order_id)
         return {
             "success": success,
+            "filled": False,
             "errorMsg": "" if success else "No order ID returned",
             "orderID": order_id,
         }

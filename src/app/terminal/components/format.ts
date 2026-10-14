@@ -1,0 +1,5 @@
+export const dollars = (value: number | null | undefined) => value == null || !Number.isFinite(value) ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+export const cents = (value: number | null | undefined) => value == null || !Number.isFinite(value) ? "—" : `${Number((value * 100).toFixed(2))}¢`;
+export const contracts = (value: number | null | undefined) => value == null || !Number.isFinite(value) ? "—" : new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
+export const compact = (value: number | null | undefined) => value == null || !Number.isFinite(value) ? "—" : new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+export const dateTime = (value: string | null | undefined) => !value || !Number.isFinite(Date.parse(value)) ? "—" : new Date(value).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
