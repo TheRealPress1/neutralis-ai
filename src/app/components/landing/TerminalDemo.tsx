@@ -1,177 +1,179 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import styles from "./TerminalDemo.module.css";
 
 interface LogLine {
   time: string;
-  level: "info" | "signal" | "guard" | "order" | "warn";
+  level: "info" | "signal" | "guard" | "result";
   module: string;
   message: string;
 }
 
 const DEMO_LINES: LogLine[] = [
-  { time: "14:22:31", level: "info",   module: "engine",    message: "WebSocket connected to Kalshi (1,847 markets)" },
-  { time: "14:22:31", level: "info",   module: "engine",    message: "WebSocket connected to Polymarket US (871 markets)" },
-  { time: "14:22:32", level: "info",   module: "matcher",   message: "Matched 847 cross-platform pairs (TF-IDF threshold 0.75)" },
-  { time: "14:22:35", level: "signal", module: "scanner",   message: "RT arb: KXEPLGAME-CRYNEW K=0.38 P=0.62 edge=24.1%" },
-  { time: "14:22:35", level: "guard",  module: "decision",  message: "Signal ec32d91b: 11/11 guards passed, size=$46.45" },
-  { time: "14:22:35", level: "order",  module: "execution", message: "Order filled: CRYNEW buy YES on kalshi @ $0.38 (12 contracts)" },
-  { time: "14:22:35", level: "order",  module: "execution", message: "Order filled: CRYNEW buy NO on poly_us @ $0.38 (hedge)" },
-  { time: "14:22:36", level: "info",   module: "portfolio", message: "Position opened: edge=24.1%, exposure=$46.45, P&L target=$11.20" },
-  { time: "14:22:48", level: "signal", module: "scanner",   message: "RT arb: KXSERIEAGAME-NAPACM K=0.40 P=0.61 edge=25.5%" },
-  { time: "14:22:48", level: "guard",  module: "decision",  message: "Signal a55fdf76: 11/11 guards passed, size=$43.80" },
-  { time: "14:22:48", level: "warn",   module: "guard",     message: "Ticker exposure cap reached — clamping size to $38.20" },
-  { time: "14:22:49", level: "order",  module: "execution", message: "Order filled: NAPACM buy YES on kalshi @ $0.40 (9 contracts)" },
-  { time: "14:22:49", level: "order",  module: "execution", message: "Order filled: NAPACM buy NO on poly_us @ $0.39 (hedge)" },
-  { time: "14:22:50", level: "info",   module: "portfolio", message: "2 open positions, $84.65 exposure, $0.00 unrealized P&L" },
-  { time: "14:23:01", level: "signal", module: "scanner",   message: "Complement arb: KXATPMATCH-YUNSCH YES+NO=$0.94 (6% edge)" },
-  { time: "14:23:01", level: "guard",  module: "decision",  message: "Signal rejected: confidence 42 < regime minimum 55" },
-  { time: "14:23:15", level: "info",   module: "settler",   message: "Settlement check: 2 positions checked, none resolved" },
-  { time: "14:23:30", level: "info",   module: "mtm",       message: "Marked 2 positions to market: unrealized P&L +$2.30" },
+  { time: "14:22:31.001", level: "info", module: "ENGINE", message: "Loading sample market snapshots…" },
+  { time: "14:22:31.024", level: "info", module: "MATCH", message: "Paired equivalent YES / NO outcomes" },
+  { time: "14:22:31.041", level: "info", module: "QUOTE", message: "Kalshi YES         $0.62" },
+  { time: "14:22:31.041", level: "info", module: "QUOTE", message: "Polymarket NO      $0.34" },
+  { time: "14:22:31.042", level: "signal", module: "SIGNAL", message: "Combined cost      $0.96 / pair" },
+  { time: "14:22:31.042", level: "signal", module: "EDGE", message: "$1.00 − $0.96 = $0.04 before fees" },
+  { time: "14:22:31.063", level: "guard", module: "CHECK", message: "✓ Resolution criteria aligned [sample]" },
+  { time: "14:22:31.068", level: "guard", module: "CHECK", message: "✓ Quote freshness verified [sample]" },
+  { time: "14:22:31.074", level: "guard", module: "CHECK", message: "✓ Available liquidity checked [sample]" },
+  { time: "14:22:31.081", level: "info", module: "REVIEW", message: "Fees & execution costs require review" },
+  { time: "14:22:31.092", level: "result", module: "READY", message: "Sample signal prepared. No orders sent." },
 ];
 
-const LEVEL_COLORS: Record<string, { dot: string; text: string }> = {
-  info:   { dot: "bg-text-secondary",  text: "text-text-secondary" },
-  signal: { dot: "bg-neon-blue",       text: "text-neon-blue" },
-  guard:  { dot: "bg-neon-purple",     text: "text-neon-purple" },
-  order:  { dot: "bg-neon-green",      text: "text-neon-green" },
-  warn:   { dot: "bg-neon-amber",      text: "text-neon-amber" },
-};
+const INITIAL_LINE_COUNT = 4;
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+
+function subscribeToReducedMotion(callback: () => void) {
+  const query = window.matchMedia(REDUCED_MOTION_QUERY);
+  query.addEventListener("change", callback);
+  return () => query.removeEventListener("change", callback);
+}
+
+function getReducedMotionSnapshot() {
+  return window.matchMedia(REDUCED_MOTION_QUERY).matches;
+}
+
+function getServerReducedMotionSnapshot() {
+  return true;
+}
+
+function PlaybackIcon({ paused }: { paused: boolean }) {
+  return paused ? (
+    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M5 3.5a.5.5 0 0 1 .77-.42l7 4.5a.5.5 0 0 1 0 .84l-7 4.5A.5.5 0 0 1 5 12.5z" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <rect x="4" y="3" width="3" height="10" rx=".5" />
+      <rect x="9" y="3" width="3" height="10" rx=".5" />
+    </svg>
+  );
+}
 
 export default function TerminalDemo() {
-  const [lines, setLines] = useState<LogLine[]>([]);
-  const [started, setStarted] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [lineCount, setLineCount] = useState(INITIAL_LINE_COUNT);
+  const [hasEnteredView, setHasEnteredView] = useState(false);
+  // A user can explicitly play a replay even when automatic motion is disabled.
+  const [playbackOverride, setPlaybackOverride] = useState<boolean | null>(null);
+  const reducedMotion = useSyncExternalStore(
+    subscribeToReducedMotion,
+    getReducedMotionSnapshot,
+    getServerReducedMotionSnapshot,
+  );
   const sectionRef = useRef<HTMLElement>(null);
+  const outputRef = useRef<HTMLDivElement>(null);
+  const isComplete = lineCount === DEMO_LINES.length;
+  const isPlaying = (playbackOverride ?? !reducedMotion) && !isComplete;
 
-  // Start animation when scrolled into view
   useEffect(() => {
-    const el = sectionRef.current;
-    if (!el) return;
+    const section = sectionRef.current;
+    if (!section) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && !started) {
-          setStarted(true);
+        if (entry.isIntersecting) {
+          setHasEnteredView(true);
+          observer.disconnect();
         }
       },
       { threshold: 0.2 },
     );
-
-    observer.observe(el);
+    observer.observe(section);
     return () => observer.disconnect();
-  }, [started]);
+  }, []);
 
-  // Type out lines one by one
   useEffect(() => {
-    if (!started) return;
+    if (!hasEnteredView || !isPlaying) return;
 
-    let i = 0;
-    const interval = setInterval(() => {
-      if (i >= DEMO_LINES.length) {
-        // Loop: restart after pause
-        setTimeout(() => {
-          setLines([]);
-          i = 0;
-        }, 3000);
-        return;
-      }
-      setLines((prev) => [...prev, DEMO_LINES[i]]);
-      i++;
-    }, 600);
+    const timeout = window.setTimeout(() => {
+      setLineCount((count) => Math.min(count + 1, DEMO_LINES.length));
+    }, 1100);
+    return () => window.clearTimeout(timeout);
+  }, [hasEnteredView, isPlaying, lineCount]);
 
-    return () => clearInterval(interval);
-  }, [started]);
-
-  // Auto-scroll to bottom
   useEffect(() => {
-    const el = containerRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [lines]);
+    const output = outputRef.current;
+    if (output) output.scrollTop = output.scrollHeight;
+  }, [lineCount]);
+
+  function replay() {
+    setLineCount(INITIAL_LINE_COUNT);
+    setPlaybackOverride(true);
+  }
 
   return (
-    <section ref={sectionRef} className="border-t border-border py-24">
-      <div className="mx-auto max-w-4xl px-6">
-        <p className="text-center font-mono text-[10px] font-medium uppercase tracking-[0.3em] text-text-secondary">
-          Live Pipeline Output
-        </p>
-        <h2 className="mt-3 text-center font-[family-name:var(--font-italiana)] text-3xl font-normal uppercase tracking-[0.08em] text-text-primary">
-          See it in action
-        </h2>
+    <section ref={sectionRef} id="engine" className={styles.section} aria-labelledby="engine-heading">
+      <div className={styles.inner}>
+        <div className={styles.copy}>
+          <p className={styles.eyebrow}><span /> UNDER THE HOOD</p>
+          <h2 id="engine-heading">From market noise<br />to a clear signal.</h2>
+          <p className={styles.description}>
+            The edge is in the details. Follow a signal from the first price
+            mismatch to a decision you can inspect.
+          </p>
+          <ol className={styles.steps}>
+            <li>
+              <span className={styles.stepNumber}>01</span>
+              <div><h3>Find the same outcome.</h3><p>Match markets across Kalshi and Polymarket.</p></div>
+            </li>
+            <li>
+              <span className={styles.stepNumber}>02</span>
+              <div><h3>Check every assumption.</h3><p>Inspect pricing, liquidity, and resolution rules.</p></div>
+            </li>
+            <li>
+              <span className={styles.stepNumber}>03</span>
+              <div><h3>Make an informed move.</h3><p>See the spread, the costs, and the full context.</p></div>
+            </li>
+          </ol>
+        </div>
 
-        {/* Terminal window */}
-        <div className="mt-12 overflow-hidden rounded-xl border border-border">
-          {/* Title bar */}
-          <div className="flex items-center gap-2 border-b border-border bg-bg-secondary px-4 py-2.5">
-            <div className="flex gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-neon-red/60" />
-              <span className="h-2.5 w-2.5 rounded-full bg-neon-amber/60" />
-              <span className="h-2.5 w-2.5 rounded-full bg-neon-green/60" />
+        <div className={styles.demo}>
+          <div className={styles.terminal}>
+            <div className={styles.titlebar}>
+              <span className={styles.terminalTitle}>
+                <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="m3 5 4 4-4 4m6 0h6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                neutralis / engine
+              </span>
+              <span className={styles.demoBadge}>DEMO REPLAY</span>
             </div>
-            <span className="ml-2 font-mono text-[10px] tracking-wider text-text-secondary">
-              neutralis-daemon — event_engine.py
-            </span>
-            <span className="ml-auto flex items-center gap-1.5 font-mono text-[10px] text-neon-green/80">
-              <span className="h-1.5 w-1.5 rounded-full bg-neon-green neon-pulse" />
-              LIVE
-            </span>
-          </div>
-
-          {/* Log output */}
-          <div
-            ref={containerRef}
-            className="h-[420px] overflow-y-auto bg-[#040508] p-4 font-mono text-xs leading-relaxed"
-          >
-            {lines.length === 0 && started && (
-              <div className="flex items-center gap-2 text-text-secondary">
-                <span className="inline-block h-3 w-1 animate-pulse bg-neon-green/60" />
-                Connecting to engine...
-              </div>
-            )}
-
-            {lines.map((line, i) => {
-              const lc = LEVEL_COLORS[line.level];
-              return (
-                <div
-                  key={i}
-                  className="flex gap-3 py-0.5"
-                  style={{
-                    animation: "line-in 0.3s ease-out",
-                  }}
-                >
-                  <span className="shrink-0 text-text-secondary/50">{line.time}</span>
-                  <span className={`shrink-0 flex items-center gap-1.5 ${lc.text}`}>
-                    <span className={`inline-block h-1.5 w-1.5 rounded-full ${lc.dot}`} />
-                    <span className="w-[52px] text-right uppercase">{line.level}</span>
-                  </span>
-                  <span className="shrink-0 w-[72px] text-right text-text-secondary/60">{line.module}</span>
-                  <span className="text-text-mono">{line.message}</span>
+            <div className={styles.sessionbar}>
+              <span>SESSION <span className={styles.sessionId}>NTRL-001</span></span>
+              <span className={styles.sessionStatus}><span /> SANDBOX</span>
+            </div>
+            <div ref={outputRef} className={styles.output} role="region" aria-label="Simulated engine replay transcript" tabIndex={0}>
+              {DEMO_LINES.slice(0, lineCount).map((line, index) => (
+                <div className={`${styles.line} ${styles[line.level]}`} key={index}>
+                  <span className={styles.timestamp}>{line.time}</span>
+                  <span className={styles.module}>{line.module}</span>
+                  <span className={styles.message}>{line.message}</span>
                 </div>
-              );
-            })}
-
-            {/* Blinking cursor at bottom */}
-            {lines.length > 0 && (
-              <div className="mt-1 flex items-center gap-2 text-text-secondary">
-                <span className="inline-block h-3 w-1 animate-pulse bg-neon-green/60" />
+              ))}
+              <div className={styles.cursorRow} aria-hidden="true"><span className={isPlaying ? styles.activeCursor : styles.cursor} /></div>
+            </div>
+            <div className={styles.controls}>
+              <span className={styles.playbackStatus}>
+                <span className={isComplete ? styles.completeDot : styles.statusDot} />
+                {isComplete ? "Replay complete" : isPlaying ? "Replaying sample events" : "Replay paused"}
+              </span>
+              <div className={styles.buttons}>
+                <button type="button" onClick={() => setPlaybackOverride(!isPlaying)} disabled={isComplete} aria-label={isPlaying ? "Pause engine replay" : "Resume engine replay"}>
+                  <PlaybackIcon paused={!isPlaying} />
+                  {isPlaying ? "Pause" : "Resume"}
+                </button>
+                <button type="button" onClick={replay} aria-label="Restart engine replay">
+                  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 5.5a5 5 0 1 1-.3 4M3.5 2v3.5H7" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  Replay
+                </button>
               </div>
-            )}
+            </div>
           </div>
+          <p className={styles.caption}>Illustrative sample data. Gross spread is before fees and execution costs.</p>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes line-in {
-          from {
-            opacity: 0;
-            transform: translateX(-8px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-      `}</style>
     </section>
   );
 }
