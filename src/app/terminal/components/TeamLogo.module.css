@@ -1,0 +1,10 @@
+.logo { width:28px; height:28px; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; overflow:hidden; background:#e8ebe4; border:1px solid #bec6b4; border-radius:50%; vertical-align:middle; }
+.logo img { display:block; width:82%; height:82%; object-fit:contain; }
+.logo[data-size="large"] { width:48px; height:48px; }
+.fallback { color:#435139; font:8px var(--font-geist-mono),monospace; font-weight:600; }
+.logo[data-size="large"] .fallback { font-size:12px; }
+.matchup { display:inline-flex; align-items:center; flex-shrink:0; padding-right:2px; }
+.matchup>.logo+.logo { margin-left:-7px; box-shadow:-2px 0 0 #151913; }
+.matchup[data-size="large"] { gap:10px; }
+.matchup[data-size="large"]>.logo+.logo { margin-left:0; box-shadow:none; }
+@media(max-width:700px) { .logo { width:23px; height:23px; } .logo[data-size="large"] { width:40px; height:40px; } .matchup[data-size="large"] { gap:8px; } }

@@ -1,0 +1,479 @@
+From ad37071ae6bbc4a31289f9e662388c50e92ac3d3 Mon Sep 17 00:00:00 2001
+From: Costa Xanthos <constantinexanthos@gmail.com>
+Date: Sat, 5 Sep 2026 19:56:50 -0400
+Subject: [PATCH] Fix inflated realized P&L: stop recording unfilled legs as
+ positions
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+record_fill created a Trade + Position for every leg in the signal even
+when execution_results only covered the legs that actually filled. In a
+cross-platform arb where Polymarket filled and Kalshi failed (or vice
+versa), the unfilled leg became a phantom position at the requested size.
+At settlement it was closed as if it had been bought, booking the arb's
+"guaranteed" edge (or a fake win) that never happened on the exchange.
+
+Two related matching bugs made this worse:
+- Polymarket (py-clob-client) results carry no ticker, so the positional
+  fallback could apply a Kalshi order's fill_count/price to a Poly leg.
+- Polymarket order IDs use orderID (camel case) and were dropped, so
+  those trades had no order_id even when they really filled.
+
+Changes:
+- record_fill: in live mode, only record legs with a matching execution
+  result (ticker + venue). No positional fallback. Read orderID too.
+- event_loop: tag every Kalshi/Polymarket result with ticker and venue.
+- _upsert_position / get_open_position: never merge a paper fill into a
+  live position (or vice versa) — match on is_paper as well.
+- scripts/sql/audit_phantom_positions.sql: find closed live positions
+  with no exchange order_id and quantify their P&L; repair is opt-in.
+- tests/test_portfolio_manager.py: regression coverage.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ neutralis/engine/event_loop.py          |  14 ++
+ neutralis/portfolio/manager.py          |  54 +++++---
+ neutralis/storage/postgres.py           |  15 ++-
+ scripts/sql/audit_phantom_positions.sql |  72 +++++++++++
+ tests/test_portfolio_manager.py         | 162 ++++++++++++++++++++++++
+ 5 files changed, 299 insertions(+), 18 deletions(-)
+ create mode 100644 scripts/sql/audit_phantom_positions.sql
+ create mode 100644 tests/test_portfolio_manager.py
+
+diff --git a/neutralis/engine/event_loop.py b/neutralis/engine/event_loop.py
+index e04e6b5d0da0bca25c63911af831665928be478d..798bac979e50d54f2b432c7858d7a643a6436f88 100644
+--- a/neutralis/engine/event_loop.py
++++ b/neutralis/engine/event_loop.py
+@@ -2036,6 +2036,8 @@ class EventEngine:
+                     resp = executor.place_order(leg.ticker, leg.side, price_cents, count)
+                     order = resp.get("order", {})
+                     if order.get("status") == "executed":
++                        order.setdefault("ticker", leg.ticker)
++                        order.setdefault("venue", "kalshi")
+                         results.append(order)
+                     else:
+                         return False
+@@ -2291,6 +2293,8 @@ class EventEngine:
+                         amount=round(leg_dollars, 2),
+                     )
+                     if resp.get("success"):
++                        resp.setdefault("ticker", leg.ticker)
++                        resp.setdefault("venue", "polymarket")
+                         poly_results.append(resp)
+                     else:
+                         logger.warning(
+@@ -2332,6 +2336,8 @@ class EventEngine:
+                     resp = k_exec.place_order(leg.ticker, leg.side, price_cents, count)
+                     order = resp.get("order", {})
+                     if order.get("status") == "executed":
++                        order.setdefault("ticker", leg.ticker)
++                        order.setdefault("venue", "kalshi")
+                         kalshi_results.append(order)
+                     else:
+                         logger.warning(
+@@ -2422,6 +2428,8 @@ class EventEngine:
+ 
+                     # May fill immediately if price crosses the spread
+                     if status == "executed":
++                        order.setdefault("ticker", leg.ticker)
++                        order.setdefault("venue", "kalshi")
+                         kalshi_results.append(order)
+                         continue
+ 
+@@ -2444,6 +2452,8 @@ class EventEngine:
+                         check_order = check.get("order", {})
+                         check_status = check_order.get("status", "")
+                         if check_status == "executed":
++                            check_order.setdefault("ticker", leg.ticker)
++                            check_order.setdefault("venue", "kalshi")
+                             kalshi_results.append(check_order)
+                             filled = True
+                             break
+@@ -2462,6 +2472,8 @@ class EventEngine:
+                             )
+                             check_order["_partial_fill_count"] = partial_count
+                             check_order["_original_count"] = count
++                            check_order.setdefault("ticker", leg.ticker)
++                            check_order.setdefault("venue", "kalshi")
+                             kalshi_results.append(check_order)
+                         else:
+                             logger.info(
+@@ -2510,6 +2522,8 @@ class EventEngine:
+                         amount=round(leg_dollars, 2),
+                     )
+                     if resp.get("success"):
++                        resp.setdefault("ticker", leg.ticker)
++                        resp.setdefault("venue", "polymarket")
+                         poly_results.append(resp)
+                     else:
+                         logger.warning(
+diff --git a/neutralis/portfolio/manager.py b/neutralis/portfolio/manager.py
+index 99024da338d9d31b4038ff23d73d637fe9b2ca44..913380b09a825a562c9f4b61ea3a97d508b1410e 100644
+--- a/neutralis/portfolio/manager.py
++++ b/neutralis/portfolio/manager.py
+@@ -24,6 +24,24 @@ from neutralis.storage.postgres import PostgresStorage
+ logger = get_logger(__name__)
+ 
+ 
++def _match_execution_result(
++    results: list[dict], ticker: str, venue: str,
++) -> dict | None:
++    """Find the exchange result for a leg by ticker (and venue when tagged).
++
++    Never falls back to positional matching: a Kalshi order applied to a
++    Polymarket leg (or vice versa) corrupts quantity and fill price.
++    """
++    for er in results:
++        if er.get("ticker") != ticker:
++            continue
++        er_venue = er.get("venue")
++        if er_venue and er_venue != venue:
++            continue
++        return er
++    return None
++
++
+ class PortfolioManager:
+     """Manages portfolio state through PostgresStorage.
+ 
+@@ -70,7 +88,15 @@ class PortfolioManager:
+         if signal.market_snapshot is not None:
+             venue = signal.market_snapshot.venue
+ 
+-        for i, leg in enumerate(signal.legs):
++        # Live mode: execution_results is the authoritative list of legs that
++        # actually filled. A leg with no matching result never reached the
++        # exchange (or was rejected/cancelled) and MUST NOT become a position,
++        # otherwise it later "settles" and books P&L that never happened.
++        live = execution_results is not None
++        if live and not execution_results:
++            return []
++
++        for leg in signal.legs:
+             side = TradeSide.BUY_YES if leg.side == "yes" else TradeSide.BUY_NO
+             leg_venue = leg.venue or venue  # per-leg venue if set, else signal-level
+ 
+@@ -86,22 +112,19 @@ class PortfolioManager:
+ 
+             quantity = leg_size / leg.price_dollars if leg.price_dollars > 0 else 0.0
+ 
+-            # Use actual execution data if available.
+-            # Match by ticker (not position) to avoid venue-ordering mismatches
+-            # when xp_results is [poly_result, kalshi_result] but signal.legs
+-            # is [kalshi_leg, poly_leg].
+             order_id = None
+             fill_price = None
+-            ex = None
+-            if execution_results:
+-                ex = next(
+-                    (er for er in execution_results if er.get("ticker") == leg.ticker),
+-                    None,
+-                )
+-                if ex is None and i < len(execution_results):
+-                    ex = execution_results[i]  # fallback to positional
+-            if ex is not None:
+-                order_id = ex.get("order_id")
++            if live:
++                ex = _match_execution_result(execution_results, leg.ticker, leg_venue)
++                if ex is None:
++                    logger.warning(
++                        "No execution result for leg %s %s %s — leg did not fill, "
++                        "not recording a position",
++                        leg_venue, leg.side, leg.ticker,
++                    )
++                    continue
++                # Kalshi uses order_id; py-clob-client (Polymarket) uses orderID
++                order_id = ex.get("order_id") or ex.get("orderID") or None
+                 # Kalshi returns prices in cents; convert to dollars
+                 if leg.side == "yes" and ex.get("yes_price"):
+                     fill_price = ex["yes_price"] / 100.0
+@@ -149,6 +172,7 @@ class PortfolioManager:
+         """Create or update an open position for this trade's ticker/venue/side."""
+         existing = self._storage.get_open_position(
+             ticker=trade.ticker, venue=trade.venue, side=trade.side,
++            is_paper=trade.is_paper,
+         )
+ 
+         if existing is None:
+diff --git a/neutralis/storage/postgres.py b/neutralis/storage/postgres.py
+index 11f0cff371332be26b138efb6f33cf40207e8868..1dc22e796c8bb3c5ee2bf665064af4b06ec59b25 100644
+--- a/neutralis/storage/postgres.py
++++ b/neutralis/storage/postgres.py
+@@ -572,15 +572,24 @@ class PostgresStorage:
+ 
+     def get_open_position(
+         self, ticker: str, venue: str, side: TradeSide,
++        is_paper: bool | None = None,
+     ) -> Position | None:
+-        """Return the open position for a ticker/venue/side combo, or None."""
++        """Return the open position for a ticker/venue/side combo, or None.
++
++        When *is_paper* is given, only a position of that kind matches, so a
++        paper fill is never merged into a live position (or vice versa).
++        """
+         conn = self._ensure_connected()
++        paper_filter = "" if is_paper is None else " AND is_paper = %(is_paper)s"
+         with conn.cursor() as cur:
+             cur.execute(
+                 f"SELECT {self._POSITION_COLS} FROM positions "
+                 "WHERE ticker = %(ticker)s AND venue = %(venue)s "
+-                f"AND side = %(side)s AND status = 'open'{self._user_filter()}",
+-                {"ticker": ticker, "venue": venue, "side": side.value, **self._uid_params},
++                f"AND side = %(side)s AND status = 'open'{paper_filter}{self._user_filter()}",
++                {
++                    "ticker": ticker, "venue": venue, "side": side.value,
++                    "is_paper": is_paper, **self._uid_params,
++                },
+             )
+             row = cur.fetchone()
+         return self._row_to_position(row) if row else None
+diff --git a/scripts/sql/audit_phantom_positions.sql b/scripts/sql/audit_phantom_positions.sql
+new file mode 100644
+index 0000000000000000000000000000000000000000..ad6e7745a61f3b06e25fb3c2786f880c820b876d
+--- /dev/null
++++ b/scripts/sql/audit_phantom_positions.sql
+@@ -0,0 +1,72 @@
++-- Audit: closed LIVE positions whose legs never actually filled on the exchange.
++--
++-- Background: before the record_fill fix, a cross-platform arb where one leg
++-- filled and the other failed still recorded BOTH legs as positions. The
++-- unfilled ("phantom") leg has no exchange order_id on its trade. When the
++-- market resolved, that phantom leg was settled as if it had been bought,
++-- booking P&L (usually the arb's "guaranteed" edge) that never happened.
++--
++-- Run each block in the Supabase SQL editor. Nothing here modifies data;
++-- the repair statement at the bottom is commented out on purpose.
++
++-- 1) Phantom candidates: live closed positions with no trade carrying an order_id.
++WITH phantom AS (
++    SELECT p.id, p.ticker, p.event_ticker, p.venue, p.side, p.size_dollars,
++           p.quantity, p.realized_pnl, p.opened_at, p.closed_at, p.user_id
++    FROM positions p
++    WHERE p.status = 'closed'
++      AND p.is_paper IS NOT TRUE
++      AND NOT EXISTS (
++          SELECT 1 FROM trades t
++          WHERE t.ticker = p.ticker AND t.venue = p.venue AND t.side = p.side
++            AND t.is_paper = FALSE
++            AND t.order_id IS NOT NULL AND t.order_id <> ''
++      )
++)
++SELECT * FROM phantom ORDER BY closed_at DESC;
++
++-- 2) How much of the dashboard's realized P&L those phantoms account for.
++SELECT
++    COUNT(*)                                   AS phantom_positions,
++    ROUND(SUM(p.realized_pnl)::numeric, 2)     AS phantom_realized_pnl,
++    ROUND((SELECT SUM(realized_pnl) FROM positions
++           WHERE status = 'closed' AND is_paper IS NOT TRUE)::numeric, 2)
++                                               AS dashboard_realized_pnl
++FROM positions p
++WHERE p.status = 'closed'
++  AND p.is_paper IS NOT TRUE
++  AND NOT EXISTS (
++      SELECT 1 FROM trades t
++      WHERE t.ticker = p.ticker AND t.venue = p.venue AND t.side = p.side
++        AND t.is_paper = FALSE
++        AND t.order_id IS NOT NULL AND t.order_id <> ''
++  );
++
++-- 3) One-legged arbs: events where only one venue actually has an order_id.
++SELECT p.event_ticker,
++       COUNT(*)                                          AS legs_recorded,
++       COUNT(*) FILTER (WHERE t.order_id IS NOT NULL)    AS legs_with_order_id,
++       ROUND(SUM(p.realized_pnl)::numeric, 2)            AS booked_pnl
++FROM positions p
++LEFT JOIN LATERAL (
++    SELECT t.order_id FROM trades t
++    WHERE t.ticker = p.ticker AND t.venue = p.venue AND t.side = p.side
++      AND t.is_paper = FALSE AND t.order_id IS NOT NULL AND t.order_id <> ''
++    LIMIT 1
++) t ON TRUE
++WHERE p.status = 'closed' AND p.is_paper IS NOT TRUE
++GROUP BY p.event_ticker
++HAVING COUNT(*) > COUNT(*) FILTER (WHERE t.order_id IS NOT NULL)
++ORDER BY booked_pnl DESC;
++
++-- 4) Repair (review the output of 1–3 first, then uncomment).
++--    Flags phantom legs as paper so every dashboard query excludes them.
++-- UPDATE positions p SET is_paper = TRUE
++-- WHERE p.status = 'closed'
++--   AND p.is_paper IS NOT TRUE
++--   AND NOT EXISTS (
++--       SELECT 1 FROM trades t
++--       WHERE t.ticker = p.ticker AND t.venue = p.venue AND t.side = p.side
++--         AND t.is_paper = FALSE
++--         AND t.order_id IS NOT NULL AND t.order_id <> ''
++--   );
+diff --git a/tests/test_portfolio_manager.py b/tests/test_portfolio_manager.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..76d675581c70054eec98242cb32e6eb85cc7d61f
+--- /dev/null
++++ b/tests/test_portfolio_manager.py
+@@ -0,0 +1,162 @@
++"""Tests for PortfolioManager.record_fill live-execution accounting.
++
++Regression coverage for phantom legs: a leg that never filled on the exchange
++must not be recorded as a position, otherwise it later "settles" and books
++P&L that never happened.
++"""
++
++from __future__ import annotations
++
++from unittest.mock import MagicMock
++
++import pytest
++
++from neutralis.models import (
++    Decision,
++    DecisionVerdict,
++    GuardResult,
++    Signal,
++    SignalType,
++    TradeLeg,
++)
++from neutralis.portfolio.manager import PortfolioManager
++
++
++KALSHI = "KXEPLGAME-26APR12SUNTOT-TOT"
++POLY = "0xabc-sun-tot"
++
++
++def _signal(legs: tuple[TradeLeg, ...]) -> Signal:
++    return Signal(
++        signal_type=SignalType.CROSS_PLATFORM_DISCREPANCY,
++        ticker=KALSHI,
++        event_ticker="KXEPLGAME-26APR12SUNTOT",
++        yes_ask=0.55,
++        no_ask=0.42,
++        combined_cost=0.97,
++        gross_edge=0.03,
++        net_edge=0.03,
++        edge_pct=3.0,
++        legs=legs,
++        confidence_score=60,
++    )
++
++
++def _decision(size: float = 97.0) -> Decision:
++    return Decision(
++        signal_id="",
++        verdict=DecisionVerdict.PASS,
++        guard_results=(GuardResult(guard_name="min_edge", passed=True, value=3.0, threshold=1.0),),
++        suggested_size_dollars=size,
++        selected=True,
++        selection_score=0.5,
++    )
++
++
++@pytest.fixture
++def storage() -> MagicMock:
++    st = MagicMock()
++    st.get_open_position.return_value = None
++    st.get_open_positions.return_value = []
++    return st
++
++
++@pytest.fixture
++def manager(storage: MagicMock) -> PortfolioManager:
++    return PortfolioManager(storage)
++
++
++def _saved_trades(storage: MagicMock) -> list:
++    return [c.args[0] for c in storage.save_trade.call_args_list]
++
++
++class TestRecordFillLive:
++    def test_leg_without_execution_result_is_not_recorded(self, manager, storage):
++        """Poly filled, Kalshi failed: only the Poly leg may become a position."""
++        sig = _signal((
++            TradeLeg(ticker=KALSHI, side="yes", price_dollars=0.55, quantity_dollars=10.0, venue="kalshi"),
++            TradeLeg(ticker=POLY, side="no", price_dollars=0.42, quantity_dollars=10.0, venue="polymarket"),
++        ))
++        results = [{"success": True, "orderID": "poly-1", "ticker": POLY, "venue": "polymarket"}]
++
++        trades = manager.record_fill(sig, _decision(), 1, is_paper=False, execution_results=results)
++
++        assert [t.ticker for t in trades] == [POLY]
++        assert [t.ticker for t in _saved_trades(storage)] == [POLY]
++        assert storage.save_position.call_count == 1
++        assert storage.save_position.call_args.args[0].ticker == POLY
++
++    def test_results_match_by_ticker_not_position(self, manager, storage):
++        """Kalshi fill data must never be applied to the Poly leg via positional fallback."""
++        sig = _signal((
++            TradeLeg(ticker=POLY, side="no", price_dollars=0.42, quantity_dollars=10.0, venue="polymarket"),
++            TradeLeg(ticker=KALSHI, side="yes", price_dollars=0.55, quantity_dollars=10.0, venue="kalshi"),
++        ))
++        results = [
++            {"ticker": KALSHI, "order_id": "k-1", "status": "executed", "fill_count": 7,
++             "yes_price": 54, "no_price": 46},
++            {"success": True, "orderID": "poly-1", "ticker": POLY, "venue": "polymarket"},
++        ]
++
++        trades = {t.ticker: t for t in manager.record_fill(
++            sig, _decision(), 1, is_paper=False, execution_results=results,
++        )}
++
++        assert set(trades) == {KALSHI, POLY}
++        assert trades[KALSHI].quantity == 7
++        assert trades[KALSHI].fill_price == pytest.approx(0.54)
++        assert trades[KALSHI].size_dollars == pytest.approx(7 * 0.54, abs=0.01)
++        # Poly leg keeps its own requested sizing, not Kalshi's 7 contracts @ 46c
++        poly_size = round(97.0 * 0.42 / 0.97, 2)
++        assert trades[POLY].size_dollars == pytest.approx(poly_size)
++        assert trades[POLY].quantity == pytest.approx(poly_size / 0.42, abs=0.001)
++        assert trades[POLY].order_id == "poly-1"
++
++    def test_polymarket_result_uses_orderid_key(self, manager, storage):
++        """py-clob-client returns orderID (camel case); it must land on Trade.order_id."""
++        sig = _signal((
++            TradeLeg(ticker=POLY, side="yes", price_dollars=0.42, quantity_dollars=10.0, venue="polymarket"),
++        ))
++        results = [{"success": True, "orderID": "poly-9", "ticker": POLY}]
++        (trade,) = manager.record_fill(sig, _decision(), 1, is_paper=False, execution_results=results)
++        assert trade.order_id == "poly-9"
++
++    def test_empty_results_records_nothing(self, manager, storage):
++        sig = _signal((
++            TradeLeg(ticker=KALSHI, side="yes", price_dollars=0.55, quantity_dollars=10.0, venue="kalshi"),
++        ))
++        assert manager.record_fill(sig, _decision(), 1, is_paper=False, execution_results=[]) == []
++        storage.save_trade.assert_not_called()
++
++
++class TestRecordFillPaper:
++    def test_paper_mode_records_every_leg(self, manager, storage):
++        """No execution_results → paper accounting, all legs recorded as before."""
++        sig = _signal((
++            TradeLeg(ticker=KALSHI, side="yes", price_dollars=0.55, quantity_dollars=10.0, venue="kalshi"),
++            TradeLeg(ticker=POLY, side="no", price_dollars=0.42, quantity_dollars=10.0, venue="polymarket"),
++        ))
++        trades = manager.record_fill(sig, _decision(), 1, is_paper=True)
++        assert sorted(t.ticker for t in trades) == sorted([KALSHI, POLY])
++        assert all(t.is_paper for t in trades)
++
++
++class TestUpsertPositionPaperIsolation:
++    def test_live_trade_only_merges_into_live_position(self, manager, storage):
++        sig = _signal((
++            TradeLeg(ticker=KALSHI, side="yes", price_dollars=0.55, quantity_dollars=10.0, venue="kalshi"),
++        ))
++        manager.record_fill(
++            sig, _decision(), 1, is_paper=False,
++            execution_results=[{"ticker": KALSHI, "order_id": "k-1", "fill_count": 3, "yes_price": 55}],
++        )
++        kwargs = storage.get_open_position.call_args.kwargs
++        assert kwargs["is_paper"] is False
++
++    def test_paper_trade_only_merges_into_paper_position(self, manager, storage):
++        sig = _signal((
++            TradeLeg(ticker=KALSHI, side="yes", price_dollars=0.55, quantity_dollars=10.0, venue="kalshi"),
++        ))
++        manager.record_fill(sig, _decision(), 1, is_paper=True)
++        kwargs = storage.get_open_position.call_args.kwargs
++        assert kwargs["is_paper"] is True
+-- 
+2.50.1 (Apple Git-155)
+

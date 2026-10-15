@@ -1,0 +1,9 @@
+# DeepFund: relevance to Neutralis
+
+2026-09-07. Public primary-source research only; no framework imported, dataset downloaded, model call or experiment performed. This is an input for the original co-heads, not a new strategy mandate.
+
+The [DeepFund paper, v2](https://arxiv.org/html/2505.11065v2) describes a planner, specialist analysts and portfolio manager using the same model backend. Its main evaluation used nine models, five selected US stocks, daily decisions and $100,000 simulated starting capital over March 17–April 17, 2025. Fundamental and macro analysts were omitted from that daily experiment. Table 3 reports only one positive absolute return. The authors report approximately $100 in API, data and database costs for their evaluation; that is not a Neutralis quote. Section 7 excludes transaction fees and market restrictions and cautions about the short, volatile period. A separate appendix extends the period; the main table should not be described as the whole study. The repository describes research without actual trading. [Author repository](https://github.com/HKUSTDial/DeepFund)
+
+Our inference: this supports the feasibility of the proposed roles and recorded decisions. It does not isolate the benefit of adding a second PM, establish current model performance, or supply a strategy we can deploy profitably. Differences in cash and exposure can affect comparisons independently of research quality.
+
+For the existing comparison proposal, retain identical frozen research and controls, separate portfolios, declared costs and benchmark conventions. Examine changes in exposure, turnover and vetoes alongside performance. A second PM earns its extra cost only if the eventual prospective evidence supports that choice. No role, model, cadence, cost ceiling, investment strategy or accepted protocol changes follow from this note.

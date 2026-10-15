@@ -34,7 +34,7 @@ export default function LandingNav({ signedIn }: { signedIn: boolean }) {
         </div>
         <div className={styles.navActions}>
           <Link href={signedIn ? "/dashboard" : "/login"} className={styles.signIn}>{signedIn ? "Dashboard" : "Sign in"}</Link>
-          <Link href={signedIn ? "/dashboard" : "/signup"} className={styles.navCta}>{signedIn ? "Open terminal" : "Get started"}<span>↗</span></Link>
+          <Link href="/terminal" className={styles.navCta}>Open terminal<span>↗</span></Link>
           <button ref={menuButton} type="button" className={styles.menuButton} aria-label={open ? "Close navigation" : "Open navigation"} aria-expanded={open} aria-controls="landing-navigation" onClick={() => setOpen(!open)}>
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">{open ? <path d="m5 5 10 10M5 15 15 5" /> : <path d="M3 6h14M3 10h14M3 14h14" />}</svg>
           </button>

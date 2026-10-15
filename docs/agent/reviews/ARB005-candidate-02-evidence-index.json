@@ -1,0 +1,132 @@
+{
+  "additional_metadata": {
+    "exit": 0,
+    "failed": 0,
+    "passed": 8
+  },
+  "affected": {
+    "exit": 0,
+    "failed": 0,
+    "passed": 602
+  },
+  "all_supported_private_probes_passed": 62,
+  "artifacts": [
+    {
+      "bytes": 11967,
+      "path": "/home/vercel-sandbox/neutralis-ai/.context/arb005-review-c02-independent.md",
+      "sha256": "eea2daf5c838c16949512858e2785ae76ff05e9c6a0020e8e178755abd29e4b0"
+    },
+    {
+      "bytes": 9805,
+      "path": "/home/vercel-sandbox/neutralis-ai/.context/arb005-c02-entry-critic.md",
+      "sha256": "67a5589c5b0aa1907ffc382b0c77247d1db8398f59a20a0a42fadd35719e234f"
+    },
+    {
+      "bytes": 2908,
+      "path": "/home/vercel-sandbox/neutralis-ai/.context/arb005-c02-entry-critic-manifest.json",
+      "sha256": "bbb315160865ef64fa975f00a6a89095503a4958b9a5da5d64a8f656f6340871"
+    },
+    {
+      "bytes": 4328,
+      "path": "/home/vercel-sandbox/neutralis-ai/.context/arb005-c02-review-preparation.md",
+      "sha256": "094d06e870ec54b1c36cbb48b5b9db10af3f127d0ea738e95c0f9c9ae951001e"
+    },
+    {
+      "bytes": 6094,
+      "path": "/home/vercel-sandbox/neutralis-ai/.context/arb005-review-c02/tests/arbitrage/.context/reviewer/test_protocol_review.py",
+      "sha256": "2b71f16a6b3be79fc20eb7422ab216a3e3ceaea6477b8458a4fa058b7bb46d9b"
+    },
+    {
+      "bytes": 3476,
+      "path": "/home/vercel-sandbox/neutralis-ai/.context/arb005-review-c02/tests/arbitrage/.context/reviewer/test_c02_metadata_independent.py",
+      "sha256": "1f59fe815d589f15e48640edf4b210ee5e82d84f4fa56b2405f7e5e2a6956002"
+    },
+    {
+      "bytes": 71265,
+      "path": "/home/vercel-sandbox/neutralis-ai/.context/arb005-review-c02/docs/arbitrage/ARB-DURABLE-1-proposed-contract.md",
+      "sha256": "9e9f3625c4fb71a9b7cf3958820fc6aa908272dd558a4e446726cda6ff0090f0"
+    },
+    {
+      "bytes": 942,
+      "path": "/home/vercel-sandbox/neutralis-ai/.context/arb005-review-c02/.context/reviewer/affected.log",
+      "sha256": "861cf632d05628258b1e84042d151502e79b0cd204ca0044fc552ec3fac6933e"
+    },
+    {
+      "bytes": 1331,
+      "path": "/home/vercel-sandbox/neutralis-ai/.context/arb005-review-c02/.context/reviewer/directional.log",
+      "sha256": "ad820013aa18db502148ec5d42aa1f6f55b88f5f35039517db805daecc580c79"
+    },
+    {
+      "bytes": 3598,
+      "path": "/home/vercel-sandbox/neutralis-ai/.context/arb005-review-c02/.context/reviewer/environment-and-custody.json",
+      "sha256": "fdaea41f88bd3d57a3185139712a4798b90184c47338eb69d76a956cac3ab098"
+    },
+    {
+      "bytes": 228,
+      "path": "/home/vercel-sandbox/neutralis-ai/.context/arb005-review-c02/.context/reviewer/independent-metadata.log",
+      "sha256": "d67fb4bd993095467c4ea4630511eb61b69f6607422e3ffa5eecc2d0881cdf8b"
+    },
+    {
+      "bytes": 844,
+      "path": "/home/vercel-sandbox/neutralis-ai/.context/arb005-review-c02/.context/reviewer/original-protocol.log",
+      "sha256": "b6f90106677197a7c5deab09811597a42f59542ca005f7436b7d5c7885896603"
+    },
+    {
+      "bytes": 18864,
+      "path": "/home/vercel-sandbox/neutralis-ai/.context/arb005-review-c02/.context/reviewer/scope-ARB005-durable-entry-stage-a.md",
+      "sha256": "3e3fdcc3b83c3b8a7d191af00caf385ebff7aca44dccc9b61d0d8eb5aa0ead3c"
+    },
+    {
+      "bytes": 20835,
+      "path": "/home/vercel-sandbox/neutralis-ai/.context/arb005-review-c02/.context/reviewer/scope-MEMORY-INDEX.md",
+      "sha256": "826f05f8a811bafdc292bfd355a9d3f66ae195d90c9af0cdb9e63a8d4cd2d655"
+    },
+    {
+      "bytes": 23176,
+      "path": "/home/vercel-sandbox/neutralis-ai/.context/arb005-review-c02/.context/reviewer/scope-PROJECT.md",
+      "sha256": "47b9b0f7a4be3d4fafefee673adfb10aba3f4220054a3fe0ad39b980e3205df4"
+    },
+    {
+      "bytes": 40879,
+      "path": "/home/vercel-sandbox/neutralis-ai/.context/arb005-review-c02/.context/reviewer/scope-STATE.md",
+      "sha256": "8768c32460aa272e0174fecd47799ee278f63adb436bb471db3730692857b97b"
+    }
+  ],
+  "base_c01": "449d5ea6aa02d4aa183a2c7d174d9ac4197b042f",
+  "candidate": "69f0f2b3fc3325e0b6c44229d4b09bc666260134",
+  "contract_base": "c5bbaf306f4e7768c61458318dcc9087a4ea7834",
+  "critic": "/root/arb003_candidate_review/entry_dispatch_check",
+  "critic_index_verified_entries": 10,
+  "critic_literal_old_dependency_audit": {
+    "exit": 1,
+    "expected_obsolete_positive_failures": 2,
+    "passed": 2
+  },
+  "critic_supported_cases": {
+    "exit": 0,
+    "failed": 0,
+    "passed": 42
+  },
+  "database_or_sql_executed": false,
+  "historical_directional": {
+    "exit": 1,
+    "failed": 1,
+    "passed": 34,
+    "unchanged": true
+  },
+  "material_findings": 0,
+  "original_protocol": {
+    "exit": 0,
+    "failed": 0,
+    "passed": 12
+  },
+  "parent": "0783369aa8fe07eb67dc4e8a31b2385028848945",
+  "preserved_c01_verified_critic_entries": 8,
+  "preserved_c01_verified_main_entries": 10,
+  "review_attribution": "stable GPT continuity; Fable returned; not a new Fable pass or continuing quota-outage claim",
+  "reviewer": "/root/arb003_candidate_review",
+  "source_clean": true,
+  "stage_b": "unassigned",
+  "tree": "9f57bd080c72d7fe4a4f1ef5c7227d1b8bde0231",
+  "verdict": "BOUNDED_PASS"
+}

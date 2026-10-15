@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Neutralis · Equities cost worksheet</title>
+<style>
+:root{color-scheme:dark;--bg:#0e1518;--card:#162126;--line:#324349;--text:#edf1ed;--muted:#aabcb9;--accent:#aff3c6;--amber:#f1d595}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 system-ui,sans-serif}main{max-width:1080px;margin:auto;padding:40px 24px 60px}.brand{color:var(--accent);letter-spacing:.14em;font-size:12px;font-weight:700}h1{font-size:clamp(30px,5vw,48px);letter-spacing:-.035em;line-height:1.1;max-width:730px;margin:18px 0}h2{font-size:18px;margin:0 0 20px}.intro{max-width:730px;color:var(--muted)}.grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin:30px 0}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px}label{display:block;font-weight:600;margin-top:20px}label:first-of-type{margin-top:0}small,.hint{display:block;color:var(--muted);font-size:13px;font-weight:400;margin:4px 0 8px}input{width:100%;padding:11px 13px;border:1px solid #576b71;border-radius:6px;background:#0e171b;color:var(--text);font:inherit}input:focus{outline:2px solid var(--accent);outline-offset:2px}input:invalid{border-color:var(--amber)}.big{font-size:40px;font-weight:650;letter-spacing:-.025em;color:var(--accent);margin:4px 0 12px}.stat{padding:15px 0;border-top:1px solid var(--line)}.stat strong{float:right;font-variant-numeric:tabular-nums}#status{color:var(--amber);padding:12px 0}table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:14px 8px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:500}td:last-child{text-align:right;font-variant-numeric:tabular-nums}.bar{height:7px;background:#33454c;border-radius:8px;overflow:hidden;margin-top:5px;width:100%}.bar span{display:block;height:7px;background:var(--accent)}.foot{font-size:13px;color:var(--muted);max-width:870px}.tag{font-size:11px;color:var(--amber);border:1px solid var(--line);border-radius:5px;padding:4px 7px;display:inline-block}button{background:transparent;color:var(--accent);border:1px solid var(--line);padding:9px 13px;border-radius:6px;font:inherit;margin-top:18px;cursor:pointer}code{font-size:13px;white-space:normal}a{color:var(--accent)}@media(max-width:760px){.grid{grid-template-columns:1fr}main{padding:28px 18px}.card{padding:20px}th,td{padding:12px 4px}}
+</style>
+</head>
+<body><main>
+<div class="brand">NEUTRALIS / RESEARCH DESK</div>
+<h1>How much does the process need to earn back?</h1>
+<p class="intro">A local worksheet for the trading side. Change the assumptions to see the annual overhead relative to capital. These are cost ratios, not forecasts or evidence that a strategy works.</p>
+<span class="tag">ILLUSTRATIVE · NO ACCOUNT CONNECTION · NO DATA SAVED</span>
+<div class="grid">
+<section class="card" aria-labelledby="inputs"><h2 id="inputs">Your assumptions</h2>
+<label for="capital">Illustrative capital · USD</label><small>Default $10,000 is an example, not a funding recommendation.</small><input id="capital" type="number" min="1" max="1000000000" step="any" value="10000" required>
+<label for="hosting">Existing shared hosting bill · USD / month</label><small>$45 uses the quoted $20 Railway + $25 Supabase. Bills are unverified.</small><input id="hosting" type="number" min="0" max="1000000" step="any" value="45" required>
+<label for="allocation">Share allocated to equities · %</label><small>Allocate existing costs once across the project. 100% is illustrative.</small><input id="allocation" type="number" min="0" max="100" step="any" value="100" required>
+<label for="data">Additional data fees · USD / month</label><small>Leave blank if unknown. Enter 0 only as an explicit scenario assumption.</small><input id="data" type="number" min="0" max="1000000" step="any" placeholder="Unknown">
+<label for="models">Additional model calls · USD / month</label><small>Include paid failed calls. Development subscriptions do not establish runtime prices.</small><input id="models" type="number" min="0" max="1000000" step="any" placeholder="Unknown">
+<label for="compute">Additional compute/storage · USD / month</label><small>Only incremental usage not already included in the shared bill above.</small><input id="compute" type="number" min="0" max="1000000" step="any" placeholder="Unknown">
+<button id="reset" type="button">Reset illustration</button>
+</section>
+<section class="card" aria-labelledby="outputs"><h2 id="outputs">Annual cost view</h2><div id="results" aria-live="polite" aria-atomic="true">
+<div id="ratio-label">Known annual overhead / capital</div><div id="ratio" class="big">—</div>
+<div class="stat">Allocated existing overhead <strong id="shared">—</strong></div>
+<div class="stat">Known incremental subtotal <strong id="incremental">—</strong></div>
+<div class="stat">Known combined subtotal <strong id="subtotal">—</strong></div>
+<div class="stat">Complete overhead estimate <strong id="total">Unknown</strong></div>
+<p id="status">Fill the inputs to calculate.</p>
+</div>
+<p class="hint">A strategy with a positive gross return can still lose to a cheaper alternative. Compare additional net performance with all incremental and fairly allocated costs, using comparable risk and timing.</p>
+<p class="hint">This worksheet excludes trading friction, taxes, one-time setup costs, changes in capital and compounding. Even a complete overhead estimate is not a complete investment break-even calculation.</p>
+<h2 style="margin-top:30px">Same overhead, different capital</h2>
+<table><thead><tr><th scope="col">Illustrative capital</th><th scope="col">Known annual cost ratio</th></tr></thead><tbody id="comparison"></tbody></table>
+<p class="hint">Bars share a scale of 0–20%, capped at 20%; numbers remain uncapped. Unknown fees are excluded from these partial ratios.</p>
+</section></div>
+<section class="card"><h2>What would justify the expense?</h2>
+<p>First, make decisions reproducible: cited facts, a frozen mandate, explicit approvals, rejection records and complete costs. Then test whether the investment team improves outcomes over one PM and simple references on new observations. More agents and more agreement do not establish an edge.</p>
+<p class="foot">Formula: annual overhead = 12 × (existing monthly bill × allocation / 100 + incremental monthly fees). Divide by capital for a simple annual ratio. The default known subtotal is $540; at $10,000 that is 5.40%, before unknown fees. Zero allocations do not make the underlying project bill disappear.</p>
+<p class="foot">Working research artifact, September 7, 2026. No broker tools, external scripts, analytics, network requests or persistent storage. <a href="../INVESTMENT-DESK-DECISION.md">Read the investment-desk decision memo</a>.</p>
+</section><noscript><p>JavaScript is disabled. The default hosting illustration is $45 × 12 = $540/year; $540 ÷ $10,000 = 5.40%. Other costs are unknown.</p></noscript>
+<script>
+'use strict';
+const ids=['capital','hosting','allocation','data','models','compute'];
+const inputs=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
+const labels={data:'data',models:'model calls',compute:'incremental compute/storage'};
+const usd=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(n);
+const percent=n=>n.toFixed(2)+'%';
+function calculate(values){
+ const n={},missing=[];
+ for(const id of ids){
+  const raw=String(values[id]).trim();
+  if(raw===''){if(id in labels){n[id]=0;missing.push(labels[id]);continue;}return {error:'Enter capital, hosting and allocation.'};}
+  const v=Number(raw),max=id==='capital'?1e9:id==='allocation'?100:1e6;
+  if(!Number.isFinite(v)||v<(id==='capital'?1:0)||v>max)return {error:'Enter valid nonnegative values within the stated limits; capital must be at least $1 and allocation no more than 100%.'};
+  n[id]=v;
+ }
+ const shared=12*n.hosting*n.allocation/100,incremental=12*(n.data+n.models+n.compute),subtotal=shared+incremental;
+ return {shared,incremental,subtotal,total:missing.length?null:subtotal,ratio:100*subtotal/n.capital,missing};
+}
+function update(){
+ const r=calculate(Object.fromEntries(ids.map(id=>[id,inputs[id].value])));
+ const put=(id,v)=>document.getElementById(id).textContent=v;
+ const body=document.getElementById('comparison');body.replaceChildren();
+ if(r.error){['ratio','shared','incremental','subtotal','total'].forEach(id=>put(id,'—'));put('status',r.error);return;}
+ put('ratio',percent(r.ratio));put('shared',usd(r.shared));put('incremental',usd(r.incremental));put('subtotal',usd(r.subtotal));put('total',r.total===null?'Unknown':usd(r.total));
+ put('ratio-label',r.total===null?'Known annual overhead / capital · partial':'Scenario annual overhead / capital');
+ put('status',r.missing.length?'Incomplete estimate. Unknown: '+r.missing.join(', ')+'. The subtotal and ratios omit these costs.':'All overhead fields supplied for this scenario. Values are assumptions, not verified bills or prices.');
+ for(const capital of [5000,10000,25000,50000]){
+  const ratio=100*r.subtotal/capital,tr=document.createElement('tr'),td=document.createElement('td'),value=document.createElement('td'),bar=document.createElement('div'),fill=document.createElement('span');
+  td.textContent=usd(capital);value.textContent=percent(ratio);bar.className='bar';bar.setAttribute('aria-hidden','true');fill.style.width=Math.min(100,ratio/20*100)+'%';bar.append(fill);value.append(bar);tr.append(td,value);body.append(tr);
+ }
+}
+ids.forEach(id=>inputs[id].addEventListener('input',update));
+document.getElementById('reset').addEventListener('click',()=>{Object.entries({capital:'10000',hosting:'45',allocation:'100',data:'',models:'',compute:''}).forEach(([k,v])=>inputs[k].value=v);update();});
+update();
+</script></main></body></html>

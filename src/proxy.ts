@@ -4,7 +4,9 @@ import { updateSession } from "@/lib/supabase/proxy";
 export async function proxy(request: NextRequest) {
   const { searchParams, pathname, origin } = request.nextUrl;
   // Public exchange quotes are independent of the visitor's auth session.
-  if (pathname === "/api/market-ticker") return NextResponse.next();
+  if (pathname === "/api/market-ticker" || pathname === "/api/terminal/markets" || pathname.startsWith("/api/terminal/markets/") || pathname === "/api/terminal/opportunities" || pathname.startsWith("/api/terminal/opportunities/")) return NextResponse.next();
+  // The worker route authenticates its own bearer secret, independently of cookies.
+  if (pathname === "/api/internal/terminal-monitors") return NextResponse.next();
   const code = searchParams.get("code");
 
   // Supabase redirects back to the Site URL root with ?code= after

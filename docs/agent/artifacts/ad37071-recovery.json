@@ -1,0 +1,17 @@
+{
+  "commit": "ad37071ae6bbc4a31289f9e662388c50e92ac3d3",
+  "parent": "d524b5a75643df5f508c068e3c4fb930ba54b4eb",
+  "tree": "e83cb4b7f5c91396ca58bbcb19e8e2e25e54d057",
+  "patch_sha256": "668da51d0ef1036d43bf62ec1eb2301c9e510c0be4a385808bfd2b93a748ef28",
+  "source": "User-authorized read-only Mac export through RunLocalCommand",
+  "patch_bytes": 21459,
+  "raw_commit_bytes": 1668,
+  "verified_commit_object": true,
+  "verified_patch_tree": true,
+  "bundle_sha256": "aa56fb304a6ce8101ddc757ee5874a48139389f68c8de5bcf6af7e6fd14bb653",
+  "bundle_bytes": 6168,
+  "recovery_ref": "refs/recovery/neutralis-ad37071",
+  "orchestration_head_unchanged": "d524b5a75643df5f508c068e3c4fb930ba54b4eb",
+  "repair_sql_executed": false,
+  "product_worktree_modified": false
+}

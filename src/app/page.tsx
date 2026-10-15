@@ -28,7 +28,7 @@ export default async function Home() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const signedIn = !!user;
-  const destination = signedIn ? "/dashboard" : "/signup";
+  const destination = "/terminal";
   return (
     <div className={styles.landing}>
       <a href="#main-content" className={styles.skipLink}>Skip to content</a>

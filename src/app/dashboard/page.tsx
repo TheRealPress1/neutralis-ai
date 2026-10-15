@@ -3,14 +3,15 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { SubscriptionTier } from "@/lib/subscription";
 import DashboardShell from "./components/DashboardShell";
+import TerminalWorkspace from "../terminal/components/TerminalWorkspace";
 
 export const metadata: Metadata = {
-  title: "Dashboard | Neutralis.ai",
+  title: "Terminal | Neutralis.ai",
   description:
-    "Portfolio monitoring dashboard for Neutralis.ai event hedge fund",
+    "Live prediction markets, trading, and portfolio monitoring in one workspace.",
 };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -20,8 +21,11 @@ export default async function DashboardPage() {
     redirect("/login?redirect=/dashboard");
   }
 
+  const { tab } = await searchParams;
+  if (!tab || tab === "terminal") return <TerminalWorkspace signedIn userId={user.id} />;
+
   // Fetch subscription tier server-side (avoids client-side race/failure)
-  const { data: profile } = await (supabase as any)
+  const { data: profile } = await supabase
     .from("profiles")
     .select("subscription_tier, is_founder")
     .eq("id", user.id)

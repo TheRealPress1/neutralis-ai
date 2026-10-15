@@ -1,6 +1,35 @@
 export type Database = {
   public: {
     Tables: {
+      terminal_order_submissions: {
+        Row: {
+          client_order_id: string;
+          user_id: string;
+          ticker: string;
+          status: "submitting" | "unknown" | "accepted" | "rejected";
+          preview_hash: string;
+          credential_binding: string;
+          order_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          client_order_id: string;
+          user_id: string;
+          ticker: string;
+          status: "submitting" | "unknown" | "accepted" | "rejected";
+          preview_hash: string;
+          credential_binding: string;
+          order_id?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          status?: "submitting" | "unknown" | "accepted" | "rejected";
+          order_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       waitlist: {
         Row: {
           id: number;
@@ -50,6 +79,8 @@ export type Database = {
           id: string;
           email: string;
           full_name: string;
+          subscription_tier: string;
+          is_founder: boolean;
           onboarding_completed_at: string | null;
           created_at: string;
           updated_at: string;

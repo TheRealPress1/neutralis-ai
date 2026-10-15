@@ -1,0 +1,11 @@
+# Robinhood agentic agreement — additional public evidence
+
+Root supplement, observed September 7, 2026. This follows a public legal-document link excluded from the earlier specialist's RH003 allowlist; it does not rewrite that receipt or its bounded findings.
+
+The [financial-entities privacy statement](https://robinhood.com/us/en/support/articles/rh-financial-entities-privacy-statement/) links to the [Customer Agreement](https://cdn.robinhood.com/assets/robinhood/legal/Robinhood-Customer-Agreement.pdf), revised September 1, 2026. Section 29.1, page 22, includes hosted MCP in the API Package and requires express written consent for its use or Licensee Product development. Section 29.8, page 24, expressly contemplates autonomous agents. The text does not itself establish Neutralis's consent, hosted-client acceptance or server-token arrangements.
+
+Data-sharing and market-data provisions do not establish our downstream model-processing or shared-research rights. These remain specific provider-contract questions, alongside the technical registration/callback evidence in RH003. [Customer Agreement, sections 29.2, 29.4 and Market Data Addendum](https://cdn.robinhood.com/assets/robinhood/legal/Robinhood-Customer-Agreement.pdf).
+
+Practical consequence: autonomous operation is contemplated, but support documentation alone does not settle this project's client permission. No inference that independent offline domain research is prohibited; no assertion that an offline test supplies a licensing exemption or provider consent. RH004 remains a standards-shaped security prototype with mock exchange only. A real connection or provider integration requires the unresolved consent/client contract to be settled separately.
+
+Private source custody: `.context/robinhood-agentic-customer-agreement.pdf`, 558,485 bytes, SHA256 `62d1cf1622948e8892641afa2ac5eb7576e20f71b87e6fc8d3b062969013856c`; HTTP 200 at `2026-09-07T22:00:31.914163+00:00`. Request metadata: `.context/robinhood-agentic-agreement-request-receipt.json`. Full bounded research note: `.context/robinhood-agentic-agreement-research.md`. Root independently opened and read section 29; no account, consent, registration, financial endpoint, vendor contact or purchase occurred.

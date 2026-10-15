@@ -1,0 +1,64 @@
+{
+  "head": "232fe82e00698776caf73c9b45cdff3f5319f22f",
+  "clean": true,
+  "verdict": "REQUEST CHANGES",
+  "material_findings": 2,
+  "tests": {
+    "affected": {
+      "passed": 400,
+      "exit": 0
+    },
+    "independent_outcomes": {
+      "passed": 16,
+      "exit": 0
+    },
+    "independent_dispatch": {
+      "passed": 12,
+      "failed": 4,
+      "exit": 1
+    },
+    "historical_directional": {
+      "passed": 34,
+      "failed": 1,
+      "exit": 1
+    }
+  },
+  "files": {
+    ".context/arb003-review-c01-independent.md": {
+      "bytes": 9234,
+      "sha256": "b629c3a83f1fe7c3761c6f8a75e4339da5d1c1f1f3c1d72271bc2000f061100a"
+    },
+    ".context/arb003-review-c01/tests/arbitrage/.context/reviewer/test_review_outcomes.py": {
+      "bytes": 7391,
+      "sha256": "574c061dc656bb9da5312ebe65e0afe87ab6658d3b5db354e29d2c68cfac4571"
+    },
+    ".context/arb003-review-c01/.context/independent/affected.log": {
+      "bytes": 701,
+      "sha256": "7775a7d91498dc20634ae75cdbbeaaab9a36320d9852bb4006d5433f4eba814f"
+    },
+    ".context/arb003-review-c01/.context/independent/outcomes.log": {
+      "bytes": 300,
+      "sha256": "89b223b4d95576447d0a6677762f5cc3a752b939fd6cc6257f3477182b1cf577"
+    },
+    ".context/arb003-review-c01/.context/independent/directional.log": {
+      "bytes": 1331,
+      "sha256": "133e7c91cc404a9c57187358c266c7b0227f43651f90ad85461b12e980dc3f08"
+    },
+    ".context/arb003-review-c01/.context/entry-review/test_entry_paths.py": {
+      "bytes": 7390,
+      "sha256": "515c888b3819869f52a076790b3d6ccfab84722f25b2a46ab078d5aca66f15f2"
+    },
+    ".context/arb003-review-c01/.context/entry-review/final-results.log": {
+      "bytes": 36673,
+      "sha256": "4b371ac0f944f13dd7c34ed1d9823b49ff7e64531deb06dcb922aac1d06cbde6"
+    },
+    ".context/arb003-review-c01/.context/entry-review/REVIEW.md": {
+      "bytes": 7758,
+      "sha256": "c40f14b5606bce1cc7df435ec1232db23f546e2b1f873902e96ee6a1a977473d"
+    },
+    ".context/arb003-review-c01/.context/entry-review/manifest.json": {
+      "bytes": 1170,
+      "sha256": "1bce4d771c01e3f20a1d1ae5c4f55abea442081d39721a2be6eb8b82b8262911"
+    }
+  }
+}

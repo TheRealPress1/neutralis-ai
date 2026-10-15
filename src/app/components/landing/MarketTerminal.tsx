@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import Image from "next/image";
 import styles from "./MarketTerminal.module.css";
 
 type Category = "All markets" | "Politics" | "Sports" | "Crypto" | "Economics";
@@ -108,7 +109,11 @@ export default function MarketTerminal() {
         <div className={styles.scanner}>
           <div className={styles.scannerHeading}>
             <div><span className={styles.eyebrow}>CROSS-EXCHANGE INTELLIGENCE</span><h3>{watchlistOnly ? "Your watchlist" : "Market scanner"}<span>{visibleMarkets.length}</span></h3></div>
-            <div className={styles.pairBadge}><span className={styles.pairIcon}>K</span><span className={styles.pairIconPoly}>P</span><span>2 exchanges</span></div>
+            <div className={styles.pairBadge}>
+              <span className={styles.pairIcon}><Image src="/kalshi-icon.png" alt="Kalshi" width={24} height={24} unoptimized /></span>
+              <span className={styles.pairIconPoly}><Image src="/polymarket-icon.svg" alt="Polymarket" width={24} height={24} /></span>
+              <span>2 exchanges</span>
+            </div>
           </div>
 
           <div className={styles.filters} aria-label="Filter markets">
@@ -151,8 +156,8 @@ export default function MarketTerminal() {
           <PriceChart market={market} />
 
           <div className={styles.tradeHeading}><span>THE OPPORTUNITY</span><span className={styles.grossLabel}>BEFORE FEES</span></div>
-          <div className={styles.tradeRow}><span><i className={styles.exchangeLogo}>K</i>Kalshi <b className={styles.yesLabel}>BUY YES</b></span><strong>{market.kalshi}¢</strong></div>
-          <div className={styles.tradeRow}><span><i className={`${styles.exchangeLogo} ${styles.polyLogo}`}>P</i>Polymarket <b className={styles.noLabel}>BUY NO</b></span><strong>{market.polymarketNo}¢</strong></div>
+          <div className={styles.tradeRow}><span><span className={styles.exchangeLogo}><Image src="/kalshi-icon.png" alt="" width={20} height={20} unoptimized /></span>Kalshi <b className={styles.yesLabel}>BUY YES</b></span><strong>{market.kalshi}¢</strong></div>
+          <div className={styles.tradeRow}><span><span className={`${styles.exchangeLogo} ${styles.polyLogo}`}><Image src="/polymarket-icon.svg" alt="" width={20} height={20} /></span>Polymarket <b className={styles.noLabel}>BUY NO</b></span><strong>{market.polymarketNo}¢</strong></div>
           <div className={styles.edgeSummary}><div><span>Combined cost <b>{cost}¢</b></span><span>Gross edge per pair</span></div><strong>+{edge}<span>¢</span></strong></div>
           <button type="button" className={`${styles.watchButton} ${isSaved ? styles.watchButtonSaved : ""}`} onClick={() => toggleFavorite(market.id)} aria-pressed={isSaved}><Icon name="star" size={14} filled={isSaved} />{isSaved ? "Added to watchlist" : "Add to watchlist"}<Icon name="chevron" size={13} /></button>
           <p className={styles.detailNote}>$1 paired payout assumes identical settlement. Fees, liquidity, and execution risk apply.</p>
