@@ -1,0 +1,15 @@
+# RH005 whole-proposal static audit
+
+Same-family GPT protocol critique, 2026-09-08 UTC. Read the complete 18,261-byte, 84-line `.context/rh005-host-boundary-proposal.md`; verified SHA256 `5995cd47a7c1bf3c028710ef6731d2a268bb2f8b88509026a6958e0d79de93df`. Compared its whole operation against accepted `6fb1a69e65d08b968784dfe453c4905f763e23bf` source in `.context/rh004-c02-custody/src/lib/brokers/robinhood`, including authorization, completion, storage, security, connection, vault, endpoint and error contracts. No tests or product imports were run.
+
+**Disposition: the original proposal needs one explicit mutation-boundary amendment. With the amendment below, no remaining material contract blocker was found for this offline slice. This is not an implementation PASS.**
+
+The proposal's “Principal and asynchronous effects” paragraph detaches returned store records but does not explicitly protect structured arguments forwarded to a store. Actual `authorization.ts:106–114` constructs a mutable consume request and passes that object to `AuthorizationStore.consume`; lines 123–124 compare the returned attempt against that same request afterward. A store that mutates `sessionHash`/`browserHash` can therefore rewrite the domain's comparison baseline. Freezing the Principal and copying the returned attempt do not alone close this path.
+
+Necessary amendment: forward detached, deeply frozen structured store arguments for `consume`, `putReplacing` and CAS `next` (including nested credential fields), preserving the domain's original objects used for subsequent comparisons. No inherited interface or implementation changes are needed. Require a same-user/different-session control attempting consume-argument mutation of session/browser hashes: the original binding must remain authoritative, with no later exchange or installation; retain the normal real-domain roundtrip positive. These controls are proposed and unrun.
+
+Root accepted this clarification during the audit and stated it will be explicit in the implementation ticket's acceptance note. The original author's artifact remains unchanged and attributable; this disposition depends on carrying the amendment into the actual assignment.
+
+The other material boundaries are coherent: store-call actor checks close begin's pre-reservation async gap; the host catch path preserves expiry despite domain error mapping; state-addressed cookies isolate A/B response cleanup; failures issue no cookie mutation and do not claim rollback after invoked writes; completion preserves one exchange, irreversible consumption and conservative lost-ack handling. The renamed three-file envelope must match `host-adapter.ts`, `__tests__/host-adapter.test.ts`, `__tests__/host-fixtures.ts`; root reports that reconciliation completed.
+
+Trusted deployed session resolution, actual browser/cookie/proxy behavior, initial provisioning, durable storage and provider/client consent remain separate deployment dependencies already identified by the proposal. They do not prevent this injected native HTTP proof, and this audit supplies no entitlement, live permission or code approval.

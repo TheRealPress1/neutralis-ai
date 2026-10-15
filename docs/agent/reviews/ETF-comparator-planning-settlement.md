@@ -1,0 +1,11 @@
+# ETF comparator — root planning settlement
+
+2026-09-07. Astra read the complete Fable v1, v2, v3 and v4 artifacts and accepts [v4](../artifacts/ETF-trend-comparator-v4.md), SHA256 `e36113543e78be9afaf438cf99e87c73abde17680ee1a302f0fda57d8aabcc04`, **as a concrete planning proposal only**. This is not a complete implementation contract, registered investment experiment, tested strategy or authorization to run.
+
+The proposed comparator is SPY versus zero-interest cash, switching from a fixed month-end comparison with the exact 200 scheduled-session mean. Its clock, no-hindsight capture rule, next-session official-open convention, missed-observation behavior, all-in cost scenarios and action/receivable accounting are now explicit enough to evaluate feasibility. Fable retains experiment direction; this is a separate comparison, not an adopted overlay or portfolio recommendation.
+
+Root review required corrections to missing-bar selection, capture deadlines, early-close calendars, fill rescheduling, known versus unknown receivables, pre-fill splits, unresolved action coverage, cash funding and retained fractional dust. Earlier [v1](../artifacts/ETF-trend-comparator-v1.md), [v2](../artifacts/ETF-trend-comparator-v2.md) and [v3](../artifacts/ETF-trend-comparator-v3.md) remain exact historical proposals and do not govern.
+
+Still required before a runnable ticket: an accepted source/rights and calendar/official-open contract; actual source fields and action-coverage evidence; C0 and registration date; complete P1 post-cost sizing; historical availability conventions; and explicit complete/incomplete valuation-span behavior. Missing, deferred, stale, corrected or unexecuted periods must remain visible in any future report and cannot silently disappear from comparisons. Recording may continue while uncertain ownership pauses economic effects. The fixed 12-decision proposal measures process; a separate statistical horizon and decision rule must precede any economic inference.
+
+No source was pulled, no paper decision or fill produced, no model/API/data purchase made, and no implementation dispatched. The exact EQ001 build ticket remains independently blocked by Conductor WAF; this planning acceptance does not bypass that block or assign another writer.

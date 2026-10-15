@@ -1,0 +1,22 @@
+{
+  "source": "User-uploaded agent-playbook-starter.zip, 2026-09-06",
+  "sourceCommit": null,
+  "archiveSha256": "72ef1299fa90a83bbf1d00c3738e786721ce0b78acd873afd8fc57f5da5314d1",
+  "files": {
+    "START-HERE.md": "9d17def1d7916372ff86d086c7e984948fcbdb2f1f58ef6be15a8c285e561168",
+    "VALIDATION.md": "7c5d1933511aadb6cb09adbfd8d2c0d79f3f693567347b9db8a3e48caa78bddc",
+    "scripts/USAGE.md": "fd1e8c778db7e6fdb07e11ab9a29e77053ebbc198d30911b1f4a40c7bcf82c81",
+    "scripts/check-lane.mjs": "8153ee78d8199486d7c16ee5243c4cff4d95b2d696e89f3b25e196413f3d7bf8",
+    "scripts/check-lane.test.mjs": "94210002c38e78f4745048b9222c30849183ef0665ba99fe00f8cd6243f3faac",
+    "skills/co-head-orchestration/SKILL.md": "c7588d17409daca9853c29ff4e6029e73606c4863c9162c11e2aa0236afa8691",
+    "skills/cross-family-review/SKILL.md": "5457754871d70336abb7e85b92ed2eda4063988a29489b52cbd5e10f026ca2c3",
+    "skills/session-handoff/SKILL.md": "63d2c92f8e8162d1d2872a7dfa65e93e18dbf20134a99ebc65408753ba7a275b",
+    "templates/AGENTS.md": "976c39f575cec717d68a39e6eb909f34830d93003fe136dacf383c7ba9b115aa",
+    "templates/CLAUDE.md": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49",
+    "templates/MEMORY-ENTRY.md": "974ff21a2599801b420463edb7cfa3b2dba0d039e5b119df9cbe0ff8092a1e12",
+    "templates/MEMORY-INDEX.md": "09e11c78ede91a26986da063a5a68d466a7a20e9d3db5cb36db81041f5125f55",
+    "templates/PROJECT.md": "e4b50b221ea15243b6b5b74a7c806e83c3ef0de9f91b558a6a27af0202d1cc6d",
+    "templates/STATE.md": "e97130359fadb8341b88cbdf454cfe4cd66a1905bb48a41f7bcaedcb19b2cab2",
+    "templates/TASK.md": "5393862157e85556079639c876ce93fb528eb2b3cefee26a59964b4791fbea4d"
+  }
+}

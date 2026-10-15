@@ -1,0 +1,11 @@
+# RH005 candidate01 — acceptance and complete independent review
+
+Astra accepted the offline milestone on 2026-09-08 at exact `ebf6373965a101a73890cddc4e2bb6e5c35a81a1` after the original independent reviewer `a7c736c6-2103-45ba-a4e3-bf845dc05076` returned PASS. This is an independent **same-family GPT** review under Constantine's confirmed Fable quota exception. It is not a Fable or cross-family verdict.
+
+Read the [complete unchanged reviewer report](../../../.context/rh005-c01-independent-review/export/REPORT.md) in its original export directory so its evidence links resolve. Report: 16,180 bytes, SHA256 `5f58838a1f9b8d16cf91a2b0945f2af2724f22364c142e8c8bc283d93b484f8b`. [Root acceptance receipt](../../../.context/rh005-c01-independent-review/root-custody.json) records exact parent/tree/base, verified transport, source fingerprints and [final evidence intake](../../../.context/rh005-c01-independent-review-intake-audit.md). The complete 40,402-byte archive and all 53 indexed files plus manifest are verified.
+
+Independent checks: **318 passes** (134 host, 127 completion, 47 foundation, 10 adapted controls), zero failures/skips/cancellations/todos; scoped compile, lint, import barriers and whitespace pass. Each payload has fresh network isolation proof including external and loopback TCP/DNS denial, and product checks record zero fetch calls. Root read the full artifact and verified custody and consistency without rerunning product code.
+
+Original reviewer setup failures remain preserved: inherited import-path/cwd mismatch and Git ownership/repository discovery. Private cwd and command-local safe.directory corrections passed without candidate edits. The original ten-control probe remains unrun; the separately preserved adaptation adds the required error companion to the malformed-UTF-8 case and retains all assertions. Its ten controls pass.
+
+Only the three accepted host source/test additions differ from accepted RH004; all 276 inherited tracked files are unchanged. Native HTTP and a test cookie jar prove the offline composition. Actual browser enforcement, application routing/session provisioning, durable persistence and Robinhood client/provider approval remain unproved. Source stays frozen; this milestone does not enable a connection, trading or publication.

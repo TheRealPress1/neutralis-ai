@@ -1,0 +1,10 @@
+{
+  "initial": "Known annual overhead / capital · partial\n5.40%\nAllocated existing overhead\n$540.00\nKnown incremental subtotal\n$0.00\nKnown combined subtotal\n$540.00\nComplete overhead estimate\nUnknown\n\nIncomplete estimate. Unknown: data, model calls, incremental compute/storage. The subtotal and ratios omit these costs.",
+  "explicit_zero_total": "$540.00",
+  "priced": "Scenario annual overhead / capital\n6.90%\nAllocated existing overhead\n$270.00\nKnown incremental subtotal\n$420.00\nKnown combined subtotal\n$690.00\nComplete overhead estimate\n$690.00\n\nAll overhead fields supplied for this scenario. Values are assumptions, not verified bills or prices.",
+  "invalid_ratio": "—",
+  "reset_equal": true,
+  "mobile_overflow": false,
+  "errors": [],
+  "blocked_network": []
+}

@@ -1,0 +1,23 @@
+{
+  "observed_at": "2026-09-07T21:49:18.047603+00:00",
+  "head": "3e47e3a34855d61de751275ac3fe5cbe7fee8ae7",
+  "reports": [
+    {
+      "source": ".context/ui005-fable-c01-review/report.md",
+      "copy": "docs/agent/reviews/UI005-candidate-01-fable.md",
+      "bytes": 5696,
+      "sha256": "ac9514b6c579e4aaf0afa5c220cb74a94ceced013bbd302b69ef94c3ddaaade4"
+    },
+    {
+      "source": ".context/ui005-c01-critic/report.md",
+      "copy": "docs/agent/reviews/UI005-candidate-01-critic.md",
+      "bytes": 12576,
+      "sha256": "9163e064ffd7443feff6581e8f2d7f6fe4013e1492958814edeb78f67c14ea7b"
+    }
+  ],
+  "critic_index": ".context/ui005-c01-critic/evidence-index.json",
+  "verified_critic_files": 47,
+  "original_builder_screenshots": "remote; not transferred or verified; independent fresh captures used",
+  "composition_acceptance": "pending founder",
+  "publication": "not authorized by UI005 review"
+}

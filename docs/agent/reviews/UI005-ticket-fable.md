@@ -1,0 +1,22 @@
+# UI005 ticket challenge and delivery-plan settlement (Fable co-head, private)
+
+Date: 2026-09-07 UTC. Read in full: .context/UI005-investment-desk-prototype-draft.md (8,386 B, sha256 1eafbe68…fe15b), .context/NEUTRALIS-DELIVERY-PLAN-draft.md (5,428 B, sha256 71d90b6b…0126), docs/agent/CONDUCTOR-PROJECT-ASSOCIATION.md (sha256 4cbe6292…18f4c). Independent fresh reads: orchestration workspace ready with correct repository and creator; `project get 1a5210cc…` returns HTTP 404 (reproduced); my session resolves fable-5-1; frontend workspace 71f761b2 currently **sleeping**. No messages, edits or runs.
+
+## UI005 — three-line challenge
+**Ambiguity.** Two precisions. (1) "Read the exact accepted source as reference" together with "self-contained HTML" and "no product imports": state that copying CSS tokens, type scale and colour values from the accepted Exchange source into the standalone file is permitted; linking or importing product files is not. (2) The fixed fixture time must name its timezone and be the single origin for every displayed instant (cutoff, evaluation instant, expiry), so the "expiry against evaluation instant" scenario is checkable by eye. I accept the reviewer assignment named in the ticket.
+
+**Reinterpretation.** Two guards. (1) Scenarios must be static fixture states plus a switcher; the "changed proposal invalidates approvals" and "arm switch during failure" scenarios must not become computed approval or risk logic in JavaScript, or the prototype turns into a second validator that could be mistaken for EQ001 behaviour. (2) The "later integration map" in the design contract is a field-to-contract-item name mapping only (displayed field → EQ001 record contract number); no schemas, types or component APIs are defined there.
+
+**Artifact-bound acceptance.** PASS with two additions. The receipt must contain a scenario matrix: required scenario → expected displayed outcome → screenshot filename per viewport, covering the default and every failure state. And the receipt must state how network was disabled and verified (method and evidence), not only that no requests occurred. Three additive files above exact 0167a6de, bundle with sole prerequisite, per-file hashes, whitespace and parity checks, 1440×1000 and 390×844 captures, keyboard and reduced-motion evidence are present.
+
+## Delivery plan — settlement and corrections
+Settled as written on direction, owners and the no-dependency of RH003 and UI005 on EQ001. Corrections and flags:
+
+1. **Association policy, material.** Every remaining dispatch (UI005, RH003, EQ001 resume) hits the same missing cloud `projectId`. A per-message exception for one peer handoff is honest but does not scale. Record one documented association mode for the profile (desktop-repository join plus fresh cloud creator, repository, state, session, model and complete membership), apply it identically to every dispatch, and re-verify the desktop join freshly each time. The pinned validator stays byte-identical; the wrapper's normalized input is documented, as the record already does. Never backfill the historical cloud ID.
+2. **Frontend workspace is sleeping now.** UI005 dispatch will go through the documented sleeping-lane wake path; the ticket should not treat wake as delivery. Verify the owner's actual status and acknowledgment after the single send.
+3. **Founder reporting guard.** Add one sentence to the plan: prototype states are design fixtures and are never reported as EQ001 behaviour, paper results or connection status. The plan's "approved direction / working code / deployed behaviour" distinction already carries this; make it explicit for UI005.
+4. **Definition of "design locked".** Propose: locked when UI005 passes cross-family review with the fresh critic and Constantine accepts the composition. After that, further UI work is integration tickets that consume accepted EQ001 outputs through a reviewed projection; no new composition rounds.
+5. **Order.** UI005 first (owner idle, founder asked to lock design), RH003 in parallel (documentation only), EQ001 held on the human path already recorded, data-sample proposal continues. The paper-mandate freeze in my lane stays blocked on the rights register and EQ001, as the plan states.
+6. **No further concern** with the arbitrage and publication rows; both correctly frozen on their real blockers.
+
+Verdict: UI005 dispatchable after the two ambiguity precisions and two receipt additions; plan accepted with corrections 1–4 recorded by Astra.

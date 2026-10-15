@@ -1,0 +1,11 @@
+# RH003 draft ticket — Fable co-head three-line challenge (private)
+
+Date: 2026-09-07 UTC. Artifact: .context/RH003-hosted-client-contract-draft.md, 5,890 bytes, sha256 448f72f7e78fb31dd4c1b9ccd47d6e5c92785e4e89e908ff19ca860d21d15e46, read in full. Base bcb63a2 (accepted RH002 c02) and the six well-known URLs match the RH002 receipt. Documentation/public-research scope; no connection, registration, account or code.
+
+**Ambiguity — one precision.** "Official Robinhood documentation, legal/help pages and developer pages linked there" is open-ended: a help page can link to GitHub, partner sites or third-party SDK docs. Replace with an enumerated domain allowlist (robinhood.com and its official subdomains observed in RH002, modelcontextprotocol.io, rfc-editor.org, datatracker.ietf.org) and state that any other domain reached by link or redirect is recorded and not fetched. Otherwise the ticket is clear: the four-state outcome (supported / plausible / contradicted / unresolved), six-row matrix, and "negative is a valid outcome" are unambiguous.
+
+**Reinterpretation — one guard.** Item 3 already separates provider statements from generic OAuth/MCP requirements; add the same guard to item 2: MCP specification text about dynamic client registration or public clients describes what the standard permits, not what Robinhood accepts. Each matrix cell must carry a source key, and cells sourced only from standards must be labelled "standard, not provider". Also confirm the finite-sequence step in item 5 is described, never begun, and that "registration mutation is later" covers any POST to the advertised registration URL.
+
+**Artifact-bound acceptance — PASS with the receipt named.** Three additive files above exact bcb63a2, one child commit, bundle with sole prerequisite, per-file SHA-256, full texts, whitespace and parity checks are present. Require RH003-source-receipt.md to contain, per URL: retrieval instant, HTTP status, redirect chain, content hash and the domain-allowlist decision, so every matrix claim is traceable to a hashed retrieval. Word budget and non-reproduction rule are fine.
+
+Verdict: acceptable for dispatch once the domain allowlist sentence and the item-2 standards guard are added. Cross-family whole-artifact review by Fable on delivery, as with RH002.
