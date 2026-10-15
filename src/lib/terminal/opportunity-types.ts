@@ -49,6 +49,13 @@ export interface OpportunityPair {
   status: OpportunityDataStatus;
   warnings: string[];
 }
+export interface OpportunityTeam {
+  league: string;
+  code: string;
+  name: string;
+  logoUrl: string | null;
+  isYesOutcome: boolean;
+}
 export interface Opportunity {
   /** Versioned reversible identity: v1~KALSHI-TICKER~polymarket-us-slug. */
   id: string;
@@ -57,6 +64,7 @@ export interface Opportunity {
   league: string;
   eventDate: string;
   outcome: string;
+  teams: OpportunityTeam[];
   status: OpportunityDataStatus;
   fetchedAt: string;
   kalshi: OpportunityMarket;

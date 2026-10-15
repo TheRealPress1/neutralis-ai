@@ -1,6 +1,7 @@
+import { teamBrand } from "./team-brands.ts";
 import type {
   Opportunity, OpportunityBook, OpportunityDataStatus, OpportunityFeed, OpportunityLevel,
-  OpportunityMarket, OpportunityPair, OpportunityVenue, OpportunityVenueHealth,
+  OpportunityMarket, OpportunityPair, OpportunityTeam, OpportunityVenue, OpportunityVenueHealth,
 } from "./opportunity-types";
 
 const KALSHI = "https://api.elections.kalshi.com/trade-api/v2";
@@ -41,6 +42,21 @@ function canonicalTeam(league: string, value: unknown): string {
     nfl: { JAC: "JAX", WSH: "WAS" }, mlb: { TBR: "TB", SDP: "SD", SFG: "SF", KCR: "KC", WSN: "WSH", CHW: "CWS" },
   };
   return /^[A-Z]{2,3}$/.test(code) ? aliases[league]?.[code] ?? code : "";
+}
+function teamPresentation(raw: Raw, identity: Identity): OpportunityTeam[] {
+  // Presentation comes from the same explicit sides that passed the identity join.
+  const sides = arr(raw.marketSides).map(obj);
+  return identity.teams.map(code => {
+    const side = sides.find(value => canonicalTeam(identity.league, obj(value.team).abbreviation) === code)!;
+    const team = obj(side.team), name = str(team.name).trim(), safe = str(team.safeName).trim();
+    const fullName = safe && name
+      ? safe.toLowerCase().endsWith(name.toLowerCase()) ? safe
+        : name.toLowerCase().includes(safe.toLowerCase()) ? name
+          : identity.league === "nba" ? `${safe} ${name}` : name
+      : name || safe || code;
+    const brand = teamBrand(identity.league, code);
+    return { league: identity.league.toUpperCase(), code, name: brand?.name || fullName, logoUrl: brand?.logoUrl ?? null, isYesOutcome: code === identity.yes };
+  });
 }
 function validDay(year: string, month: string, day: string): string | null {
   const value = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
@@ -282,6 +298,7 @@ export function createOpportunityProvider(fetcher: Fetcher = fetch, now: () => n
     const observed = [c.kalshiAt, c.polyAt, k.at, p.at].filter((v): v is number => v !== null);
     return { id: opportunityId(ticker, slug), title: `${c.identity.teams.join(" vs ")} · ${c.identity.league.toUpperCase()}`,
       category: "Sports", league: c.identity.league.toUpperCase(), eventDate: c.identity.date, outcome: c.identity.outcome,
+      teams: teamPresentation(c.poly, c.identity),
       status, fetchedAt: iso(Math.min(...observed)), kalshi, polymarketUS, pairs,
       match: { status: "review_required", identity: c.identity.key,
         evidence: [`Exact ${c.identity.league.toUpperCase()} league and team codes: ${c.identity.teams.join(" / ")}.`,
