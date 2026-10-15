@@ -211,3 +211,49 @@ test('one source outage returns explicit venue health and no invented fallback',
   assert.equal(feed.venues.polymarket_us.status,'unavailable');
   assert.equal(feed.opportunities.length,0); assert.equal(feed.status,'unavailable');
 });
+
+test('429 cools down the whole source and reports degraded venue health', async () => {
+  const calls = [];
+  const provider = createOpportunityProvider(async url => {
+    calls.push(url);
+    if (url.includes('gateway') && url.endsWith('/book')) return new Response('{}', { status: 429 });
+    if (url.includes('gateway') && url.includes('/market/slug/')) return Response.json({ market: poly() });
+    if (url.includes('gateway')) return Response.json({ markets: [poly()] });
+    if (url.includes('/orderbook?')) return Response.json(kBook());
+    if (url.endsWith(`/markets/${TICKER}`)) return Response.json({ market: kalshi() });
+    return Response.json({ markets: url.includes('series_ticker=KXNFLGAME') ? [kalshi()] : [] });
+  }, () => NOW, { polymarketSpacingMs: 0 });
+  const feed = await provider.getOpportunities();
+  assert.equal(feed.venues.polymarket_us.status, 'stale');
+  assert.match(feed.venues.polymarket_us.message, /rate-limited/);
+  assert.equal(feed.opportunities[0].pairs[0].combinedPrice, null);
+  await provider.getOpportunity(ID);
+  assert.equal(calls.filter(url => url.includes('gateway')).length, 2);
+});
+
+test('discovery bounds book hydration to twelve candidates and eight concurrent calls', async () => {
+  const ps = [], ks = [], calls = [];
+  for (let day = 15; day < 30; day += 1) {
+    const k = kalshi(), p = poly();
+    k.ticker = TICKER.replace('OCT15', `OCT${day}`); k.event_ticker = k.event_ticker.replace('OCT15', `OCT${day}`);
+    k.rules_primary = k.rules_primary.replace('Oct 15', `Oct ${day}`);
+    p.slug = SLUG.replace('10-15', `10-${day}`); p.description = p.description.replace('Oct 15', `Oct ${day}`);
+    ks.push(k); ps.push(p);
+  }
+  let active = 0, peak = 0;
+  const provider = createOpportunityProvider(async url => {
+    calls.push(url); active += 1; peak = Math.max(peak, active);
+    await new Promise(resolve => setTimeout(resolve, 1)); active -= 1;
+    if (url.includes('/orderbook?')) return Response.json(kBook());
+    if (url.endsWith('/book')) {
+      const pb = pBook(); pb.marketData.marketSlug = url.split('/').at(-2); return Response.json(pb);
+    }
+    if (url.includes('gateway')) return Response.json({ markets: ps });
+    return Response.json({ markets: url.includes('series_ticker=KXNFLGAME') ? ks : [] });
+  }, () => NOW, { polymarketSpacingMs: 0 });
+  const feed = await provider.getOpportunities();
+  assert.equal(feed.opportunities.length, 12);
+  assert.equal(calls.length, 29); // Five bounded discovery reads plus two books per chosen identity.
+  assert.ok(peak <= 8);
+  assert.match(feed.warnings.join(' '), /15 identities matched/);
+});
