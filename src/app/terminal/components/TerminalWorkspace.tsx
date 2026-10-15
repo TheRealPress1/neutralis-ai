@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { MarketCategory, TerminalMarket, TerminalMarketDetail, TerminalMarketList } from "@/lib/terminal/market-types";
 import type { TerminalAccount } from "@/lib/terminal/trading-types";
+import type { OpportunityPairDirection } from "@/lib/terminal/opportunity-types";
+import type { MonitorTarget } from "@/lib/terminal/persistent-monitor-types";
 import { evaluateMonitors, restoreMonitors, type PriceMonitor } from "@/lib/terminal/monitors";
 import { usePinnedMarkets, useTerminalData } from "./useTerminalData";
 import { cents, compact, contracts, dateTime, dollars } from "./format";
@@ -11,8 +13,12 @@ import MarketChart from "./MarketChart";
 import OrderTicket from "./OrderTicket";
 import AccountPanel from "./AccountPanel";
 import MonitorPanel from "./MonitorPanel";
+import OpportunitiesPanel from "./OpportunitiesPanel";
+import SavedMonitorsPanel, { type MonitorDraft } from "./SavedMonitorsPanel";
+import { useSavedMonitors } from "./useSavedMonitors";
 import { useOrderReceipt } from "./useOrderReceipt";
 import styles from "./TerminalWorkspace.module.css";
+import panelStyles from "./WorkspacePanels.module.css";
 
 const categories: (MarketCategory | "All")[] = ["All", "Sports", "Politics", "Economics", "Crypto"];
 const subscribeVisibility = (callback: () => void) => { document.addEventListener("visibilitychange", callback); return () => document.removeEventListener("visibilitychange", callback); };
@@ -33,7 +39,12 @@ export default function TerminalWorkspace({ signedIn, userId }: { signedIn: bool
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [monitors, setMonitors] = useState<PriceMonitor[]>([]);
   const [storageReady, setStorageReady] = useState(false);
-  const [workspaceTab, setWorkspaceTab] = useState<"markets" | "monitors">("markets");
+  const [workspaceTab, setWorkspaceTab] = useState<"markets" | "opportunities" | "monitors">("markets");
+  const [monitorMode, setMonitorMode] = useState<"saved" | "browser">("saved");
+  const [monitorDraft, setMonitorDraft] = useState<MonitorDraft | null>(null);
+  const [selectedPair, setSelectedPair] = useState<string | null>(null);
+  const [pairDirection, setPairDirection] = useState<OpportunityPairDirection | null>(null);
+  const savedMonitors = useSavedMonitors(signedIn);
   const [now, setNow] = useState(0);
   const search = useRef<HTMLInputElement>(null);
   const visible = useSyncExternalStore(subscribeVisibility, getVisibility, serverVisibility);
@@ -53,6 +64,15 @@ export default function TerminalWorkspace({ signedIn, userId }: { signedIn: bool
   useEffect(() => {
     // Restore browser-only preferences after hydration. No private account data is stored.
     const params = new URLSearchParams(window.location.search);
+    if (params.get("view") === "opportunities" || params.get("view") === "monitors") setWorkspaceTab(params.get("view") as "opportunities" | "monitors");
+    const pairId = params.get("pair");
+    if (pairId && /^v1~[A-Za-z0-9_.-]{1,160}~[a-z0-9-]{1,240}$/.test(pairId)) setSelectedPair(pairId);
+    const direction = params.get("direction");
+    if (direction === "kalshi_yes_polymarket_no" || direction === "polymarket_yes_kalshi_no") setPairDirection(direction);
+    const monitorMarket = params.get("monitorMarket"), monitorPair = params.get("monitorPair"), monitorDirection = params.get("monitorDirection");
+    const monitorLabel = params.get("monitorLabel")?.replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 160);
+    if (monitorMarket && /^[A-Z0-9][A-Z0-9.-]{0,119}$/.test(monitorMarket)) setMonitorDraft({ target: { kind: "market", ticker: monitorMarket }, label: monitorLabel || monitorMarket });
+    else if (monitorPair && /^v1~[A-Z0-9][A-Z0-9.-]{0,119}~[a-z0-9][a-z0-9_-]{0,199}$/.test(monitorPair) && (monitorDirection === "kalshi_yes_polymarket_no" || monitorDirection === "polymarket_yes_kalshi_no")) setMonitorDraft({ target: { kind: "opportunity", candidateId: monitorPair, pairDirection: monitorDirection }, label: monitorLabel || "Saved contract comparison" });
     const requested = params.get("market");
     if (requested && /^[A-Z0-9_.-]{1,160}$/i.test(requested)) setSelected(requested);
     try {
@@ -79,24 +99,50 @@ export default function TerminalWorkspace({ signedIn, userId }: { signedIn: bool
   }, [feed.data, markets, detail.data, visible]);
   function select(ticker: string) {
     setSelected(ticker); setWorkspaceTab("markets");
-    const url = new URL(window.location.href); url.searchParams.set("market", ticker); window.history.replaceState(null, "", url);
+    window.scrollTo({ top: 0, behavior: "auto" });
+    const url = new URL(window.location.href); url.searchParams.set("market", ticker); url.searchParams.set("view", "markets"); window.history.replaceState(null, "", url);
   }
+  function showTab(tab: "markets" | "opportunities" | "monitors") {
+    setWorkspaceTab(tab);
+    window.scrollTo({ top: 0, behavior: "auto" });
+    const url = new URL(window.location.href); url.searchParams.set("view", tab); window.history.replaceState(null, "", url);
+  }
+  function selectPair(id: string, direction?: OpportunityPairDirection) {
+    setSelectedPair(id); setPairDirection(direction ?? null); setWorkspaceTab("opportunities");
+    const url = new URL(window.location.href); url.searchParams.set("view", "opportunities"); url.searchParams.set("pair", id);
+    if (direction) url.searchParams.set("direction", direction); else url.searchParams.delete("direction");
+    window.history.replaceState(null, "", url);
+  }
+  function draftMonitor(draft: MonitorDraft) {
+    setMonitorDraft(draft); setMonitorMode("saved"); showTab("monitors");
+    const url = new URL(window.location.href);
+    for (const key of ["monitorMarket", "monitorPair", "monitorDirection"]) url.searchParams.delete(key);
+    url.searchParams.set("monitorLabel", draft.label);
+    if (draft.target.kind === "market") url.searchParams.set("monitorMarket", draft.target.ticker);
+    else { url.searchParams.set("monitorPair", draft.target.candidateId); url.searchParams.set("monitorDirection", draft.target.pairDirection); }
+    window.history.replaceState(null, "", url);
+  }
+  function openMonitorTarget(target: MonitorTarget) { if (target.kind === "market") select(target.ticker); else selectPair(target.candidateId, target.pairDirection); }
   function toggleWatch(ticker: string) { setWatchlist((items) => items.includes(ticker) ? items.filter((value) => value !== ticker) : [...items, ticker].slice(-30)); }
   const watching = monitors.filter((item) => item.state === "watching").length;
   const triggered = monitors.filter((item) => item.state === "triggered").length;
+  const savedWatching = savedMonitors.data?.monitors.filter((item) => item.state === "watching").length ?? 0;
   return <div className={styles.workspace}>
     <a className={styles.skipLink} href="#terminal-main">Skip to workspace</a>
     <header className={styles.header}><div className={styles.headerBrand}><Link href="/" className={styles.brand}>Neutralis.ai</Link><span className={styles.productLabel}>TERMINAL <span>01</span></span></div><div className={styles.headerActions}><span className={styles.clock}>{now ? new Date(now).toISOString().slice(11, 19) : "--:--:--"} UTC</span><Link className={styles.connectionButton} href={signedIn ? "/dashboard?tab=connections" : "/login?redirect=/terminal"}><span className={styles.statusDot} data-live={account.data?.connection === "connected"}/>{account.data?.connection === "connected" ? "Kalshi connected" : "Connect exchange"}<span>↗</span></Link><Link className={styles.profileButton} href={signedIn ? "/profile" : "/login?redirect=/terminal"}>{signedIn ? "Account" : "Sign in"}</Link></div></header>
-    <nav className={styles.workspaceNav} aria-label="Workspace navigation"><div><button aria-current={workspaceTab === "markets" ? "page" : undefined} onClick={() => setWorkspaceTab("markets")}><span>▦</span> Markets</button><button aria-current={workspaceTab === "monitors" ? "page" : undefined} onClick={() => setWorkspaceTab("monitors")}><span>◎</span> Monitors <small>{watching > 0 ? watching : "READ ONLY"}</small>{triggered > 0 && <span className={styles.triggerCount} aria-live="polite" aria-label={`${triggered} monitors triggered`}>{triggered}</span>}</button><Link href="/dashboard?tab=dashboard"><span>▤</span> Portfolio</Link></div><span className={styles.navHint}>THE BLOOMBERG TERMINAL FOR PREDICTION MARKETS</span></nav>
-    <div className={styles.marketStrip}><div><span className={styles.statusDot} data-live={!feedStale && visible}/><strong>{!visible ? "UPDATES PAUSED" : feed.loading ? "CONNECTING" : feedStale ? "FEED DELAYED" : "MARKET FEED"}</strong><span>KALSHI</span></div><span>{feed.data?.markets.length ?? "—"} markets</span><span className={styles.stripSeparator}>/</span><span>Public quotes · 15–30s refresh</span><span className={styles.stripBalance}>Available cash <strong>{dollars(account.data?.balanceDollars)}</strong></span></div>
+    <nav className={styles.workspaceNav} aria-label="Workspace navigation"><div><button aria-current={workspaceTab === "markets" ? "page" : undefined} onClick={() => showTab("markets")}><span>▦</span> Markets</button><button aria-current={workspaceTab === "opportunities" ? "page" : undefined} onClick={() => showTab("opportunities")}><span>↔</span> Opportunities</button><button aria-current={workspaceTab === "monitors" ? "page" : undefined} onClick={() => showTab("monitors")}><span>◎</span> Monitors <small>{savedWatching > 0 ? savedWatching : "OBSERVE"}</small>{triggered > 0 && <span className={styles.triggerCount} aria-live="polite" aria-label={`${triggered} monitors triggered`}>{triggered}</span>}</button><Link href="/dashboard?tab=dashboard"><span>▤</span> Portfolio</Link></div><span className={styles.navHint}>THE BLOOMBERG TERMINAL FOR PREDICTION MARKETS</span></nav>
+    <div className={styles.marketStrip}><div><span className={styles.statusDot} data-live={workspaceTab === "markets" && !feedStale && visible}/><strong>{workspaceTab === "opportunities" ? "CROSS-VENUE DESK" : workspaceTab === "monitors" ? "OBSERVATION DESK" : !visible ? "UPDATES PAUSED" : feed.loading ? "CONNECTING" : feedStale ? "FEED DELAYED" : "MARKET FEED"}</strong><span>{workspaceTab === "markets" ? "KALSHI" : "KALSHI + POLYMARKET US"}</span></div><span>{workspaceTab === "markets" ? `${feed.data?.markets.length ?? "—"} markets` : "READ ONLY"}</span><span className={styles.stripSeparator}>/</span><span>Public quotes · 15–30s refresh</span><span className={styles.stripBalance}>Available cash <strong>{dollars(account.data?.balanceDollars)}</strong></span></div>
     <main id="terminal-main" className={styles.main}>
-      {workspaceTab === "monitors" ? <MonitorPanel market={market} monitors={monitors} setMonitors={setMonitors} visible={visible} onSelect={select}/> : <>
+      {workspaceTab === "opportunities" ? <OpportunitiesPanel selectedId={selectedPair} selectedDirection={pairDirection} onSelect={selectPair} onMonitor={draftMonitor} onInspectKalshi={select} now={now}/> : workspaceTab === "monitors" ? <>
+        <div className={panelStyles.monitorMode} role="group" aria-label="Monitoring mode"><button aria-pressed={monitorMode === "saved"} onClick={() => setMonitorMode("saved")}>Saved to account</button><button aria-pressed={monitorMode === "browser"} onClick={() => setMonitorMode("browser")}>On this browser {monitors.length > 0 ? `(${monitors.length})` : ""}</button></div>
+        {monitorMode === "saved" ? <SavedMonitorsPanel key={monitorDraft ? JSON.stringify(monitorDraft.target) : "empty"} signedIn={signedIn} draft={monitorDraft} controller={savedMonitors} onOpenTarget={openMonitorTarget} onBrowse={() => showTab("opportunities")}/> : <MonitorPanel market={market} monitors={monitors} setMonitors={setMonitors} visible={visible} onSelect={select}/>}
+      </> : <>
         <div className={styles.tradingGrid}>
           <aside className={styles.marketBrowser} aria-label="Market browser"><div className={styles.browserTitle}><h1>Markets</h1><span>{filtered.length.toString().padStart(2, "0")}</span></div><div className={styles.searchBox}><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="6.8" cy="6.8" r="4.7"/><path d="m10.3 10.3 3.8 3.8"/></svg><input ref={search} aria-label="Search curated and pinned markets" placeholder="Search markets…" value={query} onChange={(event) => setQuery(event.target.value)}/><kbd>⌘ K</kbd></div><div className={styles.categories} aria-label="Market categories">{categories.map((value) => <button key={value} aria-pressed={category === value} onClick={() => setCategory(value)}>{value}</button>)}</div><div className={styles.listLabel}><button aria-pressed={watchOnly} onClick={() => setWatchOnly(!watchOnly)}>{watchOnly ? "★ WATCHLIST" : "ALL MARKETS"}<span>{watchOnly ? watchlist.length : "☆"}</span></button><span>YES / 24H</span></div><div className={styles.marketList}>
             {feed.loading ? <div className={styles.loading}>Connecting to Kalshi<span>Fetching real market quotes…</span></div> : filtered.length === 0 ? <div className={styles.empty}>{feed.error ? "Market feed unavailable. Retrying shortly." : watchOnly ? "Star a market to add it to your watchlist." : "No markets match these filters."}{feed.error && <button className={styles.textButton} onClick={feed.refresh}>Retry ↻</button>}</div> : filtered.map((item) => <div className={styles.marketRow} data-selected={ticker === item.ticker} key={item.ticker}><button className={styles.marketSelect} onClick={() => select(item.ticker)} aria-pressed={ticker === item.ticker}><span className={styles.marketMeta}>{item.category}<span>{compact(item.volume24h)} VOL</span></span><span className={styles.marketName}>{item.subtitle || item.title}</span>{item.subtitle && <span className={styles.marketQuestion}>{item.title}</span>}<span className={styles.marketPrices}><strong>{cents(item.lastPrice)}</strong><span className={item.change24h !== null && item.change24h >= 0 ? styles.positive : styles.negative}>{item.change24h === null ? "—" : `${item.change24h >= 0 ? "+" : ""}${Number((item.change24h * 100).toFixed(2))}¢`}</span><small>{feedStale || item.status === "stale" || (now > 0 && now - Date.parse(item.updatedAt) > 45_000) ? "DELAYED" : item.status === "closed" ? "CLOSED" : "YES"}</small></span></button><button className={styles.watchButton} aria-label={`${watchlist.includes(item.ticker) ? "Remove" : "Add"} ${item.subtitle || item.title} ${watchlist.includes(item.ticker) ? "from" : "to"} watchlist`} aria-pressed={watchlist.includes(item.ticker)} onClick={() => toggleWatch(item.ticker)}>{watchlist.includes(item.ticker) ? "★" : "☆"}</button></div>)}
           </div><div className={styles.browserFootnote}>Curated + pinned markets · 24h volume<br/>{feed.data?.scope ?? "Sports, politics, economics & crypto"}</div></aside>
           <section className={styles.marketDetail} aria-label="Selected market">
-            {market ? <><div className={styles.detailHeader}><div className={styles.marketBreadcrumb}><span>{market.category}</span><span>/</span><span>KALSHI</span><span className={styles.quoteBadge} data-live={!quoteStale}>{market.status === "closed" ? "CLOSED" : quoteStale ? "DELAYED" : "LIVE QUOTES"}</span></div><div className={styles.marketTitle}><div><h2>{market.title}</h2>{market.subtitle && <p>{market.subtitle}</p>}</div><button className={styles.detailStar} aria-label={watchlist.includes(market.ticker) ? "Remove selected market from watchlist" : "Add selected market to watchlist"} aria-pressed={watchlist.includes(market.ticker)} onClick={() => toggleWatch(market.ticker)}>{watchlist.includes(market.ticker) ? "★" : "☆"}</button></div><div className={styles.priceHero}><strong>{cents(market.lastPrice)}</strong><div><span>YES LAST TRADE</span><span className={market.change24h !== null && market.change24h >= 0 ? styles.positive : styles.negative}>{market.change24h === null ? "24h change unavailable" : `${market.change24h >= 0 ? "+" : ""}${Number((market.change24h * 100).toFixed(2))}¢ over 24h`}</span></div><button className={styles.monitorMarketButton} onClick={() => setWorkspaceTab("monitors")}>◎ <span>Monitor market</span></button></div><div className={styles.marketStats}><div><span>YES BID / ASK</span><strong>{cents(market.yesBid)} <i>/</i> {cents(market.yesAsk)}</strong></div><div><span>24H CONTRACTS</span><strong>{compact(market.volume24h)}</strong></div><div><span>OPEN INTEREST</span><strong>{compact(market.openInterest)}</strong></div><div><span>CLOSES</span><strong>{dateTime(market.closeTime)}</strong></div></div></div>
+            {market ? <><div className={styles.detailHeader}><div className={styles.marketBreadcrumb}><span>{market.category}</span><span>/</span><span>KALSHI</span><span className={styles.quoteBadge} data-live={!quoteStale}>{market.status === "closed" ? "CLOSED" : quoteStale ? "DELAYED" : "LIVE QUOTES"}</span></div><div className={styles.marketTitle}><div><h2>{market.title}</h2>{market.subtitle && <p>{market.subtitle}</p>}</div><button className={styles.detailStar} aria-label={watchlist.includes(market.ticker) ? "Remove selected market from watchlist" : "Add selected market to watchlist"} aria-pressed={watchlist.includes(market.ticker)} onClick={() => toggleWatch(market.ticker)}>{watchlist.includes(market.ticker) ? "★" : "☆"}</button></div><div className={styles.priceHero}><strong>{cents(market.lastPrice)}</strong><div><span>YES LAST TRADE</span><span className={market.change24h !== null && market.change24h >= 0 ? styles.positive : styles.negative}>{market.change24h === null ? "24h change unavailable" : `${market.change24h >= 0 ? "+" : ""}${Number((market.change24h * 100).toFixed(2))}¢ over 24h`}</span></div><button className={styles.monitorMarketButton} onClick={() => draftMonitor({ target: { kind: "market", ticker: market.ticker }, label: market.subtitle || market.title })}>◎ <span>Monitor market</span></button></div><div className={styles.marketStats}><div><span>YES BID / ASK</span><strong>{cents(market.yesBid)} <i>/</i> {cents(market.yesAsk)}</strong></div><div><span>24H CONTRACTS</span><strong>{compact(market.volume24h)}</strong></div><div><span>OPEN INTEREST</span><strong>{compact(market.openInterest)}</strong></div><div><span>CLOSES</span><strong>{dateTime(market.closeTime)}</strong></div></div></div>
             {detail.error && <p className={styles.error} role="status">{detail.error} Quotes may be delayed.</p>}
             <MarketChart points={detail.data?.history ?? []} status={detail.loading ? "loading" : detail.data?.historyStatus === "unavailable" || !detail.data ? "unavailable" : detail.error || (detail.data?.historyUpdatedAt && now - Date.parse(detail.data.historyUpdatedAt) > 180_000) ? "stale" : detail.data?.historyStatus ?? "unavailable"} now={now}/><Depth detail={detail.data} loading={detail.loading} stale={Boolean(detail.error) || !detail.data?.orderbookUpdatedAt || now - Date.parse(detail.data.orderbookUpdatedAt) > 45_000}/>
             <details className={styles.rules}><summary>Resolution &amp; market rules <span>＋</span></summary><p>{detail.data?.rules.primary || "Rules have not loaded. Read the full contract on Kalshi before trading."}</p>{detail.data?.rules.secondary && <p>{detail.data.rules.secondary}</p>}<dl><div><dt>Expected settlement</dt><dd>{dateTime(detail.data?.settlementTime)}</dd></div><div><dt>Final expiration</dt><dd>{dateTime(detail.data?.expirationTime)}</dd></div></dl><a href={market.url} target="_blank" rel="noopener noreferrer">Full contract on Kalshi ↗</a><code>{market.ticker}</code></details></> : <div className={styles.detailEmpty}><span>▦</span><h2>{detail.error ? "Market unavailable" : "Your view of the market."}</h2><p>{detail.error || "Select a market to inspect its prices, order book, and resolution rules."}</p></div>}
@@ -105,6 +151,6 @@ export default function TerminalWorkspace({ signedIn, userId }: { signedIn: bool
         </div><AccountPanel account={account.data} signedIn={signedIn} loading={account.loading} error={account.error} refresh={account.refresh} onSelect={select}/>
       </>}
     </main>
-    <footer className={styles.statusBar}><span><span className={styles.statusDot} data-live={!feedStale && visible}/>{feedStale ? "Waiting for fresh quotes" : "Connected to public market data"}</span><span>Kalshi execution <i>·</i> {account.data?.tradingEnabled ? "Enabled" : "Preview only"}</span><button onClick={() => setWorkspaceTab("monitors")}>{watching} monitors watching{triggered > 0 ? ` · ${triggered} triggered` : ""}</button><span className={styles.statusEnd}>NEUTRALIS / WORKSPACE 01</span></footer>
+    <footer className={styles.statusBar}><span><span className={styles.statusDot} data-live={!feedStale && visible}/>{feedStale ? "Waiting for fresh quotes" : "Connected to public market data"}</span><span>Kalshi execution <i>·</i> {account.data?.tradingEnabled ? "Enabled" : "Preview only"}</span><button onClick={() => showTab("monitors")}>{savedWatching} saved · {watching} browser monitors{triggered > 0 ? ` · ${triggered} browser alerts` : ""}</button><span className={styles.statusEnd}>NEUTRALIS / WORKSPACE 01</span></footer>
   </div>;
 }
